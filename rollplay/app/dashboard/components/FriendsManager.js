@@ -5,8 +5,8 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
-import { authFetch } from '@/app/shared/utils/authFetch'
+import { useState } from 'react'
+import { useAccountLookup, isValidAccountIdentifier } from '../hooks/useAccountLookup'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faUserPlus,
@@ -24,11 +24,11 @@ import { useSendFriendRequest, useAcceptFriendRequest, useDeclineFriendRequest, 
 export default function FriendsManager({ user, fillHeight = false }) {
   const [friendCode, setFriendCode] = useState('')
   const [actionLoading, setActionLoading] = useState({})
-  const [lookupUser, setLookupUser] = useState(null)
   const [copiedCode, setCopiedCode] = useState(false)
-  const [lookupLoading, setLookupLoading] = useState(false)
-  const [lookupError, setLookupError] = useState(null)
   const [error, setError] = useState(null)
+
+  // Debounced type-ahead lookup — shared with SocialPanel
+  const { matchedUser: lookupUser, isLooking: lookupLoading, lookupError } = useAccountLookup(friendCode)
 
   // TanStack Query: friendships
   const { data: friends = {}, isLoading: loading } = useFriendships()
@@ -38,13 +38,6 @@ export default function FriendsManager({ user, fillHeight = false }) {
   const acceptMutation = useAcceptFriendRequest()
   const declineMutation = useDeclineFriendRequest()
   const removeMutation = useRemoveFriend()
-
-  // Validate identifier format: UUID or account tag (name#1234)
-  const isValidIdentifier = (identifier) => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const accountTagRegex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/
-    return uuidRegex.test(identifier) || accountTagRegex.test(identifier)
-  }
 
   // Copy account tag to clipboard
   const handleCopyCode = async () => {
@@ -56,55 +49,6 @@ export default function FriendsManager({ user, fillHeight = false }) {
 
   // Get display code (account identifier)
   const displayCode = user.account_identifier || 'Not set'
-
-  // Lookup user by Friend Code when valid code is entered (debounced, stays local)
-  useEffect(() => {
-    const lookupUserByCode = async () => {
-      if (!friendCode.trim()) {
-        setLookupUser(null)
-        setLookupError(null)
-        return
-      }
-
-      if (!isValidIdentifier(friendCode.trim())) {
-        setLookupUser(null)
-        setLookupError(null)
-        return
-      }
-
-      try {
-        setLookupLoading(true)
-        setLookupError(null)
-
-        const identifier = friendCode.trim()
-        const endpoint = `/api/users/by-account-tag/${encodeURIComponent(identifier)}`
-
-        const response = await authFetch(endpoint, {
-          credentials: 'include'
-        })
-
-        if (response.ok) {
-          const userData = await response.json()
-          setLookupUser(userData)
-        } else if (response.status === 404) {
-          setLookupError('User not found')
-          setLookupUser(null)
-        } else {
-          setLookupError('Failed to lookup user')
-          setLookupUser(null)
-        }
-      } catch (err) {
-        console.error('Error looking up user:', err)
-        setLookupError('Failed to lookup user')
-        setLookupUser(null)
-      } finally {
-        setLookupLoading(false)
-      }
-    }
-
-    const timeoutId = setTimeout(lookupUserByCode, 500)
-    return () => clearTimeout(timeoutId)
-  }, [friendCode])
 
   const sendFriendRequest = async (e) => {
     e.preventDefault()
@@ -118,7 +62,6 @@ export default function FriendsManager({ user, fillHeight = false }) {
       setError(null)
       await sendRequestMutation.mutateAsync(friendCode.trim())
       setFriendCode('')
-      setLookupUser(null)
     } catch (err) {
       console.error('Error sending friend request:', err)
       setError(err.message)
@@ -223,7 +166,7 @@ export default function FriendsManager({ user, fillHeight = false }) {
               disabled={sendRequestMutation.isPending}
             />
             {/* Real-time lookup feedback */}
-            {friendCode && isValidIdentifier(friendCode) && (
+            {friendCode && isValidAccountIdentifier(friendCode) && (
               <div className="mt-2">
                 {lookupLoading && (
                   <p className="text-sm flex items-center gap-2" style={{color: THEME.textSecondary}}>

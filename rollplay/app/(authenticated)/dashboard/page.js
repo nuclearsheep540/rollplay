@@ -12,7 +12,6 @@ import CharacterManager from '@/app/dashboard/components/CharacterManager'
 import { AssetLibraryManager } from '@/app/asset_library'
 import { WorkshopManager } from '@/app/workshop'
 import DashboardLayout from '@/app/dashboard/components/DashboardLayout'
-import FriendsWidget from '@/app/dashboard/components/FriendsWidget'
 import AccountNameModal from '@/app/dashboard/components/AccountNameModal'
 import InDevWarningModal from '@/app/dashboard/components/InDevWarningModal'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
@@ -164,12 +163,6 @@ function DashboardContent() {
             Coming soon
           </p>
         </section>
-      )}
-
-      {/* Friends Widget - Fixed bottom-right widget on every tab, hidden
-          when a child manager is expanded (e.g. a campaign detail view). */}
-      {!isChildExpanded && (
-        <FriendsWidget user={user} />
       )}
 
       {/* Account Setup Modal (account name + screen name in one form) */}

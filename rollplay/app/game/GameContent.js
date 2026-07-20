@@ -2513,18 +2513,29 @@ export default function GameContent() {
               {/* Spacer */}
               <div className="flex-1" />
 
-              {/* Progress bar + CTA section */}
-              <div className="flex-shrink-0 w-3/5 mx-auto mb-4">
-                {/* Progress bar — starts in CTA position, slides up when complete */}
-                <div
-                  ref={el => {
-                    if (el && gatePreload.ctaReady && el.dataset.slid !== 'true') {
+              {/* Progress bar + CTA section. The bar's natural (untransformed)
+                  spot IS the 100%-loaded position from the design; the CTA is
+                  OUT OF FLOW (absolute) so it never re-centers this section,
+                  keeping that natural spot stable. On reveal the whole group
+                  slides UP INTO that spot — so the upward-slide animation now
+                  ENDS at the 100%-loaded position instead of starting there. */}
+              <div
+                ref={el => {
+                  if (!el) return;
+                  if (gatePreload.ctaReady) {
+                    if (el.dataset.slid !== 'true') {
                       el.dataset.slid = 'true';
-                      gsap.to(el, { y: -48, duration: 0.35, ease: 'power2.inOut' });
+                      gsap.to(el, { y: 0, duration: 0.35, ease: 'power2.inOut' });
                     }
-                  }}
-                  className="relative py-6 px-6"
-                >
+                  } else {
+                    // Pre-reveal: hold 48px below the resting spot to slide up from
+                    gsap.set(el, { y: 48 });
+                  }
+                }}
+                className="flex-shrink-0 w-3/5 mx-auto mb-4 relative"
+              >
+                {/* Progress bar — the CTA appears beneath it */}
+                <div className="relative py-6 px-6">
                   {/* Corner brackets */}
                   <div className="absolute top-0 left-0 w-4 h-4 border-t border-l" style={{ borderColor: COLORS.silver }} />
                   <div className="absolute top-0 right-0 w-4 h-4 border-t border-r" style={{ borderColor: COLORS.silver }} />
@@ -2554,9 +2565,10 @@ export default function GameContent() {
                   </div>
                 </div>
 
-                {/* CTA — appears below bar after 500ms hold at 100% */}
+                {/* CTA — fades in below the bar (absolute = out of flow, so
+                    the bar stays put). Appears after 500ms hold at 100%. */}
                 {gatePreload.ctaReady && (
-                  <div className="text-center mt-4 gate-cta-enter">
+                  <div className="absolute top-full inset-x-0 text-center mt-4 gate-cta-enter">
                     <p className="text-3xl tracking-[0.3em] uppercase font-[family-name:var(--font-metamorphous)] animate-pulse" style={{ color: COLORS.smoke }}>
                       Click to Enter
                     </p>

@@ -12,7 +12,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faRightFromBracket, faHouse, faCircle } from '@fortawesome/free-solid-svg-icons'
 
 import SiteHeader from '@/app/shared/components/SiteHeader'
-import NotificationBell from '@/app/shared/components/NotificationBell'
+import SocialPanel from '@/app/shared/components/SocialPanel'
 import { useAuth } from '@/app/dashboard/hooks/useAuth'
 import { useToast } from '@/app/shared/hooks/useToast'
 import { useAuthenticatedEvents } from '@/app/shared/hooks/useAuthenticatedEvents'
@@ -75,8 +75,8 @@ function AuthenticatedShell({ children }) {
             the authenticated group. Icons ordered: bell (panel toggle),
             the navigation icons, then a separator before logout. */}
         <SiteHeader showHome={false}>
-          <NotificationBell
-            userId={auth.user?.id}
+          <SocialPanel
+            user={auth.user}
             toasts={toasts}
             onDismissToast={dismissToast}
           />

@@ -246,6 +246,12 @@ class AdventureLogService:
         historical lines, not new ones. Read ordering comes from log_id, so
         insert order is irrelevant.
 
+        Any existing logs for the room are cleared first: the cold copy is the
+        single source of truth on resume, so re-seeding must be idempotent.
+        Without this, a partial cleanup on the previous pause (the session doc
+        is deleted before its logs, and the resume 409-guard only checks the
+        session doc) would let restore stack a second copy on orphaned logs.
+
         Args:
             room_id: The room/session ID
             entries: LogEntry-shaped dicts (timestamp as ISO-8601 string)
@@ -255,6 +261,8 @@ class AdventureLogService:
         """
         if not entries:
             return 0
+
+        self.delete_room_logs(room_id)
 
         docs = []
         for entry in entries:
