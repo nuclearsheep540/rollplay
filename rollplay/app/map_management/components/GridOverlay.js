@@ -288,7 +288,9 @@ const GridOverlay = ({
         position: 'absolute',
         top: 0, left: 0, right: 0, bottom: 0,
         pointerEvents: 'none',
-        zIndex: isEditMode ? 20 : 5,
+        // Grid renders ABOVE fog (25) so cell references stay usable over
+        // fogged regions (product decision 5); tokens (35) clear everything.
+        zIndex: 28,
         overflow: 'visible',
       }}
     >

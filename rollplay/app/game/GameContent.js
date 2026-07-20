@@ -33,6 +33,7 @@ import { useUnifiedAudio } from '../audio_management';
 import { useSpotifyPlayback, SPOTIFY_DEFAULT_LEVEL } from '../audio_management/hooks/useSpotifyPlayback';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
+import { useMapTokens, MapTokenChipList, MapTokenCreator } from '../map_tokens';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge } from '@fortawesome/free-solid-svg-icons';
@@ -990,6 +991,18 @@ export default function GameContent() {
     setRollLog(prev => [...prev, newEntry]);
   }, []);
 
+  // Bridge to the map-tokens hook. The hook needs registerHandler from
+  // useWebSocket, but gameContext (which useWebSocket consumes) is built
+  // first — so core WS events reach the hook through these stable
+  // ref-backed functions (sendSeatChangeRef precedent).
+  const mapTokensBridgeRef = useRef({ setMapTokenState: null, clearHoldsForUser: null });
+  const setMapTokenState = useCallback((state) => {
+    mapTokensBridgeRef.current.setMapTokenState?.(state);
+  }, []);
+  const clearMapTokenHoldsForUser = useCallback((userId) => {
+    mapTokensBridgeRef.current.clearHoldsForUser?.(userId);
+  }, []);
+
   // Handle role changes from ModeratorControls and WebSocket events — uses userId
   const handleRoleChange = useCallback(async (action, targetUserId) => {
     console.log(`Role change: ${action} for ${targetUserId}`);
@@ -1193,6 +1206,10 @@ export default function GameContent() {
     startStateBatch,
     flushStateBatch,
 
+    // Map tokens (initial_state board hydration + disconnect hold cleanup)
+    setMapTokenState,
+    clearMapTokenHoldsForUser,
+
     // Session ended modal
     setSessionEndedData
   }), [
@@ -1206,7 +1223,8 @@ export default function GameContent() {
     audioBuffersRef, audioContextRef,
     setChannelMuted, setChannelSoloed, setBroadcastMasterVolume,
     startStateBatch, flushStateBatch,
-    spotify.applySpotifySnapshot
+    spotify.applySpotifySnapshot,
+    setMapTokenState, clearMapTokenHoldsForUser
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1233,6 +1251,39 @@ export default function GameContent() {
   sendSeatChangeRef.current = sendSeatChange;
   // Sync ref so the Spotify leader can report state without a circular dep
   sendSpotifyControlRef.current = sendSpotifyControl;
+
+  // Map tokens — the shared board (hook owns state at GameContent level,
+  // fog precedent; MapDisplay renders the layer, drawers render the chips).
+  const mapTokens = useMapTokens({
+    webSocket,
+    isConnected,
+    registerHandler,
+    thisUserId,
+    activeMap,
+    addToLog,
+  });
+
+  // Feed the gameContext bridge (see mapTokensBridgeRef above).
+  useEffect(() => {
+    mapTokensBridgeRef.current = {
+      setMapTokenState: mapTokens.setMapTokenState,
+      clearHoldsForUser: mapTokens.clearHoldsForUser,
+    };
+  }, [mapTokens.setMapTokenState, mapTokens.clearHoldsForUser]);
+
+  // Stable callback bundle for MapTokenLayer — keeps MapDisplay's memo
+  // effective (identity only changes if an underlying callback does).
+  const mapTokensApi = useMemo(() => ({
+    attachTokenLayer: mapTokens.attachTokenLayer,
+    grabToken: mapTokens.grabToken,
+    releaseToken: mapTokens.releaseToken,
+    commitTokenMove: mapTokens.commitTokenMove,
+    removeToken: mapTokens.removeToken,
+    clearDenial: mapTokens.clearDenial,
+  }), [
+    mapTokens.attachTokenLayer, mapTokens.grabToken, mapTokens.releaseToken,
+    mapTokens.commitTokenMove, mapTokens.removeToken, mapTokens.clearDenial,
+  ]);
 
   // Mixer drawer transport handlers — send via WebSocket batch
   const handleMixerPlay = useCallback((trackId) => {
@@ -2093,6 +2144,18 @@ export default function GameContent() {
               displayNameMap={displayNameMap}
             />
 
+            {/* Unplaced map-token chips — drag onto the map to place (plan §3.6) */}
+            {activeMap && (
+              <MapTokenChipList
+                gameSeats={gameSeats}
+                tokens={mapTokens.tokensForActiveMap}
+                seatColorByIndex={seatColorByIndex}
+                beginCarry={mapTokens.beginCarry}
+                cancelCarry={mapTokens.cancelCarry}
+                dropCarriedToken={mapTokens.dropCarriedToken}
+              />
+            )}
+
             {gameSeats.filter(seat => !isSpectator || canUseModeratorTools || seat.userId !== "empty").map((seat) => {
               const isSitting = seat.userId === thisUserId;
               const currentColor = seatColorByIndex[seat.seatId] || getSeatColorHex(seat.seatId);
@@ -2239,6 +2302,15 @@ export default function GameContent() {
                 />
               )}
               {activeRightDrawer === 'combat' && isDM && (
+                <>
+                <MapTokenCreator
+                  npcDrafts={mapTokens.npcDrafts}
+                  createNpcDraft={mapTokens.createNpcDraft}
+                  removeNpcDraft={mapTokens.removeNpcDraft}
+                  beginCarry={mapTokens.beginCarry}
+                  cancelCarry={mapTokens.cancelCarry}
+                  dropCarriedToken={mapTokens.dropCarriedToken}
+                />
                 <CombatControlsPanel
                   promptPlayerRoll={promptPlayerRoll}
                   promptAllPlayersInitiative={promptAllPlayersInitiative}
@@ -2250,6 +2322,7 @@ export default function GameContent() {
                   characterNameMap={characterNameMap}
                   displayNameMap={displayNameMap}
                 />
+                </>
               )}
               {activeRightDrawer === 'audio' && isDM && (
                 <AudioMixerPanel
@@ -2307,6 +2380,15 @@ export default function GameContent() {
               fogOpacity={isDM && fogPeekThrough ? 0.5 : 1.0}
               // DM-only region labels at runtime. Players never see them.
               fogShowRegionLabels={isDM}
+              // Map tokens — the shared board's pieces (render above fog + grid)
+              mapTokens={mapTokens.tokensForActiveMap}
+              mapTokenHolds={mapTokens.heldTokens}
+              mapTokenDenial={mapTokens.lastDenial}
+              mapTokensApi={mapTokensApi}
+              playerMetadata={playerMetadata}
+              playerSeatMap={playerSeatMap}
+              displayNameMap={displayNameMap}
+              thisUserId={thisUserId}
             />
           )}
 
