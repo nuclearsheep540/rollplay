@@ -15,6 +15,7 @@ from shared_contracts.cine import ColorFilterOverlay, FilmGrainOverlay, HandHeld
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
 from shared_contracts.session import (
+    LogEntry,
     PlayerState,
     SessionEndFinalState,
     SessionEndResponse,
@@ -459,6 +460,7 @@ class TestSessionRoundTrip:
                         hp_current=22,
                         hp_max=28,
                         ac=14,
+                        color="#3b82f6",
                     ),
                 ),
                 SessionUser(
@@ -506,14 +508,46 @@ class TestSessionRoundTrip:
 
     def test_session_end_final_state_round_trip(self):
         state = SessionEndFinalState(
-            players=[PlayerState(user_id="u1", player_name="Alice", seat_position=0, seat_color="#FF6B6B")],
+            players=[
+                # Seated player with a character-owned color
+                PlayerState(user_id="u1", player_name="Alice", seat_position=0, character_id="char-1", color="#FF6B6B"),
+                # Known-but-unseated player still round-trips (color sync coverage)
+                PlayerState(user_id="u2", player_name="Bob"),
+            ],
             session_stats=SessionStats(duration_minutes=120, total_logs=47, max_players=5),
             audio_state={"channel_0": AudioChannelState(volume=0.5, playback_state="paused")},
             spotify_state=SpotifyState(track_uri="spotify:track:abc", playback_state="paused", paused_elapsed=98.4, channel_level=0.3),
             map_state=MapConfig(asset_id="m1", filename="map.png", file_path="https://s3.example.com/map.png"),
             active_display=ActiveDisplayType.IMAGE,
+            adventure_log=[
+                LogEntry(
+                    message="Alice rolled a d20: 17",
+                    type="player-roll",
+                    timestamp="2026-07-19T18:30:00+00:00",
+                    from_player="u1",
+                    log_id=1752950000000000,
+                ),
+                LogEntry(
+                    message="Combat started by dm_user",
+                    type="system",
+                    timestamp="2026-07-19T18:31:00+00:00",
+                    log_id=1752950060000000,
+                    prompt_id="prompt-1",
+                ),
+            ],
         )
         assert SessionEndFinalState.model_validate(state.model_dump()) == state
+
+    def test_log_entry_round_trip(self):
+        entry = LogEntry(
+            message="DM prompted all players for Initiative",
+            type="dungeon-master",
+            timestamp="2026-07-19T18:32:00+00:00",
+            from_player="u-dm",
+            log_id=1752950120000000,
+        )
+        assert LogEntry.model_validate(entry.model_dump()) == entry
+        assert entry.prompt_id is None
 
     def test_session_end_response_round_trip(self):
         response = SessionEndResponse(

@@ -50,7 +50,10 @@ export function Button({
   const disabledStyle = {
     backgroundColor: COLORS.graphite,
     color: COLORS.silver,
-    borderColor: COLORS.graphite
+    // Silver edge keeps the button's outline defined against dark surfaces
+    // (graphite-on-graphite made disabled buttons read as holes); the muted
+    // fill + text still carry the "inert" signal.
+    borderColor: COLORS.silver
   }
 
   const sizes = {

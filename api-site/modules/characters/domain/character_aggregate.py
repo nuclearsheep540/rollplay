@@ -12,6 +12,7 @@ the strategy testable in isolation.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Iterable, Optional
@@ -279,6 +280,10 @@ class CharacterAggregate:
     avatar_asset_id: Optional[UUID] = None
     avatar_s3_key: Optional[str] = None
 
+    # Character-owned display color ('#rrggbb'). Seats and map tokens *display*
+    # this; nothing stores color per-seat. None ⇒ seat-index palette fallback.
+    color: Optional[str] = None
+
     # Provenance of the current ability_scores. Lets the wizard resume in the
     # mode the player last used, and (for ``rolled``) re-display the original
     # 4d6 breakdown instead of forcing a re-roll on refresh.
@@ -515,6 +520,16 @@ class CharacterAggregate:
 
     def set_inspiration(self, value: bool) -> None:
         self.inspiration = bool(value)
+        self._touch()
+
+    def set_color(self, color: Optional[str]) -> None:
+        """Set the character's display color, or None to clear it.
+
+        Shape-only validation (data invariant): any '#rrggbb' hue is allowed —
+        there is no palette restriction and duplicates across a party are fine."""
+        if color is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            raise ValueError("Color must be '#rrggbb' hex")
+        self.color = color
         self._touch()
 
     def add_status(self, status: str) -> None:

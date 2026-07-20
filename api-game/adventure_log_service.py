@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -238,10 +238,64 @@ class AdventureLogService:
             print(f"Error during log cleanup for room {room_id}: {e}")
             # Don't raise here - log cleanup failure shouldn't break log insertion
     
+    def restore_room_logs(self, room_id: str, entries: List[Dict]) -> int:
+        """
+        Bulk re-seed a room's logs from cold storage (session resume ETL).
+
+        Unlike add_log_entry, timestamps and log_ids are PRESERVED — these are
+        historical lines, not new ones. Read ordering comes from log_id, so
+        insert order is irrelevant.
+
+        Any existing logs for the room are cleared first: the cold copy is the
+        single source of truth on resume, so re-seeding must be idempotent.
+        Without this, a partial cleanup on the previous pause (the session doc
+        is deleted before its logs, and the resume 409-guard only checks the
+        session doc) would let restore stack a second copy on orphaned logs.
+
+        Args:
+            room_id: The room/session ID
+            entries: LogEntry-shaped dicts (timestamp as ISO-8601 string)
+
+        Returns:
+            int: Number of entries restored
+        """
+        if not entries:
+            return 0
+
+        self.delete_room_logs(room_id)
+
+        docs = []
+        for entry in entries:
+            entry_timestamp = entry.get("timestamp")
+            if isinstance(entry_timestamp, str) and entry_timestamp:
+                parsed = datetime.fromisoformat(entry_timestamp)
+                # Stored timestamps are naive UTC (see add_log_entry) — normalize to match
+                if parsed.tzinfo is not None:
+                    parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+                entry_timestamp = parsed
+            doc = {
+                "room_id": room_id,
+                "message": entry.get("message", ""),
+                "type": entry.get("type", "system"),
+                "timestamp": entry_timestamp,
+                "from_player": entry.get("from_player"),
+                "log_id": entry.get("log_id"),
+            }
+            if entry.get("prompt_id"):
+                doc["prompt_id"] = entry["prompt_id"]
+            docs.append(doc)
+
+        try:
+            self.adventure_logs.insert_many(docs)
+            return len(docs)
+        except Exception as e:
+            print(f"Error restoring logs for room {room_id}: {e}")
+            raise
+
     def get_room_logs(
-        self, 
-        room_id: str, 
-        limit: int = 50, 
+        self,
+        room_id: str,
+        limit: int = 50,
         skip: int = 0
     ) -> List[Dict]:
         """

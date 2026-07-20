@@ -628,47 +628,43 @@ class WebsocketEvent():
 
     @staticmethod
     async def color_change(websocket, data, event_data, user_id, client_id, manager):
-        """Handle player color changes"""
-        player_changing = event_data.get("player")  # user_id of player whose color is changing
-        seat_index = event_data.get("seat_index")
+        """Handle character color changes.
+
+        Color is character-owned (it rides player_metadata and follows the
+        player between seats); the seat only displays it. Cold persistence
+        happens at session end, when api-site syncs player colors back onto
+        character rows."""
+        player_changing = event_data.get("player")  # user_id whose character color is changing
         new_color = event_data.get("new_color")
         changed_by = event_data.get("changed_by", user_id)
-        
-        if not all([player_changing, seat_index is not None, new_color]):
+
+        if not all([player_changing, new_color]):
             error_message = {
                 "event_type": "error",
-                "data": "Color change requires player, seat_index, and new_color"
+                "data": "Color change requires player and new_color"
             }
             return WebsocketEventResult(broadcast_message=error_message)
-        
+
         try:
-            # Get current seat colors
-            current_colors = GameService.get_seat_colors(client_id)
-            
-            # Update the specific seat color
-            current_colors[str(seat_index)] = new_color
-            
-            # Persist to database
-            GameService.update_seat_colors(client_id, current_colors)
-            
-            print(f"🎨 {changed_by} changed {player_changing}'s color (seat {seat_index}) to {new_color}")
-            
+            GameService.update_player_color(client_id, player_changing, new_color)
+
+            print(f"🎨 {changed_by} changed {player_changing}'s character color to {new_color}")
+
             broadcast_message = {
                 "event_type": "color_change",
                 "data": {
                     "player": player_changing,
-                    "seat_index": seat_index,
                     "new_color": new_color,
                     "changed_by": changed_by
                 }
             }
-            
+
             return WebsocketEventResult(broadcast_message=broadcast_message)
-            
+
         except Exception as e:
-            error_msg = f"Failed to update seat color: {str(e)}"
+            error_msg = f"Failed to update character color: {str(e)}"
             print(f"❌ {error_msg}")
-            
+
             error_message = {
                 "event_type": "error",
                 "data": error_msg

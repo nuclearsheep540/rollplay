@@ -15,6 +15,7 @@ export default function PlayerCard({
     playerData = null,
     onColorChange = null,
     currentColor = null,
+    usedColors = [],
   }) {
 
 
@@ -146,7 +147,7 @@ export default function PlayerCard({
                   onColorChange={onColorChange}
                   userId={currentSeat.userId}
                   playerName={occupantName}
-                  seatIndex={seatId}
+                  usedColors={usedColors}
                 />
               </div>
             )}

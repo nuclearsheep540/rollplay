@@ -222,6 +222,7 @@ class CharacterRepository:
                 if model.avatar_asset is not None
                 else None
             ),
+            color=model.color,
             ability_score_method=model.ability_score_method,
             ability_roll_details=(
                 dict(model.ability_roll_details)
@@ -299,6 +300,7 @@ class CharacterRepository:
                 is_draft=aggregate.is_draft,
                 creation_step=aggregate.creation_step,
                 avatar_asset_id=aggregate.avatar_asset_id,
+                color=aggregate.color,
                 ability_score_method=aggregate.ability_score_method,
                 ability_roll_details=aggregate.ability_roll_details,
                 species_sub_choices=dict(aggregate.species_sub_choices),
@@ -341,6 +343,7 @@ class CharacterRepository:
             model.is_draft = aggregate.is_draft
             model.creation_step = aggregate.creation_step
             model.avatar_asset_id = aggregate.avatar_asset_id
+            model.color = aggregate.color
             model.ability_score_method = aggregate.ability_score_method
             model.ability_roll_details = aggregate.ability_roll_details
             model.species_sub_choices = dict(aggregate.species_sub_choices)

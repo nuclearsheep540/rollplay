@@ -18,8 +18,27 @@ from .spotify import SpotifyState
 class PlayerState(ContractModel):
     user_id: str
     player_name: str
-    seat_position: int
-    seat_color: str
+    # None when the player is known to the session but not currently seated —
+    # they still round-trip so character state (color) syncs cold for everyone.
+    seat_position: Optional[int] = None
+    character_id: Optional[str] = None
+    # Character-owned color (hex). None when the player's character has no custom
+    # color — display falls back to the seat-index palette client-side.
+    color: Optional[str] = None
+
+
+class LogEntry(ContractModel):
+    """One adventure-log line, shaped like the api-game Mongo doc (sans room_id).
+
+    timestamp is ISO-8601 with explicit UTC offset — same rule as urls_expire_at.
+    log_id is the microsecond ordering key api-game stamps at insert."""
+
+    message: str
+    type: str
+    timestamp: str
+    from_player: Optional[str] = None
+    log_id: int
+    prompt_id: Optional[str] = None
 
 
 class SessionStats(ContractModel):
@@ -44,6 +63,7 @@ class SessionStartPayload(ContractModel):
     map_config: Optional[MapConfig] = None
     image_config: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
+    adventure_log: List[LogEntry] = []
     # ISO-8601 with explicit UTC offset (never naive — JS parses offset-less strings as
     # local time). Kept a string end-to-end so no hop re-serializes it naively.
     urls_expire_at: Optional[str] = None
@@ -61,6 +81,7 @@ class SessionEndFinalState(ContractModel):
     map_state: Optional[MapConfig] = None
     image_state: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
+    adventure_log: List[LogEntry] = []
 
 
 class SessionStartResponse(ContractModel):
