@@ -12,6 +12,7 @@ from .character import DungeonMaster, PlayerCharacter, SessionUser
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import MapConfig
+from .map_token import MapToken
 from .spotify import SpotifyState
 
 
@@ -64,6 +65,10 @@ class SessionStartPayload(ContractModel):
     image_config: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
     adventure_log: List[LogEntry] = []
+    # Token boards, keyed per map asset_id — every map in the session keeps
+    # its own pieces across pause/resume. Orphan boards (deleted maps) are
+    # pruned by StartSession before this payload is built.
+    map_token_state: Dict[str, List[MapToken]] = {}
     # ISO-8601 with explicit UTC offset (never naive — JS parses offset-less strings as
     # local time). Kept a string end-to-end so no hop re-serializes it naively.
     urls_expire_at: Optional[str] = None
@@ -82,6 +87,7 @@ class SessionEndFinalState(ContractModel):
     image_state: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
     adventure_log: List[LogEntry] = []
+    map_token_state: Dict[str, List[MapToken]] = {}
 
 
 class SessionStartResponse(ContractModel):

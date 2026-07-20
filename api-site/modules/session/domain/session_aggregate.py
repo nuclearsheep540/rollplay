@@ -94,6 +94,7 @@ class SessionEntity:
         image_config: Optional[dict] = None,  # Persisted active image config (asset_id for ETL restoration)
         active_display: Optional[str] = None,  # Which display was active: "map", "image", or None
         adventure_log: Optional[list] = None,  # Persisted adventure log (LogEntry-shaped dicts, ≤200) for ETL restoration
+        map_token_state: Optional[dict] = None,  # Persisted token boards (asset_id -> list[MapToken dicts]) for ETL restoration
     ):
         self.id = id
         self.name = name if name else "Session 1"
@@ -113,6 +114,7 @@ class SessionEntity:
         self.image_config = image_config
         self.active_display = active_display
         self.adventure_log = adventure_log
+        self.map_token_state = map_token_state
 
     @property
     def is_locked(self) -> bool:

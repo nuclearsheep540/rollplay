@@ -105,6 +105,7 @@ class SessionRepository:
             model.image_config = aggregate.image_config
             model.active_display = aggregate.active_display
             model.adventure_log = aggregate.adventure_log
+            model.map_token_state = aggregate.map_token_state
 
             # Sync joined_users (session_joined_users table)
             self._sync_joined_users(model.id, aggregate.joined_users)
@@ -128,7 +129,8 @@ class SessionRepository:
                 map_config=aggregate.map_config,
                 image_config=aggregate.image_config,
                 active_display=aggregate.active_display,
-                adventure_log=aggregate.adventure_log
+                adventure_log=aggregate.adventure_log,
+                map_token_state=aggregate.map_token_state
             )
             self.db.add(model)
             self.db.flush()  # Get ID before setting relationships
@@ -228,5 +230,6 @@ class SessionRepository:
             map_config=model.map_config,
             image_config=model.image_config,
             active_display=model.active_display,
-            adventure_log=model.adventure_log
+            adventure_log=model.adventure_log,
+            map_token_state=model.map_token_state
         )

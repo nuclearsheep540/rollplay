@@ -11,6 +11,7 @@ import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import update
+from pydantic import ValidationError
 
 from shared_contracts.assets import AssetRef
 from shared_contracts.audio import AudioChannelState, AudioTrackConfig
@@ -18,6 +19,7 @@ from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUs
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
+from shared_contracts.map_token import MapToken
 from shared_contracts.session import (
     LogEntry,
     SessionEndResponse,
@@ -384,6 +386,43 @@ class StartSession:
         return track_config
 
     @staticmethod
+    def _restore_map_token_state(session: SessionEntity, asset_lookup: dict) -> dict:
+        """Restore the per-map token boards (cold → hot).
+
+        Two protections before the boards reach SessionStartPayload:
+        - Orphan pruning: boards keyed by an asset_id that no longer resolves
+          in the campaign library (map deleted between sessions) are dropped
+          and logged, never restored.
+        - Per-token salvage: a malformed stored dict (e.g. cold data across a
+          contract change) is dropped with a warning instead of failing the
+          entire payload build and blocking the session start.
+        """
+        stored_boards = session.map_token_state or {}
+        restored_boards = {}
+        for board_asset_id, board_tokens in stored_boards.items():
+            if board_asset_id not in asset_lookup:
+                logger.info(
+                    f"Pruned orphan token board for deleted map asset {board_asset_id} "
+                    f"({len(board_tokens)} tokens)"
+                )
+                continue
+
+            salvaged_tokens = []
+            for board_token in board_tokens or []:
+                try:
+                    salvaged_tokens.append(MapToken(**board_token).model_dump())
+                except (ValidationError, TypeError) as token_error:
+                    logger.warning(
+                        f"Dropped malformed stored map token on board {board_asset_id} "
+                        f"at session start: {token_error}"
+                    )
+            if salvaged_tokens:
+                restored_boards[board_asset_id] = salvaged_tokens
+
+        logger.info(f"Restoring map token state: {len(restored_boards)} board(s)")
+        return restored_boards
+
+    @staticmethod
     def _restore_map_config(
         session: SessionEntity, asset_lookup: dict, url_map: dict
     ) -> Optional[MapConfig]:
@@ -571,6 +610,7 @@ class StartSession:
                 image_config=image_config_for_game,
                 active_display=ActiveDisplayType(session.active_display) if session.active_display else None,
                 adventure_log=session.adventure_log or [],
+                map_token_state=self._restore_map_token_state(session, asset_lookup),
                 urls_expire_at=urls_expire_at.isoformat() if urls_expire_at else None,
             )
 
@@ -643,6 +683,7 @@ class _ExtractedGameState:
     image_config: dict
     active_display: Optional[str]
     adventure_log: list
+    map_token_state: dict
 
 
 async def _extract_and_sync_game_state(
@@ -816,6 +857,12 @@ async def _extract_and_sync_game_state(
         adventure_log = [entry.model_dump() for entry in final_state.adventure_log]
         logger.info(f"Extracted adventure log: {len(adventure_log)} entries")
 
+        # Token boards travel whole (tiny: a handful of ~10-field discs per map)
+        map_token_state = {}
+        for board_asset_id, board_tokens in final_state.map_token_state.items():
+            map_token_state[board_asset_id] = [board_token.model_dump() for board_token in board_tokens]
+        logger.info(f"Extracted map token state: {len(map_token_state)} board(s)")
+
         return _ExtractedGameState(
             max_players=max_players,
             audio_config=audio_config,
@@ -824,6 +871,7 @@ async def _extract_and_sync_game_state(
             image_config=image_config,
             active_display=active_display,
             adventure_log=adventure_log,
+            map_token_state=map_token_state,
         )
 
     except Exception as e:
@@ -923,6 +971,7 @@ class PauseSession:
             session.image_config = extracted.image_config
             session.active_display = extracted.active_display
             session.adventure_log = extracted.adventure_log
+            session.map_token_state = extracted.map_token_state
 
             session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
             self.session_repo.save(session)
@@ -1059,6 +1108,7 @@ class FinishSession:
             session.image_config = extracted.image_config
             session.active_display = extracted.active_display
             session.adventure_log = extracted.adventure_log
+            session.map_token_state = extracted.map_token_state
 
             session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None
             self.session_repo.save(session)

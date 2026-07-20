@@ -64,6 +64,7 @@ class Session(Base):
     image_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active image config from ETL
     active_display = Column(String(10), nullable=True)  # Which display was active: "map", "image", or null
     adventure_log = Column(JSONB, nullable=True, server_default='[]')  # Persisted adventure log from ETL (LogEntry-shaped, ≤200 entries)
+    map_token_state = Column(JSONB, nullable=True, server_default='{}')  # Persisted token boards from ETL (asset_id -> list[MapToken])
 
     # Relationships
     campaign = relationship("Campaign", back_populates="sessions")

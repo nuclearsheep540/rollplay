@@ -768,3 +768,46 @@ class TestMapTokenConstraints:
     def test_label_rejects_oversized(self):
         with pytest.raises(ValidationError):
             MapToken.model_validate(self._valid_token(label="x" * 65))
+
+
+class TestMapTokenSessionEtl:
+    def _board(self):
+        return {
+            "asset-1": [
+                {
+                    "id": "token-1", "kind": "pc", "owner_user_id": "user-1",
+                    "character_id": "char-1", "x": 100.0, "y": 200.0,
+                    "footprint": 1, "created_by": "user-1",
+                    "updated_at": "2026-07-20T12:00:00+00:00",
+                },
+                {
+                    "id": "token-2", "kind": "npc", "label": "Goblin 3",
+                    "x": 300.0, "y": 400.0, "footprint": 2, "created_by": "dm-1",
+                },
+            ]
+        }
+
+    def test_start_payload_round_trips_token_boards(self):
+        payload = SessionStartPayload(
+            session_id="s1", campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="dm-1", player_name="Matt"),
+            map_token_state=self._board(),
+        )
+        restored = SessionStartPayload.model_validate(payload.model_dump())
+        assert restored == payload
+        assert restored.map_token_state["asset-1"][0].id == "token-1"
+
+    def test_final_state_round_trips_token_boards(self):
+        final_state = SessionEndFinalState(map_token_state=self._board())
+        restored = SessionEndFinalState.model_validate(final_state.model_dump())
+        assert restored == final_state
+        assert restored.map_token_state["asset-1"][1].label == "Goblin 3"
+
+    def test_token_boards_default_empty(self):
+        assert SessionEndFinalState().map_token_state == {}
+
+    def test_malformed_board_token_rejected(self):
+        board = self._board()
+        board["asset-1"][0]["x"] = float("nan")
+        with pytest.raises(ValidationError):
+            SessionEndFinalState(map_token_state=board)
