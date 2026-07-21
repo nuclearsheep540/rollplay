@@ -17,7 +17,10 @@ from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.library.repositories.preset_repository import PresetRepository
+from modules.library.repositories.collection_repository import AssetCollectionRepository
 from modules.library.domain.preset_aggregate import PresetAggregate, PresetSlot
+from modules.library.domain.collection_aggregate import AssetCollectionAggregate
+from modules.library.domain.collection_kind import CollectionKind
 from modules.session.repositories.session_repository import SessionRepository
 from modules.session.domain.session_aggregate import SessionStatus
 from shared.services.s3_service import S3Service
@@ -153,10 +156,17 @@ class DeleteMediaAsset:
     - Cleans stale references from inactive/finished session JSONB configs
     """
 
-    def __init__(self, repository: MediaAssetRepository, s3_service: S3Service, session_repository: SessionRepository):
+    def __init__(
+        self,
+        repository: MediaAssetRepository,
+        s3_service: S3Service,
+        session_repository: SessionRepository,
+        collection_repository: AssetCollectionRepository = None,
+    ):
         self.repository = repository
         self.s3_service = s3_service
         self.session_repository = session_repository
+        self.collection_repository = collection_repository
 
     def execute(self, asset_id: UUID, user_id: UUID) -> bool:
         """
@@ -190,6 +200,11 @@ class DeleteMediaAsset:
             for session in sessions:
                 if session.remove_asset_references(asset_id_str):
                     self.session_repository.save(session)
+
+        # Prune from the owner's manual collections so member lists
+        # never hold dangling ids
+        if self.collection_repository:
+            self.collection_repository.remove_asset_from_all(asset_id, user_id)
 
         # Delete from S3 first
         self.s3_service.delete_object(asset.s3_key)
@@ -239,6 +254,84 @@ class RenameMediaAsset:
         return asset
 
 
+class UpdateAssetTags:
+    """
+    Replace a media asset's user tags (atomic full-replace).
+
+    Tags are library-only metadata - they never appear in a live game
+    session - so unlike rename/type-change there is no active-session
+    guard here.
+    """
+
+    def __init__(self, repository: MediaAssetRepository):
+        self.repository = repository
+
+    def execute(self, asset_id: UUID, user_id: UUID, tags: List[str]) -> MediaAssetAggregate:
+        """
+        Replace tags if the asset is owned by the user.
+
+        Args:
+            asset_id: The asset to update
+            user_id: The requesting user's ID
+            tags: Full replacement tag list (normalized by the aggregate)
+
+        Returns:
+            Updated MediaAssetAggregate
+
+        Raises:
+            ValueError: If asset not found, not owned by user, or tags invalid
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        asset.set_tags(tags)
+        self.repository.save(asset)
+
+        return asset
+
+
+class SetAssetFavorite:
+    """
+    Set or clear the library favorite flag on a media asset.
+
+    Favorite state is library-only metadata - no active-session guard.
+    """
+
+    def __init__(self, repository: MediaAssetRepository):
+        self.repository = repository
+
+    def execute(self, asset_id: UUID, user_id: UUID, favorite: bool) -> MediaAssetAggregate:
+        """
+        Set favorite flag if the asset is owned by the user.
+
+        Args:
+            asset_id: The asset to update
+            user_id: The requesting user's ID
+            favorite: New favorite state
+
+        Returns:
+            Updated MediaAssetAggregate
+
+        Raises:
+            ValueError: If asset not found or not owned by user
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        asset.set_favorite(favorite)
+        self.repository.save(asset)
+
+        return asset
+
+
 class ChangeAssetType:
     """
     Change a media asset's type tag (e.g. map <-> image).
@@ -251,7 +344,7 @@ class ChangeAssetType:
 
     Subtype-specific config (grid_width on a map, image_fit on an image,
     audio loop points, etc.) is **intentionally discarded** on type
-    change — semantically the user is saying this is a different kind
+    change - semantically the user is saying this is a different kind
     of asset now. Callers should not assume those fields survive.
     """
 
@@ -271,7 +364,7 @@ class ChangeAssetType:
         Returns:
             Freshly-loaded MediaAssetAggregate of the new type. The
             in-memory aggregate that existed before this call is stale
-            (still the old Python subclass) — discard it and use the
+            (still the old Python subclass) - discard it and use the
             return value.
 
         Raises:
@@ -300,7 +393,7 @@ class ChangeAssetType:
 
         asset.change_type(new_type)  # raises ValueError on incompatible content type
 
-        # Atomic SQL row migration — see MediaAssetRepository.change_subtype
+        # Atomic SQL row migration - see MediaAssetRepository.change_subtype
         self.repository.change_subtype(asset_id, old_type, new_type)
 
         # Refetch so the returned aggregate has the correct Python
@@ -437,7 +530,7 @@ class UpdateFogConfig:
     Each region in the list owns its own alpha-mask PNG plus render
     params (feather, dilate, etc.). Pass regions=None or [] to clear
     all fog. Per the codebase's atomic-state rule, the entire regions
-    list is replaced on every call — partial updates are the per-
+    list is replaced on every call - partial updates are the per-
     region endpoints' job (commands TBD in a later step).
     """
 
@@ -533,7 +626,7 @@ class UpdateAudioConfig:
         if self.session_repository:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
-        # Build kwargs — effects only apply to MusicAsset
+        # Build kwargs - effects only apply to MusicAsset
         config_kwargs = dict(
             duration_seconds=duration_seconds,
             default_volume=default_volume,
@@ -637,6 +730,104 @@ class UpdateImageConfig:
 
         self.repository.save(asset)
         return asset
+
+
+class CollectionNotFoundError(Exception):
+    """Raised when a collection cannot be found or does not belong to the requester."""
+    pass
+
+
+class CreateCollection:
+    """Create a manual or smart collection for a user."""
+
+    def __init__(self, collection_repository: AssetCollectionRepository):
+        self.collections = collection_repository
+
+    def execute(self, user_id: UUID, name: str, kind: str, filters: Optional[Dict[str, Any]] = None) -> AssetCollectionAggregate:
+        kind = CollectionKind(kind)
+        if kind == CollectionKind.SMART:
+            collection = AssetCollectionAggregate.create_smart(user_id=user_id, name=name, filters=filters or {})
+        else:
+            collection = AssetCollectionAggregate.create_manual(user_id=user_id, name=name)
+
+        self.collections.save(collection)
+        return collection
+
+
+class UpdateCollection:
+    """Rename a collection and/or replace a smart collection's filters."""
+
+    def __init__(self, collection_repository: AssetCollectionRepository):
+        self.collections = collection_repository
+
+    def execute(
+        self,
+        collection_id: UUID,
+        user_id: UUID,
+        name: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> AssetCollectionAggregate:
+        collection = self.collections.get_by_id(collection_id)
+        if not collection or not collection.is_owned_by(user_id):
+            raise CollectionNotFoundError(f"Collection {collection_id} not found")
+
+        if name is not None:
+            collection.rename(name)
+        if filters is not None:
+            collection.update_filters(filters)  # raises for manual collections
+
+        self.collections.save(collection)
+        return collection
+
+
+class AddAssetToCollection:
+    """Add an owned asset to a manual collection."""
+
+    def __init__(self, collection_repository: AssetCollectionRepository, asset_repository: MediaAssetRepository):
+        self.collections = collection_repository
+        self.assets = asset_repository
+
+    def execute(self, collection_id: UUID, asset_id: UUID, user_id: UUID) -> AssetCollectionAggregate:
+        collection = self.collections.get_by_id(collection_id)
+        if not collection or not collection.is_owned_by(user_id):
+            raise CollectionNotFoundError(f"Collection {collection_id} not found")
+
+        asset = self.assets.get_by_id(asset_id)
+        if not asset or not asset.is_owned_by(user_id):
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        collection.add_asset(asset_id)  # raises for smart collections
+        self.collections.save(collection)
+        return collection
+
+
+class RemoveAssetFromCollection:
+    """Remove an asset from a manual collection."""
+
+    def __init__(self, collection_repository: AssetCollectionRepository):
+        self.collections = collection_repository
+
+    def execute(self, collection_id: UUID, asset_id: UUID, user_id: UUID) -> AssetCollectionAggregate:
+        collection = self.collections.get_by_id(collection_id)
+        if not collection or not collection.is_owned_by(user_id):
+            raise CollectionNotFoundError(f"Collection {collection_id} not found")
+
+        collection.remove_asset(asset_id)  # raises for smart collections
+        self.collections.save(collection)
+        return collection
+
+
+class DeleteCollection:
+    """Delete a collection owned by the requester. Assets are untouched."""
+
+    def __init__(self, collection_repository: AssetCollectionRepository):
+        self.collections = collection_repository
+
+    def execute(self, collection_id: UUID, user_id: UUID) -> None:
+        collection = self.collections.get_by_id(collection_id)
+        if not collection or not collection.is_owned_by(user_id):
+            raise CollectionNotFoundError(f"Collection {collection_id} not found")
+        self.collections.delete(collection_id)
 
 
 class PresetNameConflictError(Exception):

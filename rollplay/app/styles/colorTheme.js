@@ -47,6 +47,23 @@ export const THEME = {
 }
 
 // =============================================================================
+// ASSET TYPE ACCENTS (library type coding - distinct from feedback colors)
+// =============================================================================
+
+// Muted accents used to colour-code asset types across the library
+// (badges, rail swatches, waveform thumbs). Mirrors the --asset-* CSS
+// vars in globals.css; exported here for inline-style consumers.
+export const ASSET_TYPE_COLORS = {
+  map: '#8FAE8B',
+  music: '#C9A36A',
+  sfx: '#A98FC0',
+  image: '#7FA3B8'
+}
+
+// Library favorite star - mirrors --favorite in globals.css
+export const FAVORITE_COLOR = '#D9A441'
+
+// =============================================================================
 // COMMON STYLE OBJECTS (for inline styles)
 // =============================================================================
 

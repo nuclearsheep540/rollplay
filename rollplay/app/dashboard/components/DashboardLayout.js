@@ -10,7 +10,7 @@ import { useEffect } from 'react'
 import SubNav from '../../shared/components/SubNav'
 
 /**
- * Dashboard-specific shell — just the tab nav + main content. The page
+ * Dashboard-specific shell - just the tab nav + main content. The page
  * chrome (site header, auth bootstrap, event subscription) lives in
  * `app/(authenticated)/layout.js`, which wraps every authenticated page.
  */
@@ -19,11 +19,12 @@ export default function DashboardLayout({
   activeSection,
   setActiveSection,
   isChildExpanded = false,
+  isChildFullBleed = false,
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Tab configuration — visible nav items. Account isn't here any more:
+  // Tab configuration - visible nav items. Account isn't here any more:
   // it lives as an icon in the authenticated layout's header alongside
   // logout and notifications, since it's a user-profile surface rather
   // than a content tab. Market is the upcoming campaign-sharing feature.
@@ -79,7 +80,9 @@ export default function DashboardLayout({
       {/* Main Content Area - Flex container so children can fill remaining space */}
       <main
         id="dashboard-main"
-        className={`flex-1 flex flex-col px-4 sm:px-8 md:px-10 overflow-x-hidden overflow-y-auto overscroll-none ${isChildExpanded ? '' : 'pt-4 sm:pt-8 md:pt-10 pb-8'}`}
+        className={`flex-1 flex flex-col overflow-x-hidden overflow-y-auto overscroll-none ${
+          isChildFullBleed ? '' : 'px-4 sm:px-8 md:px-10'
+        } ${isChildExpanded || isChildFullBleed ? '' : 'pt-4 sm:pt-8 md:pt-10 pb-8'}`}
       >
         {children}
       </main>

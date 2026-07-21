@@ -8,7 +8,7 @@ Media assets (maps, audio, images) are stored in S3, but metadata lives in Postg
 This is distinct from domain objects (NPCs, Items) which have business logic but no S3 backing.
 """
 
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Boolean, Column, String, Integer, DateTime, ForeignKey, Enum as SQLEnum, Index, text
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -53,6 +53,12 @@ class MediaAsset(Base):
     # Full implementation may use junction tables
     campaign_ids = Column(ARRAY(UUID(as_uuid=True)), default=[], nullable=False)
 
+    # User-created searchable tags (normalized lowercase in the aggregate)
+    tags = Column(ARRAY(String), default=[], server_default=text("'{}'"), nullable=False)
+
+    # Library favorite flag (starred in the dashboard library)
+    favorite = Column(Boolean, default=False, server_default=text("false"), nullable=False)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -66,6 +72,12 @@ class MediaAsset(Base):
     __mapper_args__ = {
         'polymorphic_on': asset_type,
     }
+
+    # GIN index so tag containment queries (tags @> ARRAY[...]) stay
+    # index-backed once server-side tag filtering lands.
+    __table_args__ = (
+        Index('ix_media_assets_tags', tags, postgresql_using='gin'),
+    )
 
     def __repr__(self):
         return f"<MediaAsset(id={self.id}, filename='{self.filename}', type='{self.asset_type.value}')>"

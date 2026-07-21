@@ -11,12 +11,17 @@ This is distinct from domain objects (NPCs, Items) which have business logic
 but no S3 backing.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
 from modules.library.domain.media_asset_type import MediaAssetType
+
+# Tag rules - enforced by set_tags(). Kept as module constants so tests
+# and (future) schema hints reference one source of truth.
+MAX_TAG_LENGTH = 32
+MAX_TAGS_PER_ASSET = 20
 
 
 @dataclass
@@ -35,8 +40,19 @@ class MediaAssetAggregate:
     asset_type: MediaAssetType
     file_size: Optional[int] = None
     campaign_ids: List[UUID] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    favorite: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    def base_kwargs(self) -> Dict[str, Any]:
+        """All base-aggregate fields as kwargs.
+
+        Subtype aggregates' from_base() spreads this instead of listing
+        fields by hand, so a new base field can never silently drop out
+        of the promotion path (which would wipe it on the next save).
+        """
+        return {f.name: getattr(self, f.name) for f in fields(MediaAssetAggregate)}
 
     @classmethod
     def create(
@@ -153,6 +169,39 @@ class MediaAssetAggregate:
         if not new_filename or not new_filename.strip():
             raise ValueError("Filename cannot be empty")
         self.filename = new_filename.strip()
+        self.updated_at = datetime.utcnow()
+
+    def set_tags(self, tags: List[str]) -> None:
+        """
+        Replace this asset's tags (atomic full-replace).
+
+        Normalization: trim, lowercase, collapse inner whitespace.
+        Empty strings are dropped; duplicates keep first occurrence.
+
+        Raises:
+            ValueError: If a tag exceeds MAX_TAG_LENGTH or the list
+                exceeds MAX_TAGS_PER_ASSET after normalization.
+        """
+        normalized = []
+        seen = set()
+        for raw_tag in tags:
+            tag = ' '.join(raw_tag.strip().lower().split())
+            if not tag or tag in seen:
+                continue
+            if len(tag) > MAX_TAG_LENGTH:
+                raise ValueError(f"Tag '{tag}' exceeds {MAX_TAG_LENGTH} characters")
+            seen.add(tag)
+            normalized.append(tag)
+
+        if len(normalized) > MAX_TAGS_PER_ASSET:
+            raise ValueError(f"Assets can have at most {MAX_TAGS_PER_ASSET} tags")
+
+        self.tags = normalized
+        self.updated_at = datetime.utcnow()
+
+    def set_favorite(self, favorite: bool) -> None:
+        """Set or clear the library favorite flag."""
+        self.favorite = favorite
         self.updated_at = datetime.utcnow()
 
     def is_owned_by(self, user_id: UUID) -> bool:

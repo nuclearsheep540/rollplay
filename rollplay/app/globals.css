@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Loading gate — CTA fade-in when assets are ready */
+/* Loading gate - CTA fade-in when assets are ready */
 @keyframes gate-cta-enter {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -11,7 +11,7 @@
   animation: gate-cta-enter 600ms ease-out forwards;
 }
 
-/* Loading gate — flavor text crossfade */
+/* Loading gate - flavor text crossfade */
 @keyframes gate-fade {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
@@ -46,30 +46,30 @@ body {
 }
 
 /* ==========================================================================
-   DESIGN TOKENS — Single source of truth for all colors
+   DESIGN TOKENS - Single source of truth for all colors
    Registered in tailwind.config.js so Tailwind variant engine
    (hover:, focus:, data-[]:) generates utility classes for them.
    ========================================================================== */
 :root {
-  /* Palette — raw color values */
+  /* Palette - raw color values */
   --palette-carbon: #1F1F1F;
   --palette-smoke: #F7F4F3;
   --palette-onyx: #0B0A09;
   --palette-graphite: #37322F;
   --palette-silver: #B5ADA6;
 
-  /* Surface — backgrounds */
-  --surface-primary: #F7F4F3;      /* smoke — main page bg */
-  --surface-secondary: #1F1F1F;    /* carbon — panels */
-  --surface-panel: #1F1F1F;        /* carbon — alias */
-  --surface-elevated: #0B0A09;     /* onyx — deepest */
+  /* Surface - backgrounds */
+  --surface-primary: #F7F4F3;      /* smoke - main page bg */
+  --surface-secondary: #1F1F1F;    /* carbon - panels */
+  --surface-panel: #1F1F1F;        /* carbon - alias */
+  --surface-elevated: #0B0A09;     /* onyx - deepest */
 
-  /* Content — text */
-  --content-primary: #1F1F1F;      /* carbon — on light bg */
-  --content-secondary: #B5ADA6;    /* silver — muted, on dark */
-  --content-on-dark: #F7F4F3;      /* smoke — on dark bg */
-  --content-bold: #0B0A09;         /* onyx — strongest */
-  --content-accent: #B5ADA6;       /* silver — accent */
+  /* Content - text */
+  --content-primary: #1F1F1F;      /* carbon - on light bg */
+  --content-secondary: #B5ADA6;    /* silver - muted, on dark */
+  --content-on-dark: #F7F4F3;      /* smoke - on dark bg */
+  --content-bold: #0B0A09;         /* onyx - strongest */
+  --content-accent: #B5ADA6;       /* silver - accent */
 
   /* Border */
   --border-default: #37322F;       /* graphite */
@@ -84,12 +84,24 @@ body {
   --overlay-dark: #1F1F1FE6;       /* carbon 90% */
   --overlay-light: #0B0A09CC;      /* onyx 80% */
 
-  /* Feedback — status colors */
+  /* Feedback - status colors */
   --feedback-success: #16a34a;
   --feedback-error: #dc2626;
   --feedback-warning: #d97706;
   --feedback-info: #2563eb;
   --feedback-audio: #f97316;
+
+  /* Asset type coding (library) - muted accents, distinct from feedback */
+  --asset-map: #8FAE8B;
+  --asset-music: #C9A36A;
+  --asset-sfx: #A98FC0;
+  --asset-image: #7FA3B8;
+
+  /* Library favorite star */
+  --favorite: #D9A441;
+
+  /* Hover shade for items sitting on dark panels */
+  --surface-hover: #2B2724;
 }
 
 /* Landing Page Styles */
@@ -371,7 +383,7 @@ body {
   position: relative;
 }
 
-/* Top Command Bar — flex column so spectator banner extends the nav
+/* Top Command Bar - flex column so spectator banner extends the nav
    ========================================================================== */
 .top-nav {
   display: flex;
@@ -383,7 +395,7 @@ body {
   z-index: 100; /* Above everything */
 }
 
-/* Main nav row — keeps the original bar layout */
+/* Main nav row - keeps the original bar layout */
 .top-nav-bar {
   /* Height grows by the notch inset; padding-top pushes content below it.
      align-items: center then centers within the remaining 50px band. */
@@ -578,7 +590,7 @@ body {
 }
 
 
-/* Left drawer tab strip — mirrors right drawer but on the right edge */
+/* Left drawer tab strip - mirrors right drawer but on the right edge */
 .left-drawer-tab-strip {
   position: absolute;
   right: -40px;
@@ -750,7 +762,7 @@ body {
   backdrop-filter: blur(8px);
 }
 
-/* Scrollable tab strip — sits to the left of the drawer body */
+/* Scrollable tab strip - sits to the left of the drawer body */
 .right-drawer-tab-strip {
   position: absolute;
   left: -40px;
@@ -768,7 +780,7 @@ body {
   display: none;
 }
 
-/* Inner wrapper — centers tabs when they fit, stacks from top when they overflow */
+/* Inner wrapper - centers tabs when they fit, stacks from top when they overflow */
 .right-drawer-tab-strip-inner {
   display: flex;
   flex-direction: column;
@@ -885,7 +897,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Mixer channel group separator — wider spacing between channel groups */
+/* Mixer channel group separator - wider spacing between channel groups */
 .mixer-group-separator {
   width: 3px;
   align-self: stretch;
@@ -894,7 +906,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Vertical fader — overlaid absolutely on meter area so meters stay tight.
+/* Vertical fader - overlaid absolutely on meter area so meters stay tight.
    In writing-mode: vertical-lr, thumb width = along-track (vert), height = cross-track (horiz). */
 .vertical-fader {
   writing-mode: vertical-lr;
@@ -922,7 +934,7 @@ body {
   -webkit-appearance: none;
   appearance: none;
   /* Browser swaps axes under writing-mode: vertical-lr.
-     Declare wide×thin — browser renders as horizontal thumb. */
+     Declare wide×thin - browser renders as horizontal thumb. */
   width: calc(24px * var(--ui-scale));
   height: calc(10px * var(--ui-scale));
   background: #F7F4F3;
@@ -930,7 +942,7 @@ body {
   cursor: pointer;
   /* translateX centers horizontally over the 1px track. translateY
      offsets by half the thumb's own height so its vertical center
-     (not its top edge) sits on the value position — matches real-world
+     (not its top edge) sits on the value position - matches real-world
      mixer behaviour. */
   transform: translate(-50%, -50%);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
@@ -944,7 +956,7 @@ body {
 
 .vertical-fader::-moz-range-thumb {
   /* Browser swaps axes under writing-mode: vertical-lr.
-     Declare wide×thin — browser renders as horizontal thumb. */
+     Declare wide×thin - browser renders as horizontal thumb. */
   width: calc(24px * var(--ui-scale));
   height: calc(10px * var(--ui-scale));
   background: #F7F4F3;

@@ -24,14 +24,14 @@ class MusicAsset(MediaAssetAggregate):
     MusicAsset domain aggregate.
 
     Extends MediaAssetAggregate with audio playback configuration fields.
-    These are asset-level defaults that persist across sessions — when a DM
+    These are asset-level defaults that persist across sessions - when a DM
     loads this track into a game, these values are used as starting config.
     """
     duration_seconds: Optional[float] = None
     default_volume: Optional[float] = None
     default_looping: Optional[bool] = None
 
-    # Audio effects — asset-level defaults
+    # Audio effects - asset-level defaults
     effect_eq_enabled: Optional[bool] = None
     effect_hpf_enabled: Optional[bool] = None
     effect_hpf_mix: Optional[float] = None
@@ -48,7 +48,7 @@ class MusicAsset(MediaAssetAggregate):
     loop_mode: Optional[str] = None
     # Time signature string like "4/4" / "3/4" / "6/8". Used by the Loop
     # Editor to render beat+bar grid lines and to snap loop bounds to
-    # beats. Does not affect playback — purely an editor hint.
+    # beats. Does not affect playback - purely an editor hint.
     time_signature: Optional[str] = None
 
     @classmethod
@@ -144,16 +144,7 @@ class MusicAsset(MediaAssetAggregate):
         Used when repository loads from joined tables.
         """
         return cls(
-            id=base.id,
-            user_id=base.user_id,
-            filename=base.filename,
-            s3_key=base.s3_key,
-            content_type=base.content_type,
-            asset_type=base.asset_type,
-            file_size=base.file_size,
-            campaign_ids=base.campaign_ids,
-            created_at=base.created_at,
-            updated_at=base.updated_at,
+            **base.base_kwargs(),
             duration_seconds=duration_seconds,
             default_volume=default_volume,
             default_looping=default_looping,
@@ -236,7 +227,7 @@ class MusicAsset(MediaAssetAggregate):
         if loop_mode is not None:
             # "continuous": play from 0 on first start, then loop between loop
             #   points (the pre-loop portion plays as an intro).
-            # "region": strictly within the loop region — playback from stopped
+            # "region": strictly within the loop region - playback from stopped
             #   state snaps to loop_start; pre-region audio never plays.
             # Historical "region" meant "continuous" semantics; a data migration
             # renames legacy values to preserve behaviour.
@@ -347,7 +338,7 @@ class MusicAsset(MediaAssetAggregate):
             kwargs["volume"] = self.default_volume
         if self.default_looping is not None:
             kwargs["looping"] = self.default_looping
-        # Loop point fields — populate when set, backward-compat looping from loop_mode
+        # Loop point fields - populate when set, backward-compat looping from loop_mode
         if self.loop_mode is not None:
             kwargs["loop_mode"] = self.loop_mode
             kwargs["looping"] = self.loop_mode != "off"

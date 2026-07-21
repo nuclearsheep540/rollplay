@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 
 from shared.dependencies.db import Base
 from modules.user.model.friend_code_model import FriendCode  # noqa: F401
-# Character v2 model imports — needed so Base.metadata sees every table
+# Character v2 model imports - needed so Base.metadata sees every table
 # before SQLite create_all in the db_session fixture.
 from modules.characters.model.edition_model import Edition  # noqa: F401
 from modules.characters.model.character_model import Character as _CharacterModel  # noqa: F401
@@ -56,6 +56,7 @@ from modules.library.model.map_asset_model import MapAssetModel as _MapAssetMode
 from modules.library.model.music_asset_model import MusicAssetModel as _MusicAssetModel  # noqa: F401
 from modules.library.model.sfx_asset_model import SfxAssetModel as _SfxAssetModel  # noqa: F401
 from modules.library.model.image_asset_model import ImageAssetModel as _ImageAssetModel  # noqa: F401
+from modules.library.model.collection_model import AssetCollectionModel as _AssetCollectionModel  # noqa: F401
 from modules.events.model.notification_model import Notification as _Notification  # noqa: F401
 from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
@@ -109,6 +110,27 @@ class GUID(TypeDecorator):
                 return value
 
 
+class UUIDArrayJSON(TypeDecorator):
+    """SQLite stand-in for PostgreSQL ARRAY(UUID).
+
+    Stores the array as JSON (stringified UUIDs) but round-trips
+    Python-side values as uuid.UUID, matching what the PG driver
+    returns in production - so aggregates keep working with UUIDs.
+    """
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        return [str(item) for item in value]
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        return [uuid.UUID(item) for item in value]
+
+
 @pytest.fixture(scope="function")
 def db_session():
     """
@@ -126,7 +148,10 @@ def db_session():
             elif isinstance(column.type, JSONB):
                 column.type = JSON()
             elif isinstance(column.type, PostgreSQL_ARRAY):
-                column.type = JSON()
+                if isinstance(column.type.item_type, PostgreSQL_UUID):
+                    column.type = UUIDArrayJSON()
+                else:
+                    column.type = JSON()
 
     # Register UUID adapters for SQLite
     import sqlite3

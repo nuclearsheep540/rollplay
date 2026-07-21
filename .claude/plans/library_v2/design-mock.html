@@ -1,0 +1,877 @@
+<title>Rollplay - Library redesign</title>
+<style>
+/* ============================================================
+   Rollplay Library redesign - interactive mock
+   Palette = existing brand tokens (colorTheme.js):
+   smoke #F7F4F3 · carbon #1F1F1F · onyx #0B0A09 · graphite #37322F · silver #B5ADA6
+   Light smoke ground, dark carbon panels - per the dashboard system.
+   Type accents (muted, for asset-type coding only):
+   map sage #8FAE8B · music amber #C9A36A · sfx violet #A98FC0 · image slate #7FA3B8
+   ============================================================ */
+:root{
+  --smoke:#F7F4F3; --carbon:#1F1F1F; --onyx:#0B0A09; --graphite:#37322F; --silver:#B5ADA6;
+  --surface-primary:var(--smoke);
+  --surface-panel:var(--carbon);
+  --surface-deep:var(--onyx);
+  --surface-elevated:#2B2724;
+  --content-primary:var(--carbon);
+  --content-secondary:#6E655E;
+  --content-on-dark:var(--smoke);
+  --content-muted-dark:var(--silver);
+  --border-light:rgba(55,50,47,.22);
+  --border-dark:rgba(247,244,243,.09);
+  --type-map:#8FAE8B; --type-music:#C9A36A; --type-sfx:#A98FC0; --type-image:#7FA3B8;
+  --star:#D9A441;
+  --card-min:200px;
+  --radius:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface-primary);
+  color:var(--content-primary);
+  font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--graphite);outline-offset:2px;border-radius:4px}
+svg{display:block;flex:none}
+
+/* ---------- dashboard SubNav (context only) ---------- */
+.subnav{
+  background:var(--surface-deep);
+  color:var(--content-on-dark);
+  display:flex;align-items:center;gap:36px;
+  padding:0 28px;height:56px;
+}
+.wordmark{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--content-on-dark)}
+.wordmark span{color:var(--silver);font-weight:400}
+.subnav nav{display:flex;gap:4px;height:100%}
+.subnav nav button{
+  color:var(--content-muted-dark);padding:0 14px;height:100%;
+  border-bottom:2px solid transparent;font-size:13.5px;
+}
+.subnav nav button.active{color:var(--content-on-dark);border-bottom-color:var(--smoke)}
+.subnav nav button:hover{color:var(--content-on-dark)}
+.subnav .who{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--content-muted-dark);font-size:12.5px}
+.subnav .who .avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#5c5049,#37322F);border:1px solid var(--border-dark)}
+
+/* ---------- library frame ---------- */
+.library{
+  display:grid;grid-template-columns:248px minmax(0,1fr);
+  align-items:stretch;
+}
+@media (max-width:900px){ .library{grid-template-columns:1fr} .rail{position:static;height:auto;min-height:0} }
+
+/* ---------- left rail (flush chrome, continues the subnav) ---------- */
+.rail{
+  background:var(--surface-deep);color:var(--content-on-dark);
+  border-top:1px solid var(--border-dark);
+  padding:16px 12px 12px;
+  position:sticky;top:0;align-self:start;
+  height:calc(100vh - 57px);overflow-y:auto;
+  display:flex;flex-direction:column;gap:2px;
+}
+.rail-label{
+  font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--content-muted-dark);
+  padding:14px 10px 6px;display:flex;align-items:center;gap:6px;
+}
+.rail-label:first-child{padding-top:2px}
+.rail-item{
+  display:flex;align-items:center;gap:9px;width:100%;
+  padding:7px 10px;border-radius:7px;text-align:left;
+  color:var(--content-muted-dark);font-size:13.5px;
+}
+.rail-item:hover{background:var(--surface-elevated);color:var(--content-on-dark)}
+.rail-item.active{background:var(--surface-elevated);color:var(--content-on-dark)}
+.rail-item.active .swatch{background:var(--smoke)}
+.rail-item .count{margin-left:auto;font-size:11.5px;color:var(--content-muted-dark);font-variant-numeric:tabular-nums;opacity:.8}
+.rail-item .swatch{width:7px;height:7px;border-radius:2px;background:var(--graphite)}
+.rail-item .swatch.map{background:var(--type-map)}
+.rail-item .swatch.music{background:var(--type-music)}
+.rail-item .swatch.sfx{background:var(--type-sfx)}
+.rail-item .swatch.image{background:var(--type-image)}
+.rail-new{
+  color:var(--content-muted-dark);font-size:13px;
+  border:1px dashed rgba(247,244,243,.18);border-radius:7px;
+  padding:6px 10px;margin:4px 2px 0;display:flex;gap:8px;align-items:center;
+}
+.rail-new:hover{color:var(--content-on-dark);border-color:rgba(247,244,243,.4)}
+.rail-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--border-dark)}
+.rail-sep{height:1px;background:var(--border-dark);margin:12px 6px;flex:none}
+
+/* ---------- main pane ---------- */
+.pane{min-width:0;padding:20px 28px 48px;max-width:1280px}
+
+/* filter bar */
+.filterbar{position:relative}
+.fb-shell{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+  background:#fff;border:1px solid var(--border-light);border-radius:var(--radius);
+  padding:8px 12px;min-height:46px;
+}
+.fb-shell:focus-within{border-color:var(--graphite)}
+.fb-shell .icon{color:var(--content-secondary)}
+.fb-shell input{
+  flex:1;min-width:180px;border:0;background:none;font:inherit;color:var(--content-primary);
+  padding:4px 2px;
+}
+.fb-shell input::placeholder{color:#A39A92}
+.fb-shell input:focus{outline:none}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--surface-panel);color:var(--content-on-dark);
+  border-radius:6px;padding:4px 6px 4px 9px;font-size:12.5px;
+}
+.chip .facet{color:var(--silver);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.chip .x{color:var(--silver);padding:2px;border-radius:3px;line-height:0}
+.chip .x:hover{color:var(--smoke);background:rgba(247,244,243,.12)}
+.fb-clear{color:var(--content-secondary);font-size:12.5px;padding:4px 6px;border-radius:5px}
+.fb-clear:hover{color:var(--content-primary)}
+/* suggestions dropdown */
+.fb-menu{
+  position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;max-width:560px;
+  background:var(--surface-panel);color:var(--content-on-dark);
+  border:1px solid var(--border-dark);border-radius:var(--radius);
+  box-shadow:0 16px 40px rgba(11,10,9,.28);
+  padding:6px;max-height:380px;overflow-y:auto;
+}
+.fb-group{
+  font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--content-muted-dark);padding:10px 10px 4px;
+}
+.fb-opt{
+  display:flex;align-items:center;gap:9px;width:100%;
+  padding:7px 10px;border-radius:6px;font-size:13px;color:var(--content-on-dark);text-align:left;
+}
+.fb-opt:hover{background:var(--surface-elevated)}
+.fb-opt .count{margin-left:auto;color:var(--content-muted-dark);font-size:11.5px;font-variant-numeric:tabular-nums}
+.fb-opt .dot{width:7px;height:7px;border-radius:2px;background:var(--graphite)}
+.fb-opt em{font-style:normal;color:var(--silver)}
+.fb-hint{padding:8px 10px 6px;color:var(--content-muted-dark);font-size:11.5px;border-top:1px solid var(--border-dark);margin-top:4px}
+
+/* pane head */
+.pane-head{display:flex;align-items:flex-end;gap:14px;margin:22px 2px 4px;flex-wrap:wrap}
+.pane-head h1{font-size:24px;font-weight:700;margin:0;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+.pane-head h1 .bolt{color:var(--content-secondary)}
+.pane-head .sub{color:var(--content-secondary);font-size:13px;padding-bottom:3px}
+.pane-head .edit-smart{
+  margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+  font-size:12.5px;color:var(--content-secondary);
+  border:1px solid var(--border-light);border-radius:7px;padding:5px 10px;background:#fff;
+}
+.pane-head .edit-smart:hover{color:var(--content-primary);border-color:var(--graphite)}
+
+/* toolbar */
+.toolbar{display:flex;align-items:center;gap:10px;margin:12px 2px 16px;flex-wrap:wrap}
+.toolbar .result{color:var(--content-secondary);font-size:13px;font-variant-numeric:tabular-nums}
+.toolbar .spacer{flex:1}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;border-radius:8px;
+  padding:8px 14px;font-size:13px;font-weight:600;
+}
+.btn-primary{background:var(--surface-panel);color:var(--content-on-dark);border:1px solid var(--surface-panel)}
+.btn-primary:hover{background:var(--onyx)}
+.btn-ghost{background:#fff;color:var(--content-primary);border:1px solid var(--border-light);font-weight:500}
+.btn-ghost:hover{border-color:var(--graphite)}
+.seg{display:flex;border:1px solid var(--border-light);border-radius:8px;overflow:hidden;background:#fff}
+.seg button{padding:7px 10px;color:var(--content-secondary)}
+.seg button.active{background:var(--surface-panel);color:var(--content-on-dark)}
+.gridsize{display:flex;align-items:center;gap:8px;color:var(--content-secondary);font-size:11.5px}
+.gridsize input{accent-color:var(--carbon);width:90px}
+
+/* ---------- asset grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--card-min),1fr));gap:14px}
+.card{
+  background:var(--surface-panel);color:var(--content-on-dark);
+  border:1px solid var(--border-dark);border-radius:var(--radius);
+  overflow:hidden;display:flex;flex-direction:column;
+  transition:transform .12s ease, box-shadow .12s ease;
+  position:relative;
+}
+.card:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(11,10,9,.22)}
+@media (prefers-reduced-motion:reduce){ .card, .card:hover{transition:none;transform:none} }
+.thumb{aspect-ratio:16/9;position:relative;overflow:hidden;background:var(--surface-deep)}
+.thumb .art{position:absolute;inset:0}
+.badge{
+  position:absolute;left:8px;top:8px;
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 7px;border-radius:5px;backdrop-filter:blur(3px);
+}
+.badge.map{background:rgba(20,26,19,.72);color:var(--type-map);border:1px solid rgba(143,174,139,.4)}
+.badge.music{background:rgba(28,22,12,.72);color:var(--type-music);border:1px solid rgba(201,163,106,.4)}
+.badge.sfx{background:rgba(24,18,28,.72);color:var(--type-sfx);border:1px solid rgba(169,143,192,.4)}
+.badge.image{background:rgba(14,21,26,.72);color:var(--type-image);border:1px solid rgba(127,163,184,.4)}
+.star{
+  position:absolute;right:6px;top:6px;padding:5px;border-radius:6px;
+  color:rgba(247,244,243,.55);background:rgba(11,10,9,.35);backdrop-filter:blur(3px);line-height:0;
+}
+.star:hover{color:var(--smoke)}
+.star.on{color:var(--star)}
+.dur{
+  position:absolute;right:8px;bottom:8px;font-size:10.5px;font-variant-numeric:tabular-nums;
+  background:rgba(11,10,9,.55);color:var(--content-muted-dark);padding:2px 6px;border-radius:4px;
+}
+/* hover quick actions */
+.qa{
+  position:absolute;inset:auto 8px 8px 8px;display:flex;gap:6px;
+  opacity:0;transition:opacity .12s ease;
+}
+.card:hover .qa,.card:focus-within .qa{opacity:1}
+.qa button{
+  display:inline-flex;align-items:center;gap:5px;
+  background:rgba(11,10,9,.72);color:var(--content-on-dark);
+  border:1px solid var(--border-dark);border-radius:6px;
+  font-size:11px;padding:4px 8px;backdrop-filter:blur(3px);
+}
+.qa button:hover{background:var(--onyx);border-color:rgba(247,244,243,.3)}
+.card-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:7px}
+.card-name{font-size:13px;font-weight:600;line-height:1.3;color:var(--content-on-dark);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tagrow{display:flex;flex-wrap:wrap;gap:4px}
+.tag{
+  background:var(--graphite);color:var(--content-muted-dark);
+  font-size:10.5px;padding:2px 7px;border-radius:99px;
+}
+.tag:hover{color:var(--smoke);background:#453f3b}
+.tag.on{background:var(--silver);color:var(--carbon)}
+.tag.on:hover{background:#cfc7c0;color:var(--carbon)}
+.card-meta{
+  display:flex;justify-content:space-between;gap:8px;
+  color:var(--content-muted-dark);font-size:11px;font-variant-numeric:tabular-nums;opacity:.85;
+}
+/* collection add popover */
+.pop{
+  position:absolute;z-index:50;bottom:40px;left:8px;right:8px;
+  background:var(--surface-deep);border:1px solid var(--border-dark);border-radius:8px;
+  padding:5px;box-shadow:0 12px 30px rgba(11,10,9,.4);
+}
+.pop .fb-group{padding:6px 8px 2px}
+.pop button.item{display:flex;gap:8px;align-items:center;width:100%;text-align:left;
+  padding:6px 8px;border-radius:5px;font-size:12.5px;color:var(--content-on-dark)}
+.pop button.item:hover{background:var(--surface-elevated)}
+.pop button.item .tick{margin-left:auto;color:var(--type-map)}
+
+/* ---------- list view ---------- */
+.listwrap{overflow-x:auto;border:1px solid var(--border-light);border-radius:var(--radius);background:#fff}
+table.list{width:100%;border-collapse:collapse;min-width:760px}
+.list th{
+  text-align:left;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--content-secondary);font-weight:600;
+  padding:10px 14px;border-bottom:1px solid var(--border-light);white-space:nowrap;
+}
+.list td{padding:9px 14px;border-bottom:1px solid var(--border-light);vertical-align:middle;font-size:13px}
+.list tr:last-child td{border-bottom:0}
+.list tr:hover td{background:rgba(55,50,47,.05)}
+.list .minithumb{width:58px;height:34px;border-radius:5px;overflow:hidden;position:relative;background:var(--surface-deep)}
+.list .name{font-weight:600}
+.list .pill{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:5px}
+.list .pill.map{background:rgba(143,174,139,.16);color:#5d7d59}
+.list .pill.music{background:rgba(201,163,106,.18);color:#8a6a35}
+.list .pill.sfx{background:rgba(169,143,192,.18);color:#7457a0}
+.list .pill.image{background:rgba(127,163,184,.18);color:#3f6d8c}
+.list .tag{background:rgba(55,50,47,.09);color:var(--content-secondary)}
+.list .num{font-variant-numeric:tabular-nums;color:var(--content-secondary);white-space:nowrap}
+.list .lstar{color:#C9BFB7;line-height:0;padding:3px}
+.list .lstar.on{color:var(--star)}
+
+/* empty state */
+.empty{
+  border:1px dashed var(--border-light);border-radius:var(--radius);
+  padding:56px 20px;text-align:center;color:var(--content-secondary);
+}
+.empty b{color:var(--content-primary)}
+
+/* ---------- smart collection builder ---------- */
+.builder{max-width:860px}
+.crumb{display:inline-flex;align-items:center;gap:7px;color:var(--content-secondary);font-size:13px;margin-bottom:14px}
+.crumb:hover{color:var(--content-primary)}
+.builder h1{font-size:24px;margin:0 0 4px;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
+.builder .lede{color:var(--content-secondary);font-size:13.5px;margin:0 0 22px;max-width:56ch}
+.field-label{
+  display:block;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--content-secondary);margin:0 0 7px;
+}
+.name-input{
+  width:100%;font-size:18px;font-weight:600;color:var(--content-primary);
+  background:#fff;border:1px solid var(--border-light);border-radius:var(--radius);
+  padding:12px 14px;margin-bottom:20px;
+}
+.name-input:focus{outline:none;border-color:var(--graphite)}
+.match{
+  display:flex;align-items:center;gap:9px;margin:16px 2px 14px;
+  color:var(--content-primary);font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;
+}
+.match .pulse{width:8px;height:8px;border-radius:50%;background:var(--type-map)}
+.match .note{color:var(--content-secondary);font-weight:400}
+.builder-actions{display:flex;align-items:center;gap:10px;margin:22px 0 30px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.danger{color:#9c4a3c;font-size:12.5px;margin-left:auto}
+.danger:hover{text-decoration:underline}
+.preview-label{
+  font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--content-secondary);margin:26px 2px 10px;
+}
+.builder .grid{--card-min:170px}
+
+/* misc */
+.hidden{display:none !important}
+</style>
+
+<header class="subnav">
+  <div class="wordmark">Tabletop <span>Tavern</span></div>
+  <nav aria-label="Dashboard">
+    <button>Characters</button>
+    <button>Campaigns</button>
+    <button class="active">Library</button>
+    <button>Workshop</button>
+    <button>Market</button>
+  </nav>
+  <div class="who"><span>Matt · DM</span><div class="avatar"></div></div>
+</header>
+
+<div class="library">
+
+  <!-- =================== LEFT RAIL =================== -->
+  <aside class="rail" id="rail" aria-label="Library navigation"></aside>
+
+  <!-- =================== MAIN PANE =================== -->
+  <main class="pane">
+
+    <!-- ======== BROWSE VIEW ======== -->
+    <section id="browseView">
+      <div class="filterbar" id="fbBrowse">
+        <div class="fb-shell" id="fbBrowseShell">
+          <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span id="fbBrowseChips" style="display:contents"></span>
+          <input id="fbBrowseInput" type="text" placeholder="Filter by name, tag, type, or campaign…" autocomplete="off" aria-label="Filter assets">
+          <button class="fb-clear hidden" id="fbBrowseClear">Clear all</button>
+        </div>
+        <div class="fb-menu hidden" id="fbBrowseMenu"></div>
+      </div>
+
+      <div class="pane-head">
+        <h1 id="ctxTitle">All Assets</h1>
+        <span class="sub" id="ctxSub"></span>
+        <button class="edit-smart hidden" id="editSmartBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Edit smart collection
+        </button>
+      </div>
+
+      <div class="toolbar">
+        <span class="result" id="resultCount"></span>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost hidden" id="saveSmartBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2Z"/></svg>
+          Save as Smart Collection
+        </button>
+        <div class="seg" role="group" aria-label="View">
+          <button id="viewGridBtn" class="active" aria-label="Grid view">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
+          <button id="viewListBtn" aria-label="List view">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          </button>
+        </div>
+        <div class="gridsize" id="gridSizeWrap">
+          <span>Size</span>
+          <input type="range" min="1" max="5" value="3" id="gridSize" aria-label="Grid size">
+        </div>
+        <button class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4m0 0 -4 4m4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+          Upload Assets
+        </button>
+      </div>
+
+      <div class="grid" id="grid"></div>
+      <div class="hidden" id="listWrap"></div>
+      <div class="empty hidden" id="empty">
+        <b>No assets match these filters.</b><br>
+        Try removing a filter, or upload something new.
+      </div>
+    </section>
+
+    <!-- ======== SMART COLLECTION BUILDER VIEW ======== -->
+    <section id="builderView" class="builder hidden">
+      <button class="crumb" id="builderBack">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        Back to Library
+      </button>
+      <h1 id="builderTitle">
+        <svg class="bolt" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2Z"/></svg>
+        New Smart Collection
+      </h1>
+      <p class="lede">A smart collection is a saved set of filters. Assets that match are always included - upload a new map tagged <em>sea</em> and it appears here automatically.</p>
+
+      <label class="field-label" for="builderName">Name</label>
+      <input class="name-input" id="builderName" type="text" placeholder="e.g. Sea Session" autocomplete="off">
+
+      <label class="field-label">Filters</label>
+      <div class="filterbar" id="fbBuilder">
+        <div class="fb-shell" id="fbBuilderShell">
+          <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+          <span id="fbBuilderChips" style="display:contents"></span>
+          <input id="fbBuilderInput" type="text" placeholder="Add a type, tag, campaign, or name filter…" autocomplete="off" aria-label="Add filter">
+          <button class="fb-clear hidden" id="fbBuilderClear">Clear all</button>
+        </div>
+        <div class="fb-menu hidden" id="fbBuilderMenu"></div>
+      </div>
+
+      <div class="match">
+        <span class="pulse"></span>
+        <span id="builderMatch">0 assets currently match</span>
+        <span class="note">- updates live as your library grows</span>
+      </div>
+
+      <div class="builder-actions">
+        <button class="btn btn-primary" id="builderSave" disabled>Create Smart Collection</button>
+        <button class="btn btn-ghost" id="builderCancel">Cancel</button>
+        <button class="danger hidden" id="builderDelete">Delete smart collection</button>
+      </div>
+
+      <div class="preview-label">Matching assets</div>
+      <div class="grid" id="builderGrid"></div>
+      <div class="empty hidden" id="builderEmpty"><b>Nothing matches yet.</b><br>Add at least one filter to see live results.</div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* =====================================================================
+   Sample data - mirrors the real model: filename, asset_type,
+   campaign_ids, file_size, created_at, plus the NEW fields this design
+   introduces: tags[], favorite.
+   ===================================================================== */
+const TYPES = { map:'Map', music:'Music', sfx:'SFX', image:'Image' };
+const CAMPAIGNS = ['Curse of the Kraken', 'The Wildwood Pact'];
+
+const ASSETS = [
+  {id:1,  name:'Blackwood Forest Battlemap', type:'map',   tags:['forest','woodland','night'],  campaigns:['The Wildwood Pact'],   size:'2.6 MB', added:'12 Jun 2026', fav:true,  art:['#2e3d2a','#141b12','#8FAE8B']},
+  {id:2,  name:"Kraken's Harbor",            type:'map',   tags:['sea','harbor','town'],        campaigns:['Curse of the Kraken'], size:'3.1 MB', added:'02 Jul 2026', fav:true,  art:['#1e3340','#0d161c','#7FA3B8']},
+  {id:3,  name:'Sunken Temple of Ythra',     type:'map',   tags:['sea','dungeon'],              campaigns:['Curse of the Kraken'], size:'2.9 MB', added:'28 Jun 2026', fav:false, art:['#243a3a','#0e1717','#6fa39b']},
+  {id:4,  name:'Roadside Shrine',            type:'map',   tags:['forest','travel'],            campaigns:['The Wildwood Pact'],   size:'2.2 MB', added:'19 May 2026', fav:false, art:['#3a3426','#171410','#b8a06a']},
+  {id:5,  name:'The Gilded Flagon - Taproom',type:'map',   tags:['tavern','town'],              campaigns:['Curse of the Kraken','The Wildwood Pact'], size:'2.4 MB', added:'07 Jul 2026', fav:false, art:['#3d2c22','#181009','#c98d5a']},
+  {id:6,  name:'Tavern Brawl Theme',         type:'music', tags:['tavern','combat'],            campaigns:['Curse of the Kraken'], size:'4.3 MB', added:'14 Jun 2026', fav:true,  dur:'2:47'},
+  {id:7,  name:'Open Sails',                 type:'music', tags:['sea','travel'],               campaigns:['Curse of the Kraken'], size:'5.1 MB', added:'03 Jul 2026', fav:false, dur:'3:52'},
+  {id:8,  name:'Whispering Canopy',          type:'music', tags:['forest','ambience'],          campaigns:['The Wildwood Pact'],   size:'6.0 MB', added:'22 Jun 2026', fav:false, dur:'4:18'},
+  {id:9,  name:'Dirge of the Deep',          type:'music', tags:['sea','boss'],                 campaigns:['Curse of the Kraken'], size:'4.8 MB', added:'11 Jul 2026', fav:true,  dur:'3:05'},
+  {id:10, name:'Harbor Gulls & Rigging',     type:'sfx',   tags:['sea','ambience','harbor'],    campaigns:['Curse of the Kraken'], size:'1.3 MB', added:'02 Jul 2026', fav:false, dur:'0:48'},
+  {id:11, name:'Owl & Cricket Loop',         type:'sfx',   tags:['forest','night','ambience'],  campaigns:['The Wildwood Pact'],   size:'1.1 MB', added:'30 May 2026', fav:false, dur:'1:02'},
+  {id:12, name:'Thunderclap (Close)',        type:'sfx',   tags:['storm'],                      campaigns:[],                      size:'0.6 MB', added:'18 Jul 2026', fav:false, dur:'0:07'},
+  {id:13, name:'Elven Ranger - Portrait',    type:'image', tags:['npc','forest'],               campaigns:['The Wildwood Pact'],   size:'1.8 MB', added:'25 Jun 2026', fav:false, art:['#33402c','#131a10','#9db884']},
+  {id:14, name:'Captain Maren Voss',         type:'image', tags:['npc','sea'],                  campaigns:['Curse of the Kraken'], size:'2.0 MB', added:'05 Jul 2026', fav:true,  art:['#26333f','#0f151b','#8fb3c9']},
+  {id:15, name:"Wanted: 'The Gutter King'",  type:'image', tags:['npc','town'],                 campaigns:['Curse of the Kraken'], size:'1.5 MB', added:'16 Jul 2026', fav:false, art:['#3b332b','#171310','#c2ab8e']},
+];
+
+let smartCollections = [
+  {id:'s1', name:'Sea Session',       filters:{types:['map','music','sfx'], tags:['sea'], campaigns:[], text:''}},
+  {id:'s2', name:'Forest Encounters', filters:{types:[], tags:['forest'], campaigns:[], text:''}},
+];
+let collections = [
+  {id:'c1', name:'NPC Portraits',    members:[13,14,15]},
+  {id:'c2', name:'Session Zero Kit', members:[5,6,1]},
+];
+
+/* ---------------- state ---------------- */
+const emptyFilters = () => ({types:[], tags:[], campaigns:[], text:''});
+let browseFilters = emptyFilters();
+let context = {kind:'all', id:null};      // all | type | fav | smart | coll
+let viewMode = 'grid';
+let builder = null;                        // {name, filters, editingId}
+
+/* ---------------- helpers ---------------- */
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function hash(s){let h=9;for(const c of s)h=Math.imul(h^c.charCodeAt(0),387420489);return h>>>0}
+
+function tagCounts(){
+  const m = new Map();
+  for(const a of ASSETS) for(const t of a.tags) m.set(t,(m.get(t)||0)+1);
+  return [...m.entries()].sort((x,y)=>y[1]-x[1]);
+}
+function typeCounts(){
+  const m = {map:0,music:0,sfx:0,image:0};
+  for(const a of ASSETS) m[a.type]++;
+  return m;
+}
+const campaignCount = c => ASSETS.filter(a=>a.campaigns.includes(c)).length;
+
+function applyFilters(list, f){
+  return list.filter(a=>{
+    if(f.types.length && !f.types.includes(a.type)) return false;
+    if(f.campaigns.length && !a.campaigns.some(c=>f.campaigns.includes(c))) return false;
+    for(const t of f.tags) if(!a.tags.includes(t)) return false;   // tags narrow (AND)
+    if(f.text && !a.name.toLowerCase().includes(f.text.toLowerCase())) return false;
+    return true;
+  });
+}
+function contextBase(){
+  if(context.kind==='type') return ASSETS.filter(a=>a.type===context.id);
+  if(context.kind==='fav')  return ASSETS.filter(a=>a.fav);
+  if(context.kind==='campaign') return ASSETS.filter(a=>a.campaigns.includes(context.id));
+  if(context.kind==='coll'){
+    const c = collections.find(c=>c.id===context.id);
+    return c ? ASSETS.filter(a=>c.members.includes(a.id)) : [];
+  }
+  return ASSETS; // 'all' and 'smart' (smart loads its filters into browseFilters)
+}
+const visibleAssets = () => applyFilters(contextBase(), browseFilters);
+const hasFilters = f => f.types.length||f.tags.length||f.campaigns.length||f.text;
+
+/* ---------------- thumbnails ---------------- */
+function artHTML(a, mini){
+  if(a.type==='music'||a.type==='sfx'){
+    // deterministic pseudo-waveform
+    let h = hash(a.name), bars='';
+    const n = mini?18:34;
+    for(let i=0;i<n;i++){
+      h = Math.imul(h^(i+7),2654435761)>>>0;
+      const amp = a.type==='sfx' ? (i%5===2? 20+h%70 : 6+h%22) : 18+h%64;
+      bars += `<div style="flex:1;background:${a.type==='music'?'rgba(201,163,106,.75)':'rgba(169,143,192,.75)'};height:${amp}%;border-radius:2px"></div>`;
+    }
+    return `<div class="art" style="background:linear-gradient(160deg,#211c16,#0B0A09);display:flex;align-items:center;gap:2px;padding:${mini?'6px':'14px 16px'}">${bars}</div>`;
+  }
+  const [c1,c2,glow] = a.art;
+  const h = hash(a.name);
+  return `<div class="art" style="background:
+    radial-gradient(ellipse 70% 90% at ${20+h%55}% ${15+h%40}%, ${glow}33, transparent 60%),
+    radial-gradient(ellipse 90% 70% at ${45+h%40}% ${60+h%35}%, ${c1}, transparent 75%),
+    repeating-linear-gradient(${h%180}deg, transparent 0 14px, ${glow}0d 14px 15px),
+    linear-gradient(150deg, ${c1}, ${c2})"></div>`;
+}
+
+const STAR = on => `<svg width="15" height="15" viewBox="0 0 24 24" fill="${on?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="m12 2.5 2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9Z"/></svg>`;
+
+/* ---------------- rail ---------------- */
+function railHTML(){
+  const tc = typeCounts();
+  const favN = ASSETS.filter(a=>a.fav).length;
+  const item = (kind,id,label,count,swatch,icon)=>`
+    <button class="rail-item ${context.kind===kind&&context.id===id?'active':''}" data-nav="${kind}" data-id="${id??''}">
+      ${icon??`<span class="swatch ${swatch??''}"></span>`}
+      <span>${esc(label)}</span><span class="count">${count??''}</span>
+    </button>`;
+  const bolt = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2Z"/></svg>';
+  const folder = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>';
+  const flag = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4"/><path d="M5 4h13l-2.5 4L18 12H5"/></svg>';
+  return `
+    <div class="rail-label">Library</div>
+    ${item('all',null,'All Assets',ASSETS.length)}
+    ${item('type','map','Maps',tc.map,'map')}
+    ${item('type','music','Music',tc.music,'music')}
+    ${item('type','sfx','SFX',tc.sfx,'sfx')}
+    ${item('type','image','Images',tc.image,'image')}
+    <div class="rail-sep"></div>
+    ${item('fav',null,'Favorites',favN,null,`<span style="color:var(--star);line-height:0">${STAR(true)}</span>`)}
+    <div class="rail-sep"></div>
+    <div class="rail-label">${flag} Campaigns</div>
+    ${CAMPAIGNS.map(c=>item('campaign',c,c,campaignCount(c))).join('')}
+    <div class="rail-sep"></div>
+    <div class="rail-label">${bolt} Smart Collections</div>
+    ${smartCollections.map(s=>item('smart',s.id,s.name,applyFilters(ASSETS,s.filters).length)).join('')}
+    <button class="rail-new" data-nav="newsmart">＋ New Smart Collection</button>
+    <div class="rail-label">${folder} Collections</div>
+    ${collections.map(c=>item('coll',c.id,c.name,c.members.length)).join('')}
+    <button class="rail-new" data-nav="newcoll">＋ New Collection</button>
+    <div class="rail-foot">
+      <button class="rail-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.7.3-.9.8-.9 1.7m0 3h.01"/></svg><span>Help</span></button>
+    </div>`;
+}
+
+/* ---------------- filter bar (shared by browse + builder) ---------------- */
+function chipHTML(facet, value, label){
+  return `<span class="chip"><span class="facet">${facet}</span> ${esc(label)}
+    <button class="x" data-chip-facet="${facet}" data-chip-value="${esc(value)}" aria-label="Remove filter">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span>`;
+}
+function renderChips(f, el, clearBtn){
+  let html='';
+  for(const t of f.types) html += chipHTML('type', t, TYPES[t]);
+  for(const t of f.tags) html += chipHTML('tag', t, t);
+  for(const c of f.campaigns) html += chipHTML('campaign', c, c);
+  if(f.text) html += chipHTML('name', f.text, `“${f.text}”`);
+  el.innerHTML = html;
+  clearBtn.classList.toggle('hidden', !hasFilters(f));
+}
+function suggestionsHTML(f, q){
+  q = q.trim().toLowerCase();
+  const tc = typeCounts();
+  let html = '';
+  if(q) html += `<button class="fb-opt" data-add="text" data-val="${esc(q)}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      Name contains <em>“${esc(q)}”</em></button>`;
+  const types = Object.keys(TYPES).filter(t=>!f.types.includes(t) && (!q||TYPES[t].toLowerCase().includes(q)));
+  if(types.length){
+    html += '<div class="fb-group">Type</div>';
+    for(const t of types) html += `<button class="fb-opt" data-add="type" data-val="${t}"><span class="dot" style="background:var(--type-${t})"></span>${TYPES[t]}<span class="count">${tc[t]}</span></button>`;
+  }
+  const tags = tagCounts().filter(([t])=>!f.tags.includes(t) && (!q||t.includes(q)));
+  if(tags.length){
+    html += '<div class="fb-group">Your tags</div>';
+    for(const [t,n] of tags.slice(0,8)) html += `<button class="fb-opt" data-add="tag" data-val="${esc(t)}"><span class="dot"></span>${esc(t)}<span class="count">${n}</span></button>`;
+  }
+  const camps = CAMPAIGNS.filter(c=>!f.campaigns.includes(c) && (!q||c.toLowerCase().includes(q)));
+  if(camps.length){
+    html += '<div class="fb-group">Campaign</div>';
+    for(const c of camps) html += `<button class="fb-opt" data-add="campaign" data-val="${esc(c)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l4-5h10l4 5v13Z"/><path d="M3 8h18"/></svg>${esc(c)}</button>`;
+  }
+  html += `<div class="fb-hint">Types and campaigns match <b>any</b> selected value · multiple tags narrow the results</div>`;
+  return html;
+}
+function wireFilterBar(ids, getF, onChange){
+  const input=$(ids.input), menu=$(ids.menu), chips=$(ids.chips), clear=$(ids.clear), shell=$(ids.shell);
+  const open = ()=>{ menu.innerHTML = suggestionsHTML(getF(), input.value); menu.classList.remove('hidden'); };
+  const close= ()=> menu.classList.add('hidden');
+  input.addEventListener('focus', open);
+  input.addEventListener('input', open);
+  input.addEventListener('keydown', e=>{
+    if(e.key==='Enter' && input.value.trim()){ getF().text = input.value.trim(); input.value=''; onChange(); open(); }
+    if(e.key==='Escape') close();
+    if(e.key==='Backspace' && !input.value){
+      const f=getF();
+      if(f.text) f.text='';
+      else if(f.campaigns.length) f.campaigns.pop();
+      else if(f.tags.length) f.tags.pop();
+      else if(f.types.length) f.types.pop();
+      onChange(); open();
+    }
+  });
+  menu.addEventListener('mousedown', e=>{
+    const b=e.target.closest('[data-add]'); if(!b) return;
+    e.preventDefault();
+    const f=getF(), v=b.dataset.val;
+    if(b.dataset.add==='type') f.types.push(v);
+    if(b.dataset.add==='tag') f.tags.push(v);
+    if(b.dataset.add==='campaign') f.campaigns.push(v);
+    if(b.dataset.add==='text') f.text=v;
+    input.value=''; onChange(); open(); input.focus();
+  });
+  chips.parentElement.addEventListener('click', e=>{
+    const x=e.target.closest('[data-chip-facet]'); if(!x) return;
+    const f=getF(), v=x.dataset.chipValue;
+    if(x.dataset.chipFacet==='type') f.types=f.types.filter(t=>t!==v);
+    if(x.dataset.chipFacet==='tag') f.tags=f.tags.filter(t=>t!==v);
+    if(x.dataset.chipFacet==='campaign') f.campaigns=f.campaigns.filter(c=>c!==v);
+    if(x.dataset.chipFacet==='name') f.text='';
+    onChange();
+  });
+  clear.addEventListener('click', ()=>{ Object.assign(getF(), emptyFilters()); onChange(); });
+  document.addEventListener('mousedown', e=>{ if(!shell.contains(e.target)&&!menu.contains(e.target)) close(); });
+  return { renderChips: ()=>renderChips(getF(), chips, clear) };
+}
+
+/* ---------------- cards + list ---------------- */
+function cardHTML(a, mini, activeTags=[]){
+  const tags = a.tags.map(t=>`<button class="tag ${activeTags.includes(t)?'on':''}" data-tagfilter="${esc(t)}">${esc(t)}</button>`).join('');
+  const camp = a.campaigns.length ? `${a.campaigns.length} campaign${a.campaigns.length>1?'s':''}` : 'unassigned';
+  return `<article class="card" data-id="${a.id}">
+    <div class="thumb">${artHTML(a, mini)}
+      <span class="badge ${a.type}">${TYPES[a.type]}</span>
+      <button class="star ${a.fav?'on':''}" data-fav="${a.id}" aria-label="Favorite">${STAR(a.fav)}</button>
+      ${a.dur?`<span class="dur">${a.dur}</span>`:''}
+      ${mini?'':`<div class="qa">
+        <button data-ql="${a.id}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Quick Look</button>
+        <button data-addcoll="${a.id}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 10v6m-3-3h6"/></svg> Collection</button>
+      </div>`}
+    </div>
+    <div class="card-body">
+      <div class="card-name">${esc(a.name)}</div>
+      <div class="tagrow">${tags}</div>
+      <div class="card-meta"><span>${a.size} · ${a.added}</span><span>${camp}</span></div>
+    </div>
+  </article>`;
+}
+function listHTML(assets, activeTags=[]){
+  const rows = assets.map(a=>`<tr data-id="${a.id}">
+    <td><div class="minithumb">${artHTML(a,true)}</div></td>
+    <td class="name">${esc(a.name)}</td>
+    <td><span class="pill ${a.type}">${TYPES[a.type]}</span></td>
+    <td><span class="tagrow">${a.tags.map(t=>`<button class="tag ${activeTags.includes(t)?'on':''}" data-tagfilter="${esc(t)}">${esc(t)}</button>`).join('')}</span></td>
+    <td class="num">${a.size}</td>
+    <td class="num">${a.campaigns.length||'-'}</td>
+    <td class="num">${a.added}</td>
+    <td><button class="lstar ${a.fav?'on':''}" data-fav="${a.id}" aria-label="Favorite">${STAR(a.fav)}</button></td>
+  </tr>`).join('');
+  return `<div class="listwrap"><table class="list">
+    <thead><tr><th></th><th>Name</th><th>Type</th><th>Tags</th><th>Size</th><th>Campaigns</th><th>Added</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---------------- browse render ---------------- */
+let browseBar;
+function contextTitle(){
+  if(context.kind==='type') return TYPES[context.id]+'s';
+  if(context.kind==='fav') return 'Favorites';
+  if(context.kind==='campaign') return context.id;
+  if(context.kind==='smart') return smartCollections.find(s=>s.id===context.id)?.name ?? 'Smart Collection';
+  if(context.kind==='coll') return collections.find(c=>c.id===context.id)?.name ?? 'Collection';
+  return 'All Assets';
+}
+function contextSub(){
+  if(context.kind==='campaign') return 'Every asset associated with this campaign - all types, regardless of tags';
+  if(context.kind==='smart') return 'Smart collection - assets matching saved filters, always up to date';
+  if(context.kind==='coll') return 'Collection - manually managed. Use ＋ Collection on any card to add.';
+  if(context.kind==='fav') return 'Everything you starred, across every type';
+  return '';
+}
+function renderBrowse(){
+  $('rail').innerHTML = railHTML();
+  browseBar.renderChips();
+  const assets = visibleAssets();
+  const base = contextBase();
+  $('ctxTitle').innerHTML = (context.kind==='smart'
+    ? `<svg class="bolt" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2Z"/></svg>`
+    : '') + esc(contextTitle());
+  $('ctxSub').textContent = contextSub();
+  $('editSmartBtn').classList.toggle('hidden', context.kind!=='smart');
+  $('resultCount').textContent = hasFilters(browseFilters)
+    ? `${assets.length} of ${base.length} assets` : `${assets.length} asset${assets.length===1?'':'s'}`;
+  $('saveSmartBtn').classList.toggle('hidden', !(hasFilters(browseFilters) && context.kind!=='smart'));
+  $('grid').innerHTML = assets.map(a=>cardHTML(a,false,browseFilters.tags)).join('');
+  $('listWrap').innerHTML = listHTML(assets, browseFilters.tags);
+  $('grid').classList.toggle('hidden', viewMode!=='grid' || !assets.length);
+  $('listWrap').classList.toggle('hidden', viewMode!=='list' || !assets.length);
+  $('empty').classList.toggle('hidden', !!assets.length);
+  $('gridSizeWrap').style.visibility = viewMode==='grid' ? 'visible' : 'hidden';
+}
+
+/* ---------------- builder ---------------- */
+let builderBar;
+function openBuilder(editId, prefill){
+  const s = editId ? smartCollections.find(s=>s.id===editId) : null;
+  builder = {
+    name: s?.name ?? '',
+    filters: structuredClone(s?.filters ?? prefill ?? emptyFilters()),
+    editingId: editId ?? null,
+  };
+  $('builderTitle').childNodes[$('builderTitle').childNodes.length-1].textContent = s ? ' Edit Smart Collection' : ' New Smart Collection';
+  $('builderName').value = builder.name;
+  $('builderSave').textContent = s ? 'Save Changes' : 'Create Smart Collection';
+  $('builderDelete').classList.toggle('hidden', !s);
+  $('browseView').classList.add('hidden');
+  $('builderView').classList.remove('hidden');
+  renderBuilder();
+  $('builderName').focus();
+}
+function closeBuilder(){
+  builder = null;
+  $('builderView').classList.add('hidden');
+  $('browseView').classList.remove('hidden');
+  renderBrowse();
+}
+function renderBuilder(){
+  if(!builder) return;
+  builderBar.renderChips();
+  const matches = applyFilters(ASSETS, builder.filters);
+  $('builderMatch').textContent = `${matches.length} asset${matches.length===1?'':'s'} currently match`;
+  $('builderGrid').innerHTML = matches.map(a=>cardHTML(a,true,builder.filters.tags)).join('');
+  $('builderGrid').classList.toggle('hidden', !matches.length);
+  $('builderEmpty').classList.toggle('hidden', !!matches.length);
+  $('builderSave').disabled = !($('builderName').value.trim() && hasFilters(builder.filters));
+}
+
+/* ---------------- wiring ---------------- */
+browseBar = wireFilterBar(
+  {input:'fbBrowseInput', menu:'fbBrowseMenu', chips:'fbBrowseChips', clear:'fbBrowseClear', shell:'fbBrowseShell'},
+  ()=>browseFilters, renderBrowse
+);
+builderBar = wireFilterBar(
+  {input:'fbBuilderInput', menu:'fbBuilderMenu', chips:'fbBuilderChips', clear:'fbBuilderClear', shell:'fbBuilderShell'},
+  ()=>builder?builder.filters:emptyFilters(), renderBuilder
+);
+
+$('rail').addEventListener('click', e=>{
+  const b = e.target.closest('[data-nav]'); if(!b) return;
+  const nav = b.dataset.nav;
+  if(nav==='newsmart'){ openBuilder(null); return; }
+  if(nav==='newcoll'){
+    collections.push({id:'c'+(collections.length+1), name:'Untitled Collection', members:[]});
+    context = {kind:'coll', id:collections[collections.length-1].id};
+    browseFilters = emptyFilters(); renderBrowse(); return;
+  }
+  if(!nav) return;
+  context = {kind:nav, id:b.dataset.id||null};
+  browseFilters = nav==='smart'
+    ? structuredClone(smartCollections.find(s=>s.id===b.dataset.id).filters)
+    : emptyFilters();
+  renderBrowse();
+});
+
+document.querySelector('.pane').addEventListener('click', e=>{
+  const fav = e.target.closest('[data-fav]');
+  if(fav){
+    const a = ASSETS.find(a=>a.id==fav.dataset.fav); a.fav=!a.fav;
+    renderBrowse(); if(builder) renderBuilder(); return;
+  }
+  const tf = e.target.closest('[data-tagfilter]');
+  if(tf){
+    const inBuilder = builder && !$('builderView').classList.contains('hidden');
+    const f = inBuilder ? builder.filters : browseFilters;
+    const t = tf.dataset.tagfilter;
+    f.tags = f.tags.includes(t) ? f.tags.filter(x=>x!==t) : [...f.tags, t];
+    inBuilder ? renderBuilder() : renderBrowse(); return;
+  }
+  const ac = e.target.closest('[data-addcoll]');
+  if(ac){
+    document.querySelectorAll('.pop').forEach(p=>p.remove());
+    const id = +ac.dataset.addcoll;
+    const card = ac.closest('.card');
+    const pop = document.createElement('div');
+    pop.className='pop';
+    pop.innerHTML = '<div class="fb-group">Add to collection</div>' + collections.map(c=>{
+      const inC = c.members.includes(id);
+      return `<button class="item" data-coll="${c.id}" data-asset="${id}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+        ${esc(c.name)} ${inC?'<span class="tick">✓</span>':''}</button>`;
+    }).join('');
+    card.appendChild(pop);
+    return;
+  }
+  const cm = e.target.closest('[data-coll]');
+  if(cm){
+    const c = collections.find(c=>c.id===cm.dataset.coll);
+    const id = +cm.dataset.asset;
+    c.members.includes(id) ? c.members = c.members.filter(m=>m!==id) : c.members.push(id);
+    document.querySelectorAll('.pop').forEach(p=>p.remove());
+    renderBrowse(); return;
+  }
+  if(!e.target.closest('.pop')) document.querySelectorAll('.pop').forEach(p=>p.remove());
+});
+
+$('viewGridBtn').addEventListener('click', ()=>{ viewMode='grid'; $('viewGridBtn').classList.add('active'); $('viewListBtn').classList.remove('active'); renderBrowse(); });
+$('viewListBtn').addEventListener('click', ()=>{ viewMode='list'; $('viewListBtn').classList.add('active'); $('viewGridBtn').classList.remove('active'); renderBrowse(); });
+$('gridSize').addEventListener('input', e=>{
+  const min = [260,230,200,172,148][e.target.value-1];
+  document.documentElement.style.setProperty('--card-min', min+'px');
+});
+$('saveSmartBtn').addEventListener('click', ()=> openBuilder(null, structuredClone(browseFilters)));
+$('editSmartBtn').addEventListener('click', ()=> openBuilder(context.id));
+$('builderBack').addEventListener('click', closeBuilder);
+$('builderCancel').addEventListener('click', closeBuilder);
+$('builderName').addEventListener('input', renderBuilder);
+$('builderSave').addEventListener('click', ()=>{
+  const name = $('builderName').value.trim();
+  if(builder.editingId){
+    const s = smartCollections.find(s=>s.id===builder.editingId);
+    s.name = name; s.filters = structuredClone(builder.filters);
+    context = {kind:'smart', id:s.id};
+  }else{
+    const s = {id:'s'+(smartCollections.length+1), name, filters:structuredClone(builder.filters)};
+    smartCollections.push(s);
+    context = {kind:'smart', id:s.id};
+  }
+  browseFilters = structuredClone(smartCollections.find(s=>s.id===context.id).filters);
+  closeBuilder();
+});
+$('builderDelete').addEventListener('click', ()=>{
+  smartCollections = smartCollections.filter(s=>s.id!==builder.editingId);
+  context = {kind:'all', id:null};
+  browseFilters = emptyFilters();
+  closeBuilder();
+});
+
+renderBrowse();
+</script>

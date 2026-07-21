@@ -46,6 +46,7 @@ try:
     from modules.library.model.sfx_asset_model import SfxAssetModel
     from modules.library.model.image_asset_model import ImageAssetModel
     from modules.library.model.preset_model import PresetModel
+    from modules.library.model.collection_model import AssetCollectionModel
     from integrations.spotify.models import SpotifyAccount
     print("Models imported successfully")
 except ImportError as e:
