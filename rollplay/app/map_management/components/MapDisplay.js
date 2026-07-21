@@ -403,7 +403,6 @@ const MapDisplay = ({
             streamTokenDrag={mapTokensApi.streamTokenDrag}
             releaseToken={mapTokensApi.releaseToken}
             commitTokenMove={mapTokensApi.commitTokenMove}
-            removeToken={mapTokensApi.removeToken}
             clearDenial={mapTokensApi.clearDenial}
             remoteDragFramesRef={mapTokensApi.remoteDragFramesRef}
           />

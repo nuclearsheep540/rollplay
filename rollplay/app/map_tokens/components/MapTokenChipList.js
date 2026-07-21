@@ -12,8 +12,9 @@ import MapTokenChip from './MapTokenChip';
  * MapTokenChipList — the party drawer's "Map tokens" section (plan §3.6).
  *
  * One chip per seated character: unplaced chips drag onto the map to
- * place; placed ones read as passive "on map" state. Memoized so drawer
- * re-renders skip it while seats/tokens are unchanged.
+ * place; placed chips carry the "return" CTA that takes the token back
+ * off the board. Memoized so drawer re-renders skip it while seats/tokens
+ * are unchanged.
  */
 function MapTokenChipList({
   gameSeats = [],
@@ -22,6 +23,7 @@ function MapTokenChipList({
   beginCarry,
   cancelCarry,
   dropCarriedToken,
+  removeToken,
 }) {
   const chipSeats = gameSeats.filter(seat =>
     seat.userId !== 'empty' && seat.characterData?.character_id);
@@ -35,7 +37,7 @@ function MapTokenChipList({
       <div className="space-y-1">
         {chipSeats.map(seat => {
           const characterName = seat.characterData.character_name || seat.playerName || 'Adventurer';
-          const placed = tokens.some(token =>
+          const placedToken = tokens.find(token =>
             token.kind === 'pc' && token.owner_user_id === seat.userId);
           return (
             <MapTokenChip
@@ -49,7 +51,8 @@ function MapTokenChipList({
               }}
               name={characterName}
               color={seatColorByIndex[seat.seatId] || getSeatColorHex(seat.seatId)}
-              placed={placed}
+              placed={!!placedToken}
+              onReturn={placedToken ? () => removeToken(placedToken.id) : null}
               beginCarry={beginCarry}
               cancelCarry={cancelCarry}
               dropCarriedToken={dropCarriedToken}

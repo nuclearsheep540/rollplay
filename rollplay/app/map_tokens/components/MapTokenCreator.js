@@ -15,13 +15,21 @@ import MapTokenChip from './MapTokenChip';
  *
  * Creates local NPC drafts (label + D&D-size footprint) that appear below
  * as chips; drag a chip onto the map to place it — the token becomes
- * shared table state at that moment. Unplaced drafts live only in this
- * DM's browser.
+ * shared table state at that moment.
+ *
+ * The placed list derives from the BOARD, not from this browser's drafts —
+ * every npc token on the current map gets a "return" chip, including ones
+ * placed before a refresh or from another browser (the board is the truth;
+ * local drafts are just unplaced stamps). Recalling a token rebuilds its
+ * draft, so anything returned is immediately re-placeable. One draft can
+ * place on each map in the session (per-map stamps).
  */
 export default function MapTokenCreator({
   npcDrafts = [],
+  tokens = [],
   createNpcDraft,
   removeNpcDraft,
+  recallNpcToken,
   beginCarry,
   cancelCarry,
   dropCarriedToken,
@@ -67,31 +75,54 @@ export default function MapTokenCreator({
           + Add token
         </button>
 
-        {npcDrafts.length > 0 && (
-          <div className="space-y-1">
-            {npcDrafts.map((draft) => (
-              <div key={draft.id} className="flex items-center gap-1">
-                <div className="flex-1 min-w-0">
-                  <MapTokenChip
-                    token={draft}
-                    name={draft.label}
-                    color={NPC_TOKEN_COLOR}
-                    beginCarry={beginCarry}
-                    cancelCarry={cancelCarry}
-                    dropCarriedToken={dropCarriedToken}
-                  />
+        {(() => {
+          // Board truth first: every npc token on the current map gets a
+          // return chip. Local drafts render only while unplaced (a placed
+          // draft is represented by its board token).
+          const placedNpcTokens = tokens.filter((token) => token.kind === 'npc');
+          const placedTokenIds = new Set(placedNpcTokens.map((token) => token.id));
+          const unplacedDrafts = npcDrafts.filter((draft) => !placedTokenIds.has(draft.id));
+          if (!placedNpcTokens.length && !unplacedDrafts.length) return null;
+
+          return (
+            <div className="space-y-1">
+              {placedNpcTokens.map((token) => (
+                <MapTokenChip
+                  key={token.id}
+                  token={token}
+                  name={token.label || 'NPC'}
+                  color={NPC_TOKEN_COLOR}
+                  placed={true}
+                  onReturn={() => recallNpcToken(token)}
+                  beginCarry={beginCarry}
+                  cancelCarry={cancelCarry}
+                  dropCarriedToken={dropCarriedToken}
+                />
+              ))}
+              {unplacedDrafts.map((draft) => (
+                <div key={draft.id} className="flex items-center gap-1">
+                  <div className="flex-1 min-w-0">
+                    <MapTokenChip
+                      token={draft}
+                      name={draft.label}
+                      color={NPC_TOKEN_COLOR}
+                      beginCarry={beginCarry}
+                      cancelCarry={cancelCarry}
+                      dropCarriedToken={dropCarriedToken}
+                    />
+                  </div>
+                  <button
+                    onClick={() => removeNpcDraft(draft.id)}
+                    className="text-gray-500 hover:text-rose-400 text-xs px-1"
+                    title="Discard draft"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <button
-                  onClick={() => removeNpcDraft(draft.id)}
-                  className="text-gray-500 hover:text-rose-400 text-xs px-1"
-                  title="Discard draft"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

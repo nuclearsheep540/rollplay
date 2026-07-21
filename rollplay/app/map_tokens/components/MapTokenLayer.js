@@ -51,7 +51,6 @@ export default function MapTokenLayer({
   streamTokenDrag,
   releaseToken,
   commitTokenMove,
-  removeToken,
   clearDenial,
   remoteDragFramesRef = null,
 }) {
@@ -233,11 +232,8 @@ export default function MapTokenLayer({
     endDrag('putback');
   }, [endDrag]);
 
-  const handleTokenContextMenu = useCallback((event, token) => {
-    event.preventDefault();
-    event.stopPropagation();
-    removeToken(token.id);
-  }, [removeToken]);
+  // Removal lives on the token's chip ("return" CTA) — right-click removal
+  // was dropped 2026-07-21: the OS context menu wins that gesture.
 
   // Remote lerp loop (v1.1 live-drag): while any remote hand holds a token,
   // an rAF loop steers its disc toward the latest relayed frame — direct
@@ -382,7 +378,6 @@ export default function MapTokenLayer({
             onPointerMove={handleTokenPointerMove}
             onPointerUp={handleTokenPointerUp}
             onPointerCancel={handleTokenPointerCancel}
-            onContextMenu={(event) => handleTokenContextMenu(event, token)}
           >
             {/* Disc — dynamic color stays inline; decoration is Tailwind */}
             <div

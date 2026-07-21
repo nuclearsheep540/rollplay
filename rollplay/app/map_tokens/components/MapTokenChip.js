@@ -7,12 +7,14 @@ import React, { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
- * MapTokenChip — one unplaced token in a panel (party drawer for PCs, the
- * DM's creator section for NPC drafts). Drag it out onto the map to place
- * (decision 14): pointer capture keeps events on the chip, a fixed-position
- * ghost disc follows the pointer (portaled to <body> so drawer transforms
- * can't skew it), and the drop point goes through the hook's
- * dropCarriedToken — over the map places, anywhere else snaps back.
+ * MapTokenChip — a token's home in a panel (party drawer for PCs, the DM's
+ * creator section for NPC drafts). Unplaced: drag it out onto the map to
+ * place (decision 14) — pointer capture keeps events on the chip, a
+ * fixed-position ghost disc follows the pointer (portaled to <body> so
+ * drawer transforms can't skew it), and the drop point goes through the
+ * hook's dropCarriedToken. Placed: the chip persists and carries the
+ * "return" CTA that takes the token back off the board (the removal path —
+ * right-click on the disc lost to the OS context menu, 2026-07-21).
  */
 
 const GHOST_DIAMETER_PX = 44;
@@ -21,7 +23,8 @@ export default function MapTokenChip({
   token,          // token payload sans position: { id, kind, owner_user_id, character_id, label, footprint }
   name,           // display name for the chip
   color,          // disc color (character color / DM-rose)
-  placed = false, // on-map already — rendered as a passive state badge
+  placed = false, // on-map already — chip shows the "return" CTA instead of dragging
+  onReturn = null, // called when the user clicks "return" on a placed chip
   beginCarry,
   cancelCarry,
   dropCarriedToken,
@@ -79,9 +82,17 @@ export default function MapTokenChip({
           style={{ backgroundColor: color }}
         />
         <span className="truncate">{name}</span>
-        <span className="ml-auto text-[10px] uppercase tracking-wide text-gray-500">
-          {placed ? 'on map' : 'drag'}
-        </span>
+        {placed ? (
+          <button
+            onClick={onReturn}
+            className="ml-auto text-[10px] uppercase tracking-wide text-gray-300 border border-white/25 rounded px-1.5 py-0.5 hover:bg-white/10 hover:text-white"
+            title={`Return ${name}'s token from the map`}
+          >
+            ↩ return
+          </button>
+        ) : (
+          <span className="ml-auto text-[10px] uppercase tracking-wide text-gray-500">drag</span>
+        )}
       </div>
 
       {ghostPosition && typeof document !== 'undefined' && createPortal(

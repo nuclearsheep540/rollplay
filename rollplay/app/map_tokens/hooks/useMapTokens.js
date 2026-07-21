@@ -262,12 +262,10 @@ export const useMapTokens = ({
     const point = screenPointToSpace(element, clientX, clientY, naturalWidth, naturalHeight);
     if (!point || !point.insideElement) return false;
 
-    const placed = commitTokenPlace({ ...carried, x: point.x, y: point.y });
-    if (placed && carried.kind === 'npc') {
-      setNpcDrafts((previousDrafts) =>
-        previousDrafts.filter((draft) => draft.id !== carried.id));
-    }
-    return placed;
+    // Drafts are NOT consumed at placement — the chip persists as the
+    // token's home (per-map stamp, like a pc chip) and carries the
+    // "return token" CTA that takes it back off the board.
+    return commitTokenPlace({ ...carried, x: point.x, y: point.y });
   }, [activeAssetId, commitTokenPlace]);
 
   // ── DM NPC drafts ──────────────────────────────────────────────────────────
@@ -289,6 +287,30 @@ export const useMapTokens = ({
     setNpcDrafts((previousDrafts) =>
       previousDrafts.filter((draft) => draft.id !== draftId));
   }, []);
+
+  /**
+   * Recall an npc token from the board back into the DM's draft list.
+   * Works for ANY board token — including ones this browser never drafted
+   * (placed pre-refresh, or by an earlier session) — by rebuilding the
+   * draft from the token itself. The draft is the recalled token's home;
+   * discard it with ✕ if it isn't wanted again.
+   */
+  const recallNpcToken = useCallback((token) => {
+    if (!removeToken(token.id)) return false;
+    setNpcDrafts((previousDrafts) => {
+      if (previousDrafts.some((draft) => draft.id === token.id)) return previousDrafts;
+      const rebuiltDraft = {
+        id: token.id,
+        kind: 'npc',
+        owner_user_id: null,
+        character_id: null,
+        label: token.label || 'NPC',
+        footprint: token.footprint || 1,
+      };
+      return [...previousDrafts, rebuiltDraft];
+    });
+    return true;
+  }, [removeToken]);
 
   // ── Handler registration ───────────────────────────────────────────────────
 
@@ -337,5 +359,6 @@ export const useMapTokens = ({
     // DM drafts
     createNpcDraft,
     removeNpcDraft,
+    recallNpcToken,
   };
 };

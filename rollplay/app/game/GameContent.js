@@ -1279,12 +1279,11 @@ export default function GameContent() {
     streamTokenDrag: mapTokens.streamTokenDrag,
     releaseToken: mapTokens.releaseToken,
     commitTokenMove: mapTokens.commitTokenMove,
-    removeToken: mapTokens.removeToken,
     clearDenial: mapTokens.clearDenial,
     remoteDragFramesRef: mapTokens.remoteDragFramesRef,
   }), [
     mapTokens.attachTokenLayer, mapTokens.grabToken, mapTokens.streamTokenDrag,
-    mapTokens.releaseToken, mapTokens.commitTokenMove, mapTokens.removeToken,
+    mapTokens.releaseToken, mapTokens.commitTokenMove,
     mapTokens.clearDenial, mapTokens.remoteDragFramesRef,
   ]);
 
@@ -2156,6 +2155,7 @@ export default function GameContent() {
                 beginCarry={mapTokens.beginCarry}
                 cancelCarry={mapTokens.cancelCarry}
                 dropCarriedToken={mapTokens.dropCarriedToken}
+                removeToken={mapTokens.removeToken}
               />
             )}
 
@@ -2308,8 +2308,10 @@ export default function GameContent() {
                 <>
                 <MapTokenCreator
                   npcDrafts={mapTokens.npcDrafts}
+                  tokens={mapTokens.tokensForActiveMap}
                   createNpcDraft={mapTokens.createNpcDraft}
                   removeNpcDraft={mapTokens.removeNpcDraft}
+                  recallNpcToken={mapTokens.recallNpcToken}
                   beginCarry={mapTokens.beginCarry}
                   cancelCarry={mapTokens.cancelCarry}
                   dropCarriedToken={mapTokens.dropCarriedToken}
