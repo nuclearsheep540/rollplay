@@ -102,17 +102,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # Serialize deploys so two tag pushes can't race writing to the host.
+    # cancel-in-progress: false lets an in-flight copy finish rather than be
+    # killed mid-SCP (which is the partial-write we want to avoid).
+    concurrency:
+      group: deploy-manifest
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
       # Copies scripts/ and releases.json to the prod repo root so
       # scripts/set-release.sh can sync .env and redeploy on the host.
-      # Requires secrets: PROD_HOST (EC2 public DNS/IP), PROD_SSH_KEY (private key).
+      # Requires secrets: PROD_HOST (EC2 public DNS/IP), PROD_SSH_KEY (private
+      # key), PROD_SSH_FINGERPRINT (host key fingerprint for MITM protection).
       - name: Copy scripts/ and releases.json to prod
-        uses: appleboy/scp-action@v0.1.7
+        # Pinned to the commit behind v0.1.7 — this action receives the prod
+        # SSH key, so a mutable tag would be a supply-chain risk.
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ec2-user
           key: ${{ secrets.PROD_SSH_KEY }}
+          fingerprint: ${{ secrets.PROD_SSH_FINGERPRINT }}
           source: "scripts,releases.json"
           target: "/home/ec2-user/rollplay/"
