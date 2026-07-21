@@ -66,6 +66,21 @@ class UpdateScreenName:
         return user
 
 
+class UpdateUserColor:
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
+
+    def execute(self, user_id: UUID, color: str) -> UserAggregate:
+        """Set the user's identity color (validated against USER_COLORS in the aggregate)."""
+        user = self.repository.get_by_id(user_id)
+        if not user:
+            raise ValueError(f"User {user_id} not found")
+
+        user.set_color(color)
+        self.repository.save(user)
+        return user
+
+
 class SoftDeleteUser:
     """
     Soft delete a user account with full cascade cleanup.

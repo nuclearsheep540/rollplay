@@ -38,6 +38,16 @@ def utc_now():
 # - Must start with letter or number
 _ACCOUNT_NAME_REGEX = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}$')
 
+# Site-wide identity color palette (curated for legibility on dark surfaces —
+# Matt, 2026-07-21). The user's color paints their account icon and their
+# disc in other users' social panes; it is DISTINCT from characters.color
+# (in-game persona color for seats/tokens). NULL = not chosen; display falls
+# back to a deterministic hash into this same palette client-side.
+USER_COLORS = [
+    "#cda265", "#99cd65", "#70c285", "#5fd3d3",
+    "#5979d9", "#9959d9", "#d959b9", "#d95959",
+]
+
 
 @dataclass
 class UserAggregate:
@@ -54,6 +64,7 @@ class UserAggregate:
     account_tag: Optional[str] = None  # 4-digit discriminator (e.g., "2345")
     game_invites: Optional[List[GameInvites]] = None
     has_received_demo: bool = False  # Track if user has received their demo campaign
+    color: Optional[str] = None  # Identity color hex from USER_COLORS; None = not chosen
 
     @property
     def account_identifier(self) -> Optional[str]:
@@ -151,6 +162,21 @@ class UserAggregate:
             raise ValueError("Screen name cannot exceed 30 characters")
 
         self.screen_name = normalized_name
+
+    def set_color(self, color: str):
+        """
+        Set the user's identity color.
+
+        Constrained to the curated USER_COLORS palette — a product choice
+        for legibility (every option reads well on dark surfaces), not a
+        formatting rule.
+
+        Raises:
+            ValueError: If the color is not one of USER_COLORS
+        """
+        if color not in USER_COLORS:
+            raise ValueError("Color must be one of the identity palette options")
+        self.color = color
 
     def set_account_name(self, account_name: str, account_tag: str):
         """

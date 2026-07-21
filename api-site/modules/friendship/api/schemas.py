@@ -24,6 +24,7 @@ class FriendRequestResponse(BaseModel):
     recipient_id: UUID
     requester_screen_name: Optional[str] = None  # For incoming requests
     requester_account_tag: Optional[str] = None  # For incoming requests
+    requester_color: Optional[str] = None  # Requester's identity color (USER_COLORS)
     recipient_screen_name: Optional[str] = None  # For outgoing requests
     recipient_account_tag: Optional[str] = None  # For outgoing requests
     created_at: datetime
@@ -42,6 +43,7 @@ class FriendshipResponse(BaseModel):
     friend_id: UUID  # The OTHER user in the friendship (computed)
     friend_screen_name: Optional[str] = None
     friend_account_tag: Optional[str] = None
+    friend_color: Optional[str] = None  # Friend's identity color (USER_COLORS)
     is_online: bool = False  # Whether the friend is currently connected to events WebSocket
     created_at: datetime
 

@@ -6,10 +6,10 @@
 'use client'
 
 import { Suspense, useEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faRightFromBracket, faHouse, faCircle } from '@fortawesome/free-solid-svg-icons'
+import { faRightFromBracket, faHouse } from '@fortawesome/free-solid-svg-icons'
 
 import SiteHeader from '@/app/shared/components/SiteHeader'
 import SocialPanel from '@/app/shared/components/SocialPanel'
@@ -18,10 +18,10 @@ import { useToast } from '@/app/shared/hooks/useToast'
 import { useAuthenticatedEvents } from '@/app/shared/hooks/useAuthenticatedEvents'
 import { AuthenticatedContext } from '@/app/shared/providers/AuthenticatedContext'
 import { THEME } from '@/app/styles/colorTheme'
+import UserDisc from '@/app/shared/components/UserDisc'
 
 function AuthenticatedShell({ children }) {
   const router = useRouter()
-  const pathname = usePathname()
   const auth = useAuth()
   const { toasts, showToast, dismissToast } = useToast()
 
@@ -46,17 +46,6 @@ function AuthenticatedShell({ children }) {
       </div>
     )
   }
-
-  const onAccountPage = pathname === '/account'
-
-  // Avatar initial for the account icon — prefer the immutable account
-  // handle, then screen name, then email; '?' if none are set.
-  const accountInitial = (
-    auth.user?.account_name?.[0] ||
-    auth.user?.screen_name?.[0] ||
-    auth.user?.email?.[0] ||
-    '?'
-  ).toUpperCase()
 
   return (
     <AuthenticatedContext.Provider
@@ -93,27 +82,27 @@ function AuthenticatedShell({ children }) {
             href="/account"
             aria-label="Account"
             title="Account"
-            className="hover:opacity-80 transition-opacity"
-            style={{ color: onAccountPage ? THEME.textOnDark : THEME.textSecondary }}
+            className="hover:opacity-80 transition-opacity -ml-1"
           >
-            {/* Avatar disc — faCircle rendered by FontAwesome itself, so it
-                aligns with the neighbouring icons by construction (same SVG
-                pipeline, same box, same baseline behaviour) and inherits the
-                Link's active/inactive colour. The wrapper span only exists to
-                anchor the initial overlay: it carries FA's own -0.125em
-                vertical-align while the SVG goes display:block inside it, so
-                the wrapper's outer geometry is identical to a bare icon's.
-                The initial is cut out in the header background colour, nudged
-                1px down to optically centre the capital. */}
-            <span className="relative inline-block align-[-0.125em]">
-              <FontAwesomeIcon icon={faCircle} className="block h-7 w-7" />
-              <span
-                className="absolute inset-0 flex items-center justify-center text-sm font-bold leading-none select-none mt-px"
-                style={{ color: THEME.bgSecondary }}
-              >
-                {accountInitial}
-              </span>
-            </span>
+            {/* The user's own identity disc — same UserDisc as friend rows
+                and the account page avatar, so color and treatment can never
+                drift. The nav's items-center handles vertical alignment.
+
+                Optical alignment + intent (deliberate): a circle fills ~78%
+                of its box and reads smaller than square glyphs at the same
+                metric size, and we overshoot parity a touch on purpose —
+                this is the user's own path, not general navigation. w-9 with
+                a border-2 ring = a 32px colored fill (the overshoot against
+                the neighbours' 28px glyphs) with the darker black/40 ring
+                sitting beyond it, matching the account page avatar. Sizing
+                the box smaller lets the ring eat the fill and collapses the
+                overshoot back to parity — don't. */}
+            <UserDisc
+              userId={auth.user?.id}
+              color={auth.user?.color}
+              name={auth.user?.account_name || auth.user?.screen_name || auth.user?.email}
+              className="w-9 h-9 text-base border-2 border-black/40 -top-0.5"
+            />
           </Link>
           {/* Negative x-margin tightens the 32 px nav gap around the
               divider specifically, without touching the spacing between

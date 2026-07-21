@@ -27,6 +27,11 @@ class User(Base):
     is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete flag
     deleted_at = Column(DateTime, nullable=True)  # When soft deleted
     has_received_demo = Column(Boolean, default=False, nullable=False)  # Track demo campaign given
+    # Identity color (hex from the curated USER_COLORS palette). Paints the
+    # account icon and this user's disc in other users' social panes. NULL =
+    # not chosen (display falls back to a deterministic hash client-side).
+    # Distinct from characters.color (in-game persona color).
+    color = Column(String(7), nullable=True)
 
     # Relationships (for ORM convenience, not exposed to domain)
     campaigns = relationship("Campaign", back_populates="creator")

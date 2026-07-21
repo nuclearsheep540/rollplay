@@ -17,6 +17,7 @@ import {
   faUsers
 } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
+import UserDisc from '@/app/shared/components/UserDisc'
 import { Button } from './shared/Button'
 import { useFriendships } from '../hooks/useFriendships'
 import { useSendFriendRequest, useAcceptFriendRequest, useDeclineFriendRequest, useRemoveFriend } from '../hooks/mutations/useFriendshipMutations'
@@ -326,16 +327,12 @@ export default function FriendsManager({ user, fillHeight = false }) {
                 style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border"
-                    style={{
-                      backgroundColor: `${THEME.textAccent}30`,
-                      borderColor: `${THEME.textAccent}50`,
-                      color: THEME.textAccent
-                    }}
-                  >
-                    {(friendship.friend_screen_name || 'U')[0].toUpperCase()}
-                  </div>
+                  <UserDisc
+                    userId={friendship.friend_id}
+                    color={friendship.friend_color}
+                    name={friendship.friend_screen_name}
+                    className="w-10 h-10 text-lg"
+                  />
                   <div>
                     <p className="font-semibold" style={{color: THEME.textOnDark}}>
                       {friendship.friend_screen_name || 'User'}

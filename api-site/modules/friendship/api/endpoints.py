@@ -65,6 +65,7 @@ def _to_friendship_response(
         friend_id=friend_user_id,
         friend_screen_name=friend_user.screen_name if friend_user else None,
         friend_account_tag=friend_user.account_identifier if friend_user else None,
+        friend_color=friend_user.color if friend_user else None,
         is_online=is_online,
         created_at=friendship.created_at
     )
@@ -91,6 +92,7 @@ def _to_friend_request_response(
         recipient_id=friend_request.recipient_id,
         requester_screen_name=requester.screen_name if requester else None,
         requester_account_tag=requester.account_identifier if requester else None,
+        requester_color=requester.color if requester else None,
         recipient_screen_name=recipient.screen_name if recipient else None,
         recipient_account_tag=recipient.account_identifier if recipient else None,
         created_at=friend_request.created_at
