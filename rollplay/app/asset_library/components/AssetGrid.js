@@ -15,6 +15,8 @@ export default function AssetGrid({
   onToggleFavorite,
   onTagClick,
   activeTags = [],
+  selectable = false,
+  selectedIds = null,
   columns = 4,
 }) {
   if (loading) {
@@ -51,6 +53,8 @@ export default function AssetGrid({
           onToggleFavorite={onToggleFavorite}
           onTagClick={onTagClick}
           activeTags={activeTags}
+          selectable={selectable}
+          selected={selectedIds?.has(asset.id) || false}
         />
       ))}
     </div>

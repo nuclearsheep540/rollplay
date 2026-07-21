@@ -42,7 +42,7 @@ from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.preset_aggregate import PresetAggregate, PresetSlot
 from modules.library.application.queries import (
-    GetMediaAssetsByUser, GetMediaAssetsByCampaign,
+    GetMediaAssetsByUser, GetMediaAssetsByCampaign, CountMediaAssetsByUser,
     GetPresetById, ListPresetsForUser, GetCollectionsByUser,
 )
 from .schemas import (
@@ -59,6 +59,7 @@ from .schemas import (
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
     MediaAssetListResponse,
+    AssetCountResponse,
     CampaignAssetsMetadataResponse,
     PresetResponse,
     PresetListResponse,
@@ -317,6 +318,23 @@ async def get_campaign_assets_metadata(
         asset_count=metadata.asset_count,
         total_file_size=metadata.total_file_size,
     )
+
+
+@router.get("/count", response_model=AssetCountResponse)
+async def count_media_assets(
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+) -> AssetCountResponse:
+    """
+    Total assets owned by the current user - a bare SQL COUNT.
+    Registered before /{asset_id} so "count" isn't parsed as a UUID.
+    """
+    try:
+        query = CountMediaAssetsByUser(repo)
+        return AssetCountResponse(total=query.execute(current_user.id))
+    except Exception as e:
+        logger.error(f"Count media assets error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to count media assets")
 
 
 # ── Collections ──────────────────────────────────────────────────────────────

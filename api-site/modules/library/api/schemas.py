@@ -132,6 +132,11 @@ class MediaAssetListResponse(BaseModel):
     total: int
 
 
+class AssetCountResponse(BaseModel):
+    """Bare total of the user's assets - feeds the library counter"""
+    total: int = Field(..., ge=0, description="Total assets owned by the user")
+
+
 class CampaignAssetsMetadataResponse(BaseModel):
     """Aggregated metadata for a campaign's asset library - count and
     total bytes across all assets associated with the campaign. Used by

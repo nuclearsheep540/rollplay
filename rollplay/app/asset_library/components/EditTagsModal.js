@@ -22,12 +22,16 @@ function normalizeTag(raw) {
 }
 
 /**
- * Tag editor for a single asset - chips for current tags, an input
- * that adds on Enter/comma, and suggestions from the rest of the
- * user's library.
+ * Tag editor. Two modes, decided by how many assets are passed:
+ *
+ * - one asset: edit its tags in place (atomic full-replace on save)
+ * - several assets (multi-select): collect tags to ADD - each asset
+ *   keeps its existing tags and gains the new ones (client-side merge,
+ *   since the endpoint is full-replace per asset)
  */
-export default function EditTagsModal({ asset, allTags = [], onClose }) {
-  const [tags, setTags] = useState(asset.tags || [])
+export default function EditTagsModal({ assets, allTags = [], onClose }) {
+  const bulk = assets.length > 1
+  const [tags, setTags] = useState(() => (bulk ? [] : (assets[0].tags || [])))
   const [draft, setDraft] = useState('')
   const [localError, setLocalError] = useState(null)
   const inputRef = useRef(null)
@@ -48,7 +52,7 @@ export default function EditTagsModal({ asset, allTags = [], onClose }) {
       setLocalError(`Tags can be at most ${MAX_TAG_LENGTH} characters`)
       return
     }
-    if (tags.length >= MAX_TAGS_PER_ASSET) {
+    if (!bulk && tags.length >= MAX_TAGS_PER_ASSET) {
       setLocalError(`Assets can have at most ${MAX_TAGS_PER_ASSET} tags`)
       return
     }
@@ -75,11 +79,27 @@ export default function EditTagsModal({ asset, allTags = [], onClose }) {
   }
 
   const handleSave = async () => {
+    // Commit any half-typed tag the user forgot to Enter
+    const pending = normalizeTag(draft)
+    const finalTags = pending && !tags.includes(pending) ? [...tags, pending] : tags
+
     try {
-      // Commit any half-typed tag the user forgot to Enter
-      const pending = normalizeTag(draft)
-      const finalTags = pending && !tags.includes(pending) ? [...tags, pending] : tags
-      await updateMutation.mutateAsync({ assetId: asset.id, tags: finalTags })
+      if (bulk) {
+        if (finalTags.length === 0) return
+        const results = await Promise.allSettled(
+          assets.map((asset) => {
+            const merged = [...new Set([...(asset.tags || []), ...finalTags])]
+            return updateMutation.mutateAsync({ assetId: asset.id, tags: merged })
+          })
+        )
+        const failed = results.filter((result) => result.status === 'rejected').length
+        if (failed > 0) {
+          setLocalError(`Failed to update ${failed} of ${assets.length} assets`)
+          return
+        }
+      } else {
+        await updateMutation.mutateAsync({ assetId: assets[0].id, tags: finalTags })
+      }
       onClose()
     } catch {
       // Error surfaces via updateMutation.error
@@ -87,16 +107,25 @@ export default function EditTagsModal({ asset, allTags = [], onClose }) {
   }
 
   const error = localError || updateMutation.error?.message
+  const saveDisabled = updateMutation.isPending || (bulk && tags.length === 0 && !draft.trim())
 
   return (
     <Modal open={true} onClose={onClose} size="sm" initialFocus={inputRef}>
       <div className="p-6">
-        <h2 className="text-lg font-semibold mb-1">Edit Tags</h2>
-        <p className="mb-4 truncate text-sm text-content-secondary" title={asset.filename}>
-          {asset.filename}
+        <h2 className="text-lg font-semibold mb-1">
+          {bulk ? `Add Tags to ${assets.length} Assets` : 'Edit Tags'}
+        </h2>
+        <p className="mb-4 truncate text-sm text-content-secondary" title={bulk ? undefined : assets[0].filename}>
+          {bulk
+            ? "Added on top of each asset's existing tags"
+            : assets[0].filename}
         </p>
 
-        <FormField label={`Tags (${tags.length}/${MAX_TAGS_PER_ASSET})`} id="edit-tags-input" error={error}>
+        <FormField
+          label={bulk ? 'Tags to add' : `Tags (${tags.length}/${MAX_TAGS_PER_ASSET})`}
+          id="edit-tags-input"
+          error={error}
+        >
           <div className="flex flex-wrap items-center gap-1.5 rounded-sm border border-border bg-surface-elevated px-3 py-2 focus-within:border-border-active">
             {tags.map((tag) => (
               <span
@@ -120,7 +149,7 @@ export default function EditTagsModal({ asset, allTags = [], onClose }) {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={tags.length === 0 ? 'e.g. forest, night, boss…' : ''}
+              placeholder={tags.length === 0 ? 'e.g. forest, night, boss' : ''}
               className="min-w-[120px] flex-1 bg-transparent py-0.5 text-sm text-content-on-dark outline-none placeholder:text-content-secondary"
             />
           </div>
@@ -149,8 +178,8 @@ export default function EditTagsModal({ asset, allTags = [], onClose }) {
           <Button variant="ghost" onClick={onClose} disabled={updateMutation.isPending}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleSave} disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? 'Saving…' : 'Save Tags'}
+          <Button variant="primary" onClick={handleSave} disabled={saveDisabled}>
+            {updateMutation.isPending ? 'Saving...' : bulk ? 'Add Tags' : 'Save Tags'}
           </Button>
         </div>
       </div>

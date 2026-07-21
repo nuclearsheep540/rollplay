@@ -84,6 +84,33 @@ export function filtersToSmartPayload(filters) {
   }
 }
 
+// Column accessors for list-view sorting
+const SORT_ACCESSORS = {
+  name: (asset) => (asset.filename || '').toLowerCase(),
+  type: (asset) => asset.asset_type || '',
+  size: (asset) => asset.file_size || 0,
+  campaigns: (asset) => (asset.campaign_ids || []).length,
+  added: (asset) => new Date(asset.created_at || 0).getTime(),
+}
+
+/**
+ * Sort assets by a list column. sort is { key, dir: 'asc' | 'desc' }
+ * or null for the default order (created_at desc from the backend).
+ */
+export function sortAssets(assets, sort) {
+  if (!sort) return assets
+  const accessor = SORT_ACCESSORS[sort.key]
+  if (!accessor) return assets
+  const direction = sort.dir === 'desc' ? -1 : 1
+  return [...assets].sort((a, b) => {
+    const left = accessor(a)
+    const right = accessor(b)
+    if (left < right) return -direction
+    if (left > right) return direction
+    return 0
+  })
+}
+
 /**
  * Aggregate distinct tags with usage counts across the library -
  * feeds the filter bar's default suggestions ("your tags").

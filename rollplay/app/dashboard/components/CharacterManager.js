@@ -295,20 +295,22 @@ export default function CharacterManager({
       }}
       onClick={() => toggleCharacterDetails(char)}
     >
-      {/* Avatar area - 3/4 of card height with hero background */}
+      {/* Avatar area - 3/4 of card height; per-character avatar with
+          hero-image fallback */}
       <div
         className="flex items-center justify-center relative"
         style={{
-          backgroundImage: 'url(/heroes.png)',
+          backgroundImage: `url(${char.avatar_url || '/heroes.png'})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         }}
       >
-        {/* Dark overlay for readability */}
+        {/* Overlay for badge readability - much lighter over a real
+            avatar so the portrait stays visible */}
         <div
           className="absolute inset-0"
           style={{
-            backgroundColor: `${COLORS.onyx}80`
+            backgroundColor: char.avatar_url ? `${COLORS.onyx}26` : `${COLORS.onyx}80`
           }}
         />
 

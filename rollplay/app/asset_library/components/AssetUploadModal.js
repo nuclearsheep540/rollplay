@@ -42,12 +42,14 @@ export default function AssetUploadModal({ isOpen, onClose, initialFiles = null 
 
   const allDone = totalCount > 0 && completedCount === totalCount
 
-  // Seed the queue with files dropped onto the library view. The modal
-  // mounts fresh per open, so this runs once per drop.
+  // Seed the queue with files dropped onto the library view. Guarded by
+  // a ref so it stays idempotent: React Strict Mode re-runs mount
+  // effects in dev, which would otherwise queue every file twice.
+  const seededInitialFiles = useRef(false)
   useEffect(() => {
-    if (initialFiles?.length) {
-      addFiles(initialFiles)
-    }
+    if (seededInitialFiles.current || !initialFiles?.length) return
+    seededInitialFiles.current = true
+    addFiles(initialFiles)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -62,6 +62,15 @@ class MediaAssetRepository:
 
         return self._model_to_aggregate(model)
 
+    def count_by_user_id(self, user_id: UUID) -> int:
+        """Total assets owned by a user - single SQL COUNT, no rows
+        materialised. Feeds the library's paginated list counter."""
+        return (
+            self.db.query(func.count(MediaAssetModel.id))
+            .filter(MediaAssetModel.user_id == user_id)
+            .scalar()
+        ) or 0
+
     def get_by_user_id(self, user_id: UUID) -> List[MediaAssetAggregate]:
         """Get all media assets owned by a user"""
         query, entity = self._poly_query()

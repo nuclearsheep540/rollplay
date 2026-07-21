@@ -144,9 +144,15 @@ export default function SmartCollectionBuilder({
         <Button variant="primary" onClick={handleSave} disabled={!canSave || pending}>
           {pending ? 'Saving…' : isEditing ? 'Save Changes' : 'Create Smart Collection'}
         </Button>
-        <Button variant="ghost" onClick={onCancel} disabled={pending}>
+        {/* Plain button: the ghost Button's inline smoke text is for
+            dark surfaces and disappears on this light pane */}
+        <button
+          onClick={onCancel}
+          disabled={pending}
+          className="rounded-sm border border-border px-4 py-2 text-sm font-medium text-content-primary transition-colors hover:border-border-active disabled:opacity-50"
+        >
           Cancel
-        </Button>
+        </button>
         {isEditing && (
           <button
             onClick={() => (confirmingDelete ? handleDelete() : setConfirmingDelete(true))}

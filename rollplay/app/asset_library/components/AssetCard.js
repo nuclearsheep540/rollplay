@@ -3,7 +3,7 @@
 
 import React from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faStar } from '@fortawesome/free-solid-svg-icons'
+import { faStar, faCheck } from '@fortawesome/free-solid-svg-icons'
 import { faStar as faStarOutline } from '@fortawesome/free-regular-svg-icons'
 import ContextMenu from '@/app/shared/components/ContextMenu'
 import Badge from '@/app/shared/components/Badge'
@@ -47,6 +47,8 @@ export default function AssetCard({
   onToggleFavorite,
   onTagClick,
   activeTags = [],
+  selectable = false,
+  selected = false,
 }) {
   const isImage = asset.asset_type === 'map' || asset.asset_type === 'image'
   const isAudio = asset.asset_type === 'music' || asset.asset_type === 'sfx'
@@ -64,9 +66,26 @@ export default function AssetCard({
 
   return (
     <ContextMenu items={contextMenuItems}>
-      <div onClick={onClick} className="cursor-pointer rounded-sm border border-border bg-surface-panel overflow-hidden transition-all">
+      <div
+        onClick={onClick}
+        className={`cursor-pointer rounded-sm border bg-surface-panel overflow-hidden transition-all ${
+          selected ? 'border-border-active' : 'border-border'
+        }`}
+      >
         {/* Thumbnail/Preview */}
         <div className="relative aspect-video flex items-center justify-center bg-surface-elevated">
+          {/* Selection indicator */}
+          {selectable && (
+            <span
+              className={`absolute left-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
+                selected
+                  ? 'border-content-on-dark bg-content-on-dark text-surface-panel'
+                  : 'border-content-on-dark/60 bg-overlay-light text-transparent'
+              }`}
+            >
+              <FontAwesomeIcon icon={faCheck} className="text-[10px]" />
+            </span>
+          )}
           {isImage && asset.s3_url ? (
             <img
               src={asset.s3_url}
@@ -97,15 +116,15 @@ export default function AssetCard({
             </span>
           )}
 
-          {/* Favorite star */}
+          {/* Favorite star - outline previews amber on hover; filled dims to hint removal */}
           <button
             onClick={handleFavoriteClick}
             aria-label={asset.favorite ? 'Remove from favorites' : 'Add to favorites'}
             className={`absolute top-1.5 right-1.5 rounded-sm bg-overlay-light p-1.5 leading-none transition-colors ${
-              asset.favorite ? 'text-favorite' : 'text-content-on-dark/50 hover:text-content-on-dark'
+              asset.favorite ? 'text-favorite hover:opacity-75' : 'text-content-on-dark hover:text-favorite'
             }`}
           >
-            <FontAwesomeIcon icon={asset.favorite ? faStar : faStarOutline} className="text-xs" />
+            <FontAwesomeIcon icon={asset.favorite ? faStar : faStarOutline} className="text-sm" />
           </button>
         </div>
 

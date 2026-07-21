@@ -8,9 +8,10 @@ import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faUpload, faTrash, faEye, faPen, faTags, faShapes, faSliders,
-  faStar, faTableCellsLarge, faList, faBolt, faFolder,
+  faStar, faTableCellsLarge, faList, faBolt, faFolder, faSquareCheck,
 } from '@fortawesome/free-solid-svg-icons'
 import { useAssets } from '../hooks/useAssets'
+import { useAssetCount } from '../hooks/useAssetCount'
 import { useDeleteAsset } from '../hooks/useDeleteAsset'
 import { useRenameAsset } from '../hooks/useRenameAsset'
 import { useAssociateAsset } from '../hooks/useAssociateAsset'
@@ -21,7 +22,7 @@ import { useCreateCollection, useUpdateCollection, useDeleteCollection, useToggl
 import { useCampaigns } from '@/app/dashboard/hooks/useCampaigns'
 import {
   EMPTY_FILTERS, hasActiveFilters, applyAssetFilters, aggregateTagCounts,
-  filtersFromSmartCollection,
+  filtersFromSmartCollection, sortAssets,
 } from '../utils/assetFilters'
 import LibraryRail from './LibraryRail'
 import AssetFilterBar from './AssetFilterBar'
@@ -64,6 +65,19 @@ export default function AssetLibraryManager({ user }) {
     return 2
   })
 
+  // List view pagination: page size from the toolbar, window grows as
+  // the sentinel row scrolls into view
+  const [listPageSize, setListPageSize] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = parseInt(localStorage.getItem('assetListPageSize'))
+      if ([20, 50, 100].includes(stored)) return stored
+    }
+    return 20
+  })
+  const [listVisibleCount, setListVisibleCount] = useState(listPageSize)
+  // List column sort: { key, dir } or null for default order
+  const [listSort, setListSort] = useState(null)
+
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [quickLookAsset, setQuickLookAsset] = useState(null)
@@ -71,6 +85,11 @@ export default function AssetLibraryManager({ user }) {
   const [renameValue, setRenameValue] = useState('')
   const [editTagsTarget, setEditTagsTarget] = useState(null)
   const renameInputRef = useRef(null)
+
+  // Multi-select: toggled from the toolbar; clicking assets selects
+  // them, right-clicking a selected asset offers bulk actions
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
 
   // Page-level drop target: dropping files anywhere on the library
   // opens the upload modal pre-seeded with them
@@ -95,12 +114,24 @@ export default function AssetLibraryManager({ user }) {
     localStorage.setItem('assetLibraryViewMode', viewMode)
   }, [viewMode])
 
+  useEffect(() => {
+    localStorage.setItem('assetListPageSize', listPageSize.toString())
+  }, [listPageSize])
+
+  // Rewind the list window whenever what's listed (or its order) changes
+  useEffect(() => {
+    setListVisibleCount(listPageSize)
+  }, [listPageSize, context, filters, viewMode, listSort])
+
   // Full library, filtered client-side (see utils/assetFilters.js)
   const {
     data: assets = [],
     isLoading: loading,
     error: queryError,
   } = useAssets()
+
+  // Authoritative DB total - the list counter's denominator
+  const { data: assetCount } = useAssetCount()
 
   const deleteMutation = useDeleteAsset()
   const renameMutation = useRenameAsset()
@@ -211,9 +242,41 @@ export default function AssetLibraryManager({ user }) {
           ? 'Manually managed - right-click any asset → Collections to add or remove'
           : null
 
+  // ── Selection ──────────────────────────────────────────────────────
+  const selectedAssets = useMemo(
+    () => assets.filter((asset) => selectedIds.has(asset.id)),
+    [assets, selectedIds]
+  )
+
+  const exitSelection = useCallback(() => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }, [])
+
+  const toggleSelected = useCallback((asset) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(asset.id)) {
+        next.delete(asset.id)
+      } else {
+        next.add(asset.id)
+      }
+      return next
+    })
+  }, [])
+
+  const handleAssetClick = useCallback((asset) => {
+    if (selectionMode) {
+      toggleSelected(asset)
+    } else {
+      setQuickLookAsset(asset)
+    }
+  }, [selectionMode, toggleSelected])
+
   // ── Handlers ───────────────────────────────────────────────────────
   const handleNavigate = useCallback((kind, id = null) => {
     setBuilder(null)
+    exitSelection()
     setContext({ kind, id })
     if (kind === 'smart') {
       const collection = collections.find((existing) => existing.id === id)
@@ -221,7 +284,7 @@ export default function AssetLibraryManager({ user }) {
     } else {
       setFilters({ ...EMPTY_FILTERS })
     }
-  }, [collections])
+  }, [collections, exitSelection])
 
   const handleCollectionModalSubmit = useCallback(async () => {
     const name = collectionName.trim()
@@ -303,8 +366,67 @@ export default function AssetLibraryManager({ user }) {
     }
   }, [renameMutation.isPending])
 
+  // Bulk executors - skip assets that already have the association so
+  // repeats are harmless; mutations run concurrently and invalidations
+  // coalesce in TanStack
+  const bulkAddToCollection = useCallback((collection, targets) => {
+    const missing = targets.filter((asset) => !(collection.asset_ids || []).includes(asset.id))
+    return Promise.allSettled(missing.map((asset) =>
+      collectionMemberMutation.mutateAsync({ collectionId: collection.id, assetId: asset.id, member: true })
+    ))
+  }, [collectionMemberMutation])
+
+  const bulkAddToCampaign = useCallback((campaign, targets) => {
+    const missing = targets.filter((asset) => !(asset.campaign_ids || []).includes(campaign.id))
+    return Promise.allSettled(missing.map((asset) =>
+      associateMutation.mutateAsync({ assetId: asset.id, campaignId: campaign.id })
+    ))
+  }, [associateMutation])
+
   // Build context menu items for each asset card/row
   const getContextMenuItems = useCallback((asset) => {
+    // Bulk menu: selection active and the right-clicked asset is part of it
+    if (selectionMode && selectedIds.size > 0 && selectedIds.has(asset.id)) {
+      const count = selectedIds.size
+      const targets = assets.filter((candidate) => selectedIds.has(candidate.id))
+      const bulkItems = []
+
+      if (manualCollections.length > 0) {
+        bulkItems.push({
+          label: `Add ${count} to Collection`,
+          icon: <FontAwesomeIcon icon={faFolder} className="text-xs" />,
+          subItems: manualCollections.map(collection => ({
+            label: collection.name,
+            onClick: () => bulkAddToCollection(collection, targets),
+          })),
+        })
+      }
+
+      if (ownedCampaigns.length > 0) {
+        bulkItems.push({
+          label: `Add ${count} to Campaign`,
+          subItems: ownedCampaigns.map(campaign => ({
+            label: campaign.title,
+            onClick: () => bulkAddToCampaign(campaign, targets),
+          })),
+        })
+      }
+
+      bulkItems.push({
+        label: `Add Tags to ${count}`,
+        icon: <FontAwesomeIcon icon={faTags} className="text-xs" />,
+        onClick: () => setEditTagsTarget(targets),
+      })
+
+      bulkItems.push({ separator: true })
+      bulkItems.push({
+        label: 'Clear Selection',
+        onClick: exitSelection,
+      })
+
+      return bulkItems
+    }
+
     const items = [
       {
         label: 'Quick Look',
@@ -327,7 +449,7 @@ export default function AssetLibraryManager({ user }) {
       {
         label: 'Edit Tags',
         icon: <FontAwesomeIcon icon={faTags} className="text-xs" />,
-        onClick: () => setEditTagsTarget(asset),
+        onClick: () => setEditTagsTarget([asset]),
       },
     ]
 
@@ -415,7 +537,11 @@ export default function AssetLibraryManager({ user }) {
     })
 
     return items
-  }, [ownedCampaigns, manualCollections, associateMutation, changeTypeMutation, collectionMemberMutation, handleToggleFavorite, router])
+  }, [
+    ownedCampaigns, manualCollections, associateMutation, changeTypeMutation,
+    collectionMemberMutation, handleToggleFavorite, router,
+    selectionMode, selectedIds, assets, bulkAddToCollection, bulkAddToCampaign, exitSelection,
+  ])
 
   // ── Page-level drag-and-drop ───────────────────────────────────────
   const dragHasFiles = (event) =>
@@ -455,10 +581,45 @@ export default function AssetLibraryManager({ user }) {
     }
   }
 
+  // List pagination window - sorted first, then sliced
+  const sortedListAssets = useMemo(
+    () => sortAssets(visibleAssets, listSort),
+    [visibleAssets, listSort]
+  )
+  const listAssets = useMemo(
+    () => sortedListAssets.slice(0, listVisibleCount),
+    [sortedListAssets, listVisibleCount]
+  )
+  const listHasMore = listVisibleCount < sortedListAssets.length
+  const handleListLoadMore = useCallback(() => {
+    setListVisibleCount((count) => count + listPageSize)
+  }, [listPageSize])
+
+  // Cycle a column: asc, then desc, then back to default order
+  const handleListSortChange = useCallback((key) => {
+    setListSort((previous) => {
+      if (previous?.key !== key) return { key, dir: 'asc' }
+      if (previous.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }, [])
+
   const filtersActive = hasActiveFilters(filters)
-  const resultText = filtersActive
-    ? `${visibleAssets.length} of ${baseAssets.length} asset${baseAssets.length !== 1 ? 's' : ''}`
-    : `${visibleAssets.length} asset${visibleAssets.length !== 1 ? 's' : ''}`
+
+  // Grid: result count as before. List: "{loaded} of {total} assets" -
+  // total is the DB count for the plain library view, or the current
+  // result-set size when a context/filter narrows it.
+  let resultText
+  if (viewMode === 'list') {
+    const listTotal = (context.kind === 'all' && !filtersActive)
+      ? (assetCount ?? visibleAssets.length)
+      : visibleAssets.length
+    resultText = `${listAssets.length} of ${listTotal} asset${listTotal !== 1 ? 's' : ''}`
+  } else if (filtersActive) {
+    resultText = `${visibleAssets.length} of ${baseAssets.length} asset${baseAssets.length !== 1 ? 's' : ''}`
+  } else {
+    resultText = `${visibleAssets.length} asset${visibleAssets.length !== 1 ? 's' : ''}`
+  }
 
   return (
     <div
@@ -581,6 +742,36 @@ export default function AssetLibraryManager({ user }) {
         {/* Toolbar */}
         <div className="mb-4 mt-2 flex flex-wrap items-center gap-3">
           <span className="text-sm tabular-nums text-content-secondary">{resultText}</span>
+
+          {/* Multi-select controls */}
+          {selectionMode ? (
+            <span className="flex items-center gap-2">
+              <span className="text-sm font-medium tabular-nums text-content-primary">
+                {selectedIds.size} selected
+              </span>
+              <button
+                onClick={() => setSelectedIds(new Set(visibleAssets.map((asset) => asset.id)))}
+                className="rounded-sm border border-border px-2.5 py-1.5 text-xs text-content-secondary transition-colors hover:border-border-active hover:text-content-primary"
+              >
+                Select All
+              </button>
+              <button
+                onClick={exitSelection}
+                className="rounded-sm border border-border px-2.5 py-1.5 text-xs text-content-secondary transition-colors hover:border-border-active hover:text-content-primary"
+              >
+                Done
+              </button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setSelectionMode(true)}
+              className="flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1.5 text-xs text-content-secondary transition-colors hover:border-border-active hover:text-content-primary"
+            >
+              <FontAwesomeIcon icon={faSquareCheck} className="text-[10px]" />
+              Multi Select
+            </button>
+          )}
+
           <div className="flex-1" />
 
           {/* Save current filters as a smart collection */}
@@ -594,8 +785,8 @@ export default function AssetLibraryManager({ user }) {
             </button>
           )}
 
-          {/* Grid scale slider (grid view only) */}
-          {viewMode === 'grid' && (
+          {/* Grid: size slider · List: page size */}
+          {viewMode === 'grid' ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-content-secondary">Grid Size</span>
               <input
@@ -608,6 +799,25 @@ export default function AssetLibraryManager({ user }) {
                 className="w-24 asset-grid-slider"
                 aria-label="Grid size"
               />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-content-secondary">Show</span>
+              <div className="flex overflow-hidden rounded-sm border border-border">
+                {[20, 50, 100].map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => setListPageSize(size)}
+                    className={`px-2.5 py-1.5 text-xs tabular-nums transition-colors ${
+                      listPageSize === size
+                        ? 'bg-surface-secondary text-content-on-dark'
+                        : 'text-content-secondary hover:text-content-primary'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -706,22 +916,30 @@ export default function AssetLibraryManager({ user }) {
             </div>
           ) : viewMode === 'list' && visibleAssets.length > 0 ? (
             <AssetListView
-              assets={visibleAssets}
+              assets={listAssets}
               getContextMenuItems={getContextMenuItems}
-              onAssetClick={(asset) => setQuickLookAsset(asset)}
+              onAssetClick={handleAssetClick}
               onToggleFavorite={handleToggleFavorite}
               onTagClick={handleTagToggle}
               activeTags={filters.tags}
+              selectable={selectionMode}
+              selectedIds={selectedIds}
+              hasMore={listHasMore}
+              onLoadMore={handleListLoadMore}
+              sort={listSort}
+              onSortChange={handleListSortChange}
             />
           ) : (
             <AssetGrid
               assets={visibleAssets}
               loading={loading}
               getContextMenuItems={getContextMenuItems}
-              onAssetClick={(asset) => setQuickLookAsset(asset)}
+              onAssetClick={handleAssetClick}
               onToggleFavorite={handleToggleFavorite}
               onTagClick={handleTagToggle}
               activeTags={filters.tags}
+              selectable={selectionMode}
+              selectedIds={selectedIds}
               columns={7 - gridScale}
             />
           )}
@@ -750,10 +968,10 @@ export default function AssetLibraryManager({ user }) {
         />
       )}
 
-      {/* Edit Tags Modal */}
+      {/* Edit Tags Modal (single asset or bulk add) */}
       {editTagsTarget && (
         <EditTagsModal
-          asset={editTagsTarget}
+          assets={editTagsTarget}
           allTags={tagOptions}
           onClose={() => setEditTagsTarget(null)}
         />

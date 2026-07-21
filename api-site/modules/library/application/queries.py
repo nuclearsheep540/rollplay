@@ -80,6 +80,16 @@ class GetMediaAssetsByCampaign:
             return self.repository.get_by_campaign_id(campaign_id)
 
 
+class CountMediaAssetsByUser:
+    """Total asset count for a user - a bare SQL COUNT."""
+
+    def __init__(self, repository: MediaAssetRepository):
+        self.repository = repository
+
+    def execute(self, user_id: UUID) -> int:
+        return self.repository.count_by_user_id(user_id)
+
+
 class GetPresetById:
     """Get a preset owned by a user."""
 
