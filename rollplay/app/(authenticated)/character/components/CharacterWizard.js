@@ -16,6 +16,8 @@ import {
 } from '../hooks/useCharacterDraft'
 import { useEditions, useEditionClasses } from '../hooks/useReferenceData'
 import { useSetCharacterAvatar } from '../hooks/useSetCharacterAvatar'
+import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 import CharacterAvatarPickerModal from './CharacterAvatarPickerModal'
@@ -121,10 +123,15 @@ export default function CharacterWizard() {
   // sync settles.
   const setAvatarMutation = useSetCharacterAvatar(draft?.id ?? draftIdFromUrl)
 
+  const { showToast } = useAuthenticated()
+
   const [currentStep, setCurrentStep] = useState('species')
   const [saveState, setSaveState] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
+  // Tracks the direct-PATCH avatar save below (which bypasses
+  // setAvatarMutation), so the pane's "Saving..." badge actually shows
+  const [avatarSaving, setAvatarSaving] = useState(false)
   // Set when the user clicks Finalize in this session — gates the
   // post-finalize blank-render so the wizard doesn't briefly show
   // finalised-character data before the route push lands. Edit-mode entries
@@ -269,11 +276,11 @@ export default function CharacterWizard() {
       setAvatarError('Character not yet ready — try again in a moment')
       return
     }
+    setAvatarSaving(true)
     try {
       // ``mutateAsync`` re-binds via the hook's closure; if we just auto-created
       // the draft this same event the hook is still bound to undefined. PATCH
       // through authFetch directly so we can target the fresh id reliably.
-      const { authFetch } = await import('@/app/shared/utils/authFetch')
       const res = await authFetch(`/api/characters/${characterId}/avatar`, {
         method: 'PATCH',
         credentials: 'include',
@@ -283,8 +290,17 @@ export default function CharacterWizard() {
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body?.detail || 'Failed to set avatar')
       await draftQuery.refetch()
+      // The avatar saves on its own, outside the step/finalize flow - say
+      // so explicitly, or users assume they still owe a save/finalize.
+      setSaveState('saved')
+      showToast?.({
+        type: 'success',
+        message: 'Avatar saved - avatar changes apply instantly and don’t need finalizing',
+      })
     } catch (err) {
       setAvatarError(err.message || 'Failed to set avatar')
+    } finally {
+      setAvatarSaving(false)
     }
   }
 
@@ -382,7 +398,7 @@ export default function CharacterWizard() {
       characterSubtitle={subtitle}
       onRename={handleRename}
       avatarUrl={draft?.avatar_url}
-      avatarIsBusy={createDraft.isPending || setAvatarMutation.isPending}
+      avatarIsBusy={createDraft.isPending || setAvatarMutation.isPending || avatarSaving}
       avatarError={avatarError}
       onOpenAvatarPicker={handleOpenAvatarPicker}
     >

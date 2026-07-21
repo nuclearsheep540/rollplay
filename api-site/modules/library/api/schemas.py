@@ -45,10 +45,24 @@ class ChangeTypeRequest(BaseModel):
     asset_type: MediaAssetType = Field(..., description="New asset type (map, image, music, sfx)")
 
 
+class UpdateTagsRequest(BaseModel):
+    """Request to replace a media asset's user tags (atomic full-replace).
+
+    Coarse payload bounds only - real rules (normalization, 32-char /
+    20-tag limits) live in MediaAssetAggregate.set_tags().
+    """
+    tags: List[str] = Field(..., max_length=50, description="Full replacement tag list")
+
+
+class SetFavoriteRequest(BaseModel):
+    """Request to set or clear the library favorite flag"""
+    favorite: bool = Field(..., description="New favorite state")
+
+
 class MediaAssetResponse(BaseModel):
     """Flat polymorphic response for any media asset type.
 
-    All subtype-specific fields are optional — only the fields relevant
+    All subtype-specific fields are optional - only the fields relevant
     to the asset's type will be populated. This mirrors the joined-table
     inheritance in PostgreSQL: one shape, many asset types.
     """
@@ -61,6 +75,8 @@ class MediaAssetResponse(BaseModel):
     asset_type: str  # Return as string for JSON compatibility
     file_size: Optional[int] = None
     campaign_ids: List[str] = []
+    tags: List[str] = []
+    favorite: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -72,7 +88,7 @@ class MediaAssetResponse(BaseModel):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
-    fog_config: Optional[dict] = None  # FogConfig v2 — { version: 2, regions: [...] }. See shared_contracts.map.FogConfig.
+    fog_config: Optional[dict] = None  # FogConfig v2 - { version: 2, regions: [...] }. See shared_contracts.map.FogConfig.
 
     # Audio fields (music + sfx)
     duration_seconds: Optional[float] = None
@@ -116,8 +132,13 @@ class MediaAssetListResponse(BaseModel):
     total: int
 
 
+class AssetCountResponse(BaseModel):
+    """Bare total of the user's assets - feeds the library counter"""
+    total: int = Field(..., ge=0, description="Total assets owned by the user")
+
+
 class CampaignAssetsMetadataResponse(BaseModel):
-    """Aggregated metadata for a campaign's asset library — count and
+    """Aggregated metadata for a campaign's asset library - count and
     total bytes across all assets associated with the campaign. Used by
     the dashboard campaign hero to surface "N assets · X MB" without
     pulling the full asset list.
@@ -146,7 +167,7 @@ class UpdateFogConfigRequest(BaseModel):
     carries its own mask + render params (feather, dilate, etc.).
 
     Per-region partial updates (toggle, rename, etc.) are handled by
-    dedicated endpoints — see the regions feature plan.
+    dedicated endpoints - see the regions feature plan.
     """
     regions: Optional[List[FogRegion]] = Field(
         None,
@@ -190,6 +211,53 @@ AssetResponse = MediaAssetResponse
 AssetListResponse = MediaAssetListResponse
 
 
+# ── Collection schemas ───────────────────────────────────────────────────────
+
+class SmartFiltersSchema(BaseModel):
+    """Smart-collection filter document (version 1). Matches the
+    frontend search contract in asset_library/utils/assetFilters.js -
+    types/campaigns OR within facet, tags AND, text name-contains."""
+    version: int = Field(default=1, description="Filter document version")
+    types: List[str] = Field(default_factory=list, description="Asset types (OR)")
+    tags: List[str] = Field(default_factory=list, description="Tags (AND - narrows)")
+    campaigns: List[str] = Field(default_factory=list, description="Campaign UUIDs as strings (OR)")
+    text: str = Field(default="", description="Name-contains filter")
+
+
+class CollectionResponse(BaseModel):
+    """A collection (manual member list or smart filter set)."""
+    id: UUID
+    user_id: UUID
+    name: str
+    kind: str
+    asset_ids: List[UUID] = []
+    filters: Optional[SmartFiltersSchema] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CollectionListResponse(BaseModel):
+    """List response wrapper for collections."""
+    collections: List[CollectionResponse]
+    total: int
+
+
+class CreateCollectionRequest(BaseModel):
+    """Create a manual or smart collection."""
+    name: str = Field(..., min_length=1, max_length=120, description="Collection name")
+    kind: str = Field(..., pattern="^(manual|smart)$", description="'manual' or 'smart'")
+    filters: Optional[SmartFiltersSchema] = Field(None, description="Required for smart collections")
+
+
+class UpdateCollectionRequest(BaseModel):
+    """Rename a collection and/or replace a smart collection's filters."""
+    name: Optional[str] = Field(None, min_length=1, max_length=120, description="New name (optional)")
+    filters: Optional[SmartFiltersSchema] = Field(None, description="New filters (smart collections only)")
+
+
 # ── Preset schemas ───────────────────────────────────────────────────────────
 
 class PresetSlotSchema(BaseModel):
@@ -206,7 +274,7 @@ class PresetResponse(BaseModel):
     # UUID fields mirror the aggregate's types so `model_validate(preset)`
     # works without manual stringification. Pydantic serialises UUIDs as
     # strings in the JSON response, so the wire format matches a bare
-    # `str` declaration — but the hydration path is now automatic.
+    # `str` declaration - but the hydration path is now automatic.
     id: UUID
     user_id: UUID
     name: str

@@ -108,6 +108,7 @@ function DashboardContent() {
       activeSection={activeSection}
       setActiveSection={setActiveSection}
       isChildExpanded={isChildExpanded}
+      isChildFullBleed={activeSection === 'library'}
     >
       {/* Campaigns Section */}
       {activeSection === 'campaigns' && (
@@ -172,7 +173,7 @@ function DashboardContent() {
         onComplete={handleSetupComplete}
       />
 
-      {/* In-development warning — shown every login, after setup modal if applicable */}
+      {/* In-development warning - shown every login, after setup modal if applicable */}
       <InDevWarningModal
         show={showInDevWarning && !showSetupModal}
         onClose={() => setShowInDevWarning(false)}

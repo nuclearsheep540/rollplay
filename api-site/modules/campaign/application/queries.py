@@ -129,6 +129,12 @@ class GetCampaignMembers:
                     character.species_code.replace("_", " ").title()
                     if character and character.species_code else None
                 ),
+                # Raw S3 key - the endpoint layer resolves a presigned URL
+                # (avatar_asset is lazy="joined", so no extra query here)
+                'character_avatar_s3_key': (
+                    character.avatar_asset.s3_key
+                    if character and character.avatar_asset else None
+                ),
                 'is_host': role == CampaignRole.DM
             })
 

@@ -1,10 +1,14 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from .schemas import (
     CampaignCreateRequest,
@@ -84,6 +88,20 @@ def _build_hero_image_asset_info(campaign: CampaignAggregate, s3_service: Option
     )
 
 
+def _resolve_member_avatar_urls(members: list, s3_service: Optional[S3Service]) -> None:
+    """Swap each member's raw character_avatar_s3_key for a presigned
+    character_avatar_url (in place). URL signing is an endpoint-layer
+    concern - the query returns raw keys."""
+    for member in members:
+        s3_key = member.pop('character_avatar_s3_key', None)
+        member['character_avatar_url'] = None
+        if s3_key and s3_service:
+            try:
+                member['character_avatar_url'] = s3_service.generate_download_url(s3_key)
+            except Exception as e:
+                logger.warning(f"Failed to presign member avatar {s3_key}: {e}")
+
+
 def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserRepository] = None, s3_service: Optional[S3Service] = None, campaign_repo: Optional[CampaignRepository] = None, db: Optional[Session] = None) -> CampaignResponse:
     """Convert CampaignAggregate to CampaignResponse.
 
@@ -106,6 +124,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
     if campaign_repo and db:
         from modules.campaign.application.queries import GetCampaignMembers
         members = GetCampaignMembers(campaign_repo, db).execute(campaign.id)
+        _resolve_member_avatar_urls(members, s3_service)
 
     return CampaignResponse(
         id=str(campaign.id),
@@ -550,7 +569,8 @@ async def get_campaign_members(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    s3_service: S3Service = Depends(get_s3_service)
 ):
     """
     Get all campaign members with character details.
@@ -580,6 +600,7 @@ async def get_campaign_members(
         from modules.campaign.application.queries import GetCampaignMembers
         query = GetCampaignMembers(campaign_repo, db)
         members = query.execute(campaign_id)
+        _resolve_member_avatar_urls(members, s3_service)
 
         return members
 

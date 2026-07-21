@@ -18,9 +18,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from modules.library.dependencies.providers import get_media_asset_repository, get_preset_repository
+from modules.library.dependencies.providers import get_media_asset_repository, get_preset_repository, get_collection_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.library.repositories.preset_repository import PresetRepository
+from modules.library.repositories.collection_repository import AssetCollectionRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
@@ -28,9 +29,12 @@ from modules.session.repositories.session_repository import SessionRepository
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import (
     ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset,
-    ChangeAssetType, UpdateGridConfig, UpdateFogConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError,
+    ChangeAssetType, UpdateAssetTags, SetAssetFavorite,
+    UpdateGridConfig, UpdateFogConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError,
     CreatePreset, RenamePreset, UpdatePresetSlots, DeletePreset,
     PresetNameConflictError, PresetNotFoundError, InvalidPresetAssetError,
+    CreateCollection, UpdateCollection, AddAssetToCollection,
+    RemoveAssetFromCollection, DeleteCollection, CollectionNotFoundError,
 )
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
@@ -38,8 +42,8 @@ from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.preset_aggregate import PresetAggregate, PresetSlot
 from modules.library.application.queries import (
-    GetMediaAssetsByUser, GetMediaAssetsByCampaign,
-    GetPresetById, ListPresetsForUser,
+    GetMediaAssetsByUser, GetMediaAssetsByCampaign, CountMediaAssetsByUser,
+    GetPresetById, ListPresetsForUser, GetCollectionsByUser,
 )
 from .schemas import (
     UploadUrlResponse,
@@ -48,16 +52,23 @@ from .schemas import (
     AssociateRequest,
     RenameRequest,
     ChangeTypeRequest,
+    UpdateTagsRequest,
+    SetFavoriteRequest,
     UpdateGridConfigRequest,
     UpdateFogConfigRequest,
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
     MediaAssetListResponse,
+    AssetCountResponse,
     CampaignAssetsMetadataResponse,
     PresetResponse,
     PresetListResponse,
     CreatePresetRequest,
     UpdatePresetRequest,
+    CollectionResponse,
+    CollectionListResponse,
+    CreateCollectionRequest,
+    UpdateCollectionRequest,
 )
 from modules.user.domain.user_aggregate import UserAggregate
 from shared.dependencies.auth import get_current_user_from_token
@@ -89,6 +100,8 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
         asset_type=asset_type_value,
         file_size=asset.file_size,
         campaign_ids=[str(cid) for cid in asset.campaign_ids],
+        tags=asset.tags,
+        favorite=asset.favorite,
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
@@ -285,7 +298,7 @@ async def get_campaign_assets_metadata(
 ) -> CampaignAssetsMetadataResponse:
     """
     Return aggregated metadata (count + total bytes) for the assets
-    associated with a campaign. Members-only — same access guard as the
+    associated with a campaign. Members-only - same access guard as the
     campaign-filtered list endpoint above.
 
     Implementation note: delegates to
@@ -305,6 +318,173 @@ async def get_campaign_assets_metadata(
         asset_count=metadata.asset_count,
         total_file_size=metadata.total_file_size,
     )
+
+
+@router.get("/count", response_model=AssetCountResponse)
+async def count_media_assets(
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+) -> AssetCountResponse:
+    """
+    Total assets owned by the current user - a bare SQL COUNT.
+    Registered before /{asset_id} so "count" isn't parsed as a UUID.
+    """
+    try:
+        query = CountMediaAssetsByUser(repo)
+        return AssetCountResponse(total=query.execute(current_user.id))
+    except Exception as e:
+        logger.error(f"Count media assets error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to count media assets")
+
+
+# ── Collections ──────────────────────────────────────────────────────────────
+# Registered BEFORE /{asset_id} so FastAPI doesn't try to parse "collections"
+# as an asset UUID (Starlette routing is first-match-wins).
+
+@router.get("/collections", response_model=CollectionListResponse)
+async def list_collections(
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
+) -> CollectionListResponse:
+    """List the current user's collections (manual and smart)."""
+    try:
+        query = GetCollectionsByUser(collection_repo)
+        collections = query.execute(current_user.id)
+        responses = [CollectionResponse.model_validate(c) for c in collections]
+        return CollectionListResponse(collections=responses, total=len(responses))
+    except Exception as e:
+        logger.error(f"List collections error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list collections")
+
+
+@router.post("/collections", response_model=CollectionResponse, status_code=201)
+async def create_collection(
+    body: CreateCollectionRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
+) -> CollectionResponse:
+    """Create a manual or smart collection."""
+    try:
+        command = CreateCollection(collection_repo)
+        collection = command.execute(
+            user_id=current_user.id,
+            name=body.name,
+            kind=body.kind,
+            filters=body.filters.model_dump() if body.filters else None,
+        )
+        return CollectionResponse.model_validate(collection)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create collection error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create collection")
+
+
+@router.patch("/collections/{collection_id}", response_model=CollectionResponse)
+async def update_collection(
+    collection_id: UUID,
+    body: UpdateCollectionRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
+) -> CollectionResponse:
+    """Rename a collection and/or replace a smart collection's filters."""
+    if body.name is None and body.filters is None:
+        raise HTTPException(status_code=400, detail="Must provide name or filters to update")
+
+    try:
+        command = UpdateCollection(collection_repo)
+        collection = command.execute(
+            collection_id=collection_id,
+            user_id=current_user.id,
+            name=body.name,
+            filters=body.filters.model_dump() if body.filters else None,
+        )
+        return CollectionResponse.model_validate(collection)
+    except CollectionNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update collection error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update collection")
+
+
+@router.delete("/collections/{collection_id}", status_code=204)
+async def delete_collection(
+    collection_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
+) -> None:
+    """Delete a collection. The assets inside are untouched."""
+    try:
+        command = DeleteCollection(collection_repo)
+        command.execute(collection_id=collection_id, user_id=current_user.id)
+    except CollectionNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete collection error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete collection")
+
+
+@router.post("/collections/{collection_id}/assets/{asset_id}", response_model=CollectionResponse)
+async def add_asset_to_collection(
+    collection_id: UUID,
+    asset_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
+    asset_repo: MediaAssetRepository = Depends(get_media_asset_repository),
+) -> CollectionResponse:
+    """Add an owned asset to a manual collection."""
+    try:
+        command = AddAssetToCollection(collection_repo, asset_repo)
+        collection = command.execute(
+            collection_id=collection_id,
+            asset_id=asset_id,
+            user_id=current_user.id,
+        )
+        return CollectionResponse.model_validate(collection)
+    except CollectionNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Add asset to collection error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add asset to collection")
+
+
+@router.delete("/collections/{collection_id}/assets/{asset_id}", response_model=CollectionResponse)
+async def remove_asset_from_collection(
+    collection_id: UUID,
+    asset_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
+) -> CollectionResponse:
+    """Remove an asset from a manual collection."""
+    try:
+        command = RemoveAssetFromCollection(collection_repo)
+        collection = command.execute(
+            collection_id=collection_id,
+            asset_id=asset_id,
+            user_id=current_user.id,
+        )
+        return CollectionResponse.model_validate(collection)
+    except CollectionNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Remove asset from collection error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove asset from collection")
 
 
 # ── Presets ──────────────────────────────────────────────────────────────────
@@ -535,6 +715,67 @@ async def rename_media_asset(
         raise HTTPException(status_code=500, detail="Failed to rename media asset")
 
 
+@router.patch("/{asset_id}/tags", response_model=MediaAssetResponse)
+async def update_asset_tags(
+    asset_id: UUID,
+    request: UpdateTagsRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Replace a media asset's user tags (atomic full-replace).
+
+    Tags are normalized server-side: trimmed, lowercased, inner
+    whitespace collapsed, duplicates dropped.
+    """
+    try:
+        command = UpdateAssetTags(repo)
+        asset = command.execute(asset_id, current_user.id, request.tags)
+
+        logger.info(f"Updated tags for media asset {asset_id}: {asset.tags}")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except ValueError as e:
+        logger.warning(f"Update asset tags failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update asset tags error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update asset tags")
+
+
+@router.put("/{asset_id}/favorite", response_model=MediaAssetResponse)
+async def set_asset_favorite(
+    asset_id: UUID,
+    request: SetFavoriteRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Set or clear the library favorite flag on a media asset.
+    """
+    try:
+        command = SetAssetFavorite(repo)
+        asset = command.execute(asset_id, current_user.id, request.favorite)
+
+        logger.info(f"Set favorite={request.favorite} for media asset {asset_id}")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except ValueError as e:
+        logger.warning(f"Set asset favorite failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Set asset favorite error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set asset favorite")
+
+
 @router.put("/{asset_id}/type", response_model=MediaAssetResponse)
 async def change_asset_type(
     asset_id: UUID,
@@ -646,7 +887,7 @@ async def update_fog_config(
             regions=region_dicts,
         )
 
-        # Avoid logging full mask payloads — only the shape metadata.
+        # Avoid logging full mask payloads - only the shape metadata.
         region_count = len(request.regions) if request.regions else 0
         logger.info(
             f"Updated fog config for map {asset_id}: "
@@ -810,13 +1051,14 @@ async def delete_media_asset(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
+    collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> None:
     """
     Delete a media asset from S3 and the database.
     """
     try:
-        command = DeleteMediaAsset(repo, s3_service, session_repo)
+        command = DeleteMediaAsset(repo, s3_service, session_repo, collection_repo)
         deleted = command.execute(asset_id, current_user.id)
 
         if not deleted:

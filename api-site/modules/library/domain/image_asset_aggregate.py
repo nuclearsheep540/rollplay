@@ -93,16 +93,7 @@ class ImageAsset(MediaAssetAggregate):
         Used when repository loads from joined tables.
         """
         return cls(
-            id=base.id,
-            user_id=base.user_id,
-            filename=base.filename,
-            s3_key=base.s3_key,
-            content_type=base.content_type,
-            asset_type=base.asset_type,
-            file_size=base.file_size,
-            campaign_ids=base.campaign_ids,
-            created_at=base.created_at,
-            updated_at=base.updated_at,
+            **base.base_kwargs(),
             image_fit=image_fit,
             aspect_ratio=aspect_ratio,
             display_mode=display_mode,

@@ -1729,7 +1729,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                         // local frame.
                                         width: '42%',
                                         clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
-                                        backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('/heroes.png')`,
+                                        backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('${member.character_avatar_url || '/heroes.png'}')`,
                                       }}
                                     />
                                     <PlayerCardAction

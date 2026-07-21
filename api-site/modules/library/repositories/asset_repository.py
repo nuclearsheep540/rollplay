@@ -62,6 +62,15 @@ class MediaAssetRepository:
 
         return self._model_to_aggregate(model)
 
+    def count_by_user_id(self, user_id: UUID) -> int:
+        """Total assets owned by a user - single SQL COUNT, no rows
+        materialised. Feeds the library's paginated list counter."""
+        return (
+            self.db.query(func.count(MediaAssetModel.id))
+            .filter(MediaAssetModel.user_id == user_id)
+            .scalar()
+        ) or 0
+
     def get_by_user_id(self, user_id: UUID) -> List[MediaAssetAggregate]:
         """Get all media assets owned by a user"""
         query, entity = self._poly_query()
@@ -85,7 +94,7 @@ class MediaAssetRepository:
     def get_campaign_assets_metadata(self, campaign_id: UUID) -> CampaignAssetsMetadata:
         """Aggregate count + total file size for assets associated with a
         campaign. Computed via `SELECT COUNT(id), SUM(file_size)` so no
-        rows are materialised in Python — returns a single domain value
+        rows are materialised in Python - returns a single domain value
         object regardless of how many assets are linked to the campaign.
         `COALESCE(SUM(...), 0)` covers the empty-set case where SUM
         would otherwise return NULL.
@@ -135,11 +144,10 @@ class MediaAssetRepository:
 
     def save(self, aggregate: Union[MediaAssetAggregate, MapAsset, MusicAsset, SfxAsset, ImageAsset]) -> UUID:
         """Save media asset aggregate (create or update)"""
-        existing = (
-            self.db.query(MediaAssetModel)
-            .filter_by(id=aggregate.id)
-            .first()
-        )
+        # Primary-key lookup via session.get: hits the identity map first
+        # (the aggregate was usually just loaded in the same request) and
+        # binds the PK through the column's own type on a miss.
+        existing = self.db.get(MediaAssetModel, aggregate.id)
 
         if existing:
             # Update existing base fields
@@ -149,6 +157,8 @@ class MediaAssetRepository:
             existing.asset_type = aggregate.asset_type
             existing.file_size = aggregate.file_size
             existing.campaign_ids = aggregate.campaign_ids
+            existing.tags = aggregate.tags
+            existing.favorite = aggregate.favorite
 
             # Update map-specific fields if MapAsset
             if isinstance(aggregate, MapAsset) and isinstance(existing, MapAssetModel):
@@ -207,6 +217,8 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
+                    tags=aggregate.tags,
+                    favorite=aggregate.favorite,
                     grid_width=aggregate.grid_width,
                     grid_height=aggregate.grid_height,
                     grid_opacity=aggregate.grid_opacity,
@@ -226,6 +238,8 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
+                    tags=aggregate.tags,
+                    favorite=aggregate.favorite,
                     duration_seconds=aggregate.duration_seconds,
                     default_volume=aggregate.default_volume,
                     default_looping=aggregate.default_looping,
@@ -253,6 +267,8 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
+                    tags=aggregate.tags,
+                    favorite=aggregate.favorite,
                     duration_seconds=aggregate.duration_seconds,
                     default_volume=aggregate.default_volume,
                     default_looping=aggregate.default_looping
@@ -267,6 +283,8 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
+                    tags=aggregate.tags,
+                    favorite=aggregate.favorite,
                     image_fit=aggregate.image_fit,
                     aspect_ratio=aggregate.aspect_ratio,
                     display_mode=aggregate.display_mode,
@@ -284,7 +302,9 @@ class MediaAssetRepository:
                     content_type=aggregate.content_type,
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
-                    campaign_ids=aggregate.campaign_ids
+                    campaign_ids=aggregate.campaign_ids,
+                    tags=aggregate.tags,
+                    favorite=aggregate.favorite
                 )
             self.db.add(model)
 
@@ -306,7 +326,7 @@ class MediaAssetRepository:
 
         Subtype-specific data (grid config on a map, image_fit on an
         image, loop points on a music asset, etc.) is intentionally
-        discarded — semantically the user has reclassified the asset
+        discarded - semantically the user has reclassified the asset
         and the per-type config no longer applies.
 
         Caller must refetch the asset afterwards: the in-memory
@@ -371,6 +391,8 @@ class MediaAssetRepository:
             asset_type=model.asset_type,
             file_size=model.file_size,
             campaign_ids=list(model.campaign_ids) if model.campaign_ids else [],
+            tags=list(model.tags) if model.tags else [],
+            favorite=bool(model.favorite),
             created_at=model.created_at,
             updated_at=model.updated_at
         )

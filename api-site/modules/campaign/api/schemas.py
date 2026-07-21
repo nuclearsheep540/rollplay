@@ -56,6 +56,7 @@ class CampaignMemberResponse(BaseModel):
     character_level: Optional[int] = None
     character_class: Optional[str] = None  # Multi-class formatted
     character_race: Optional[str] = None
+    character_avatar_url: Optional[str] = None  # Presigned URL, resolved at the endpoint
     is_host: bool = False  # Kept for frontend backward compat (true when role=dm)
 
 

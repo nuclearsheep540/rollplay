@@ -3,7 +3,7 @@
 
 'use client'
 
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faXmark, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import Modal from '@/app/shared/components/Modal'
@@ -19,8 +19,11 @@ const ALL_ACCEPTED_MIMES = [...new Set(
 /**
  * Modal for uploading one or more assets with drag-and-drop support.
  * Each file gets a per-file asset type dropdown before uploading.
+ *
+ * Pass initialFiles to open the modal pre-seeded (e.g. files dropped
+ * onto the library view) - the user still sets types and confirms.
  */
-export default function AssetUploadModal({ isOpen, onClose }) {
+export default function AssetUploadModal({ isOpen, onClose, initialFiles = null }) {
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -38,6 +41,17 @@ export default function AssetUploadModal({ isOpen, onClose }) {
   } = useBulkUploadAssets()
 
   const allDone = totalCount > 0 && completedCount === totalCount
+
+  // Seed the queue with files dropped onto the library view. Guarded by
+  // a ref so it stays idempotent: React Strict Mode re-runs mount
+  // effects in dev, which would otherwise queue every file twice.
+  const seededInitialFiles = useRef(false)
+  useEffect(() => {
+    if (seededInitialFiles.current || !initialFiles?.length) return
+    seededInitialFiles.current = true
+    addFiles(initialFiles)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -126,7 +140,7 @@ export default function AssetUploadModal({ isOpen, onClose }) {
               {queue.length > 0 ? 'Drop more files or click to add' : 'Drop files here or click to browse'}
             </p>
             <p className="text-sm text-content-secondary">
-              Images (.png, .jpg, .webp, .gif) and Audio (.mp3, .wav, .ogg) — 50MB max each
+              Images (.png, .jpg, .webp, .gif) and Audio (.mp3, .wav, .ogg) - 50MB max each
             </p>
           </div>
         )}

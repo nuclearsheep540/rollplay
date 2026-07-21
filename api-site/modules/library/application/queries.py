@@ -13,6 +13,8 @@ from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.domain.preset_aggregate import PresetAggregate
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.library.repositories.preset_repository import PresetRepository
+from modules.library.repositories.collection_repository import AssetCollectionRepository
+from modules.library.domain.collection_aggregate import AssetCollectionAggregate
 
 
 class GetMediaAssetsByUser:
@@ -78,6 +80,16 @@ class GetMediaAssetsByCampaign:
             return self.repository.get_by_campaign_id(campaign_id)
 
 
+class CountMediaAssetsByUser:
+    """Total asset count for a user - a bare SQL COUNT."""
+
+    def __init__(self, repository: MediaAssetRepository):
+        self.repository = repository
+
+    def execute(self, user_id: UUID) -> int:
+        return self.repository.count_by_user_id(user_id)
+
+
 class GetPresetById:
     """Get a preset owned by a user."""
 
@@ -99,3 +111,13 @@ class ListPresetsForUser:
 
     def execute(self, user_id: UUID) -> List[PresetAggregate]:
         return self.repository.list_for_user(user_id)
+
+
+class GetCollectionsByUser:
+    """List all collections owned by a user, oldest first (stable rail order)."""
+
+    def __init__(self, repository: AssetCollectionRepository):
+        self.repository = repository
+
+    def execute(self, user_id: UUID) -> List[AssetCollectionAggregate]:
+        return self.repository.get_by_user_id(user_id)

@@ -10,6 +10,11 @@ const VARIANT_CLASSES = {
   warning: 'bg-[color-mix(in_srgb,var(--feedback-warning),transparent_75%)] text-feedback-warning border-[color-mix(in_srgb,var(--feedback-warning),black_30%)]',
   info: 'bg-[color-mix(in_srgb,var(--feedback-info),transparent_75%)] text-feedback-info border-[color-mix(in_srgb,var(--feedback-info),black_30%)]',
   audio: 'bg-[color-mix(in_srgb,var(--feedback-audio),transparent_75%)] text-feedback-audio border-[color-mix(in_srgb,var(--feedback-audio),black_30%)]',
+  // Asset type coding (library) - same recipe over the --asset-* tokens
+  map: 'bg-[color-mix(in_srgb,var(--asset-map),transparent_75%)] text-asset-map border-[color-mix(in_srgb,var(--asset-map),black_30%)]',
+  music: 'bg-[color-mix(in_srgb,var(--asset-music),transparent_75%)] text-asset-music border-[color-mix(in_srgb,var(--asset-music),black_30%)]',
+  sfx: 'bg-[color-mix(in_srgb,var(--asset-sfx),transparent_75%)] text-asset-sfx border-[color-mix(in_srgb,var(--asset-sfx),black_30%)]',
+  image: 'bg-[color-mix(in_srgb,var(--asset-image),transparent_75%)] text-asset-image border-[color-mix(in_srgb,var(--asset-image),black_30%)]',
 }
 
 const SIZE_CLASSES = {
@@ -23,7 +28,7 @@ const SIZE_CLASSES = {
  * Badge / tag component with variant colors from design tokens.
  *
  * @param {React.ReactNode} children - Badge content
- * @param {'default'|'success'|'error'|'warning'|'info'} variant
+ * @param {'default'|'success'|'error'|'warning'|'info'|'audio'|'map'|'music'|'sfx'|'image'} variant
  * @param {'xs'|'sm'|'md'|'lg'} size
  * @param {boolean} pulse - Enables pulse animation
  * @param {string} className - Additional classes

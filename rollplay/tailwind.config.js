@@ -19,6 +19,7 @@ module.exports = {
           secondary: 'var(--surface-secondary)',
           panel: 'var(--surface-panel)',
           elevated: 'var(--surface-elevated)',
+          hover: 'var(--surface-hover)',
         },
         content: {
           primary: 'var(--content-primary)',
@@ -47,6 +48,13 @@ module.exports = {
           info: 'var(--feedback-info)',
           audio: 'var(--feedback-audio)',
         },
+        asset: {
+          map: 'var(--asset-map)',
+          music: 'var(--asset-music)',
+          sfx: 'var(--asset-sfx)',
+          image: 'var(--asset-image)',
+        },
+        favorite: 'var(--favorite)',
       },
     },
   },

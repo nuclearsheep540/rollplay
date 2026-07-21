@@ -100,16 +100,7 @@ class MapAsset(MediaAssetAggregate):
         Used when repository loads from joined tables.
         """
         return cls(
-            id=base.id,
-            user_id=base.user_id,
-            filename=base.filename,
-            s3_key=base.s3_key,
-            content_type=base.content_type,
-            asset_type=base.asset_type,
-            file_size=base.file_size,
-            campaign_ids=base.campaign_ids,
-            created_at=base.created_at,
-            updated_at=base.updated_at,
+            **base.base_kwargs(),
             grid_width=grid_width,
             grid_height=grid_height,
             grid_opacity=grid_opacity,
@@ -238,7 +229,7 @@ class MapAsset(MediaAssetAggregate):
     #
     # Fog is a list of independent regions. Each region owns its own
     # alpha mask + render params (feather, dilate, etc.). At runtime,
-    # enabled regions composite by DOM stacking — overlapping regions
+    # enabled regions composite by DOM stacking - overlapping regions
     # read as denser fog. Cap of FOG_REGIONS_MAX (12) per the contract.
     #
     # Region helpers below (add/update/delete/toggle) are the granular
@@ -253,7 +244,7 @@ class MapAsset(MediaAssetAggregate):
         """Atomic full replace of the regions list.
 
         Pass regions=None or [] to clear all fog. Each region dict is
-        validated against the FogRegion contract before storage —
+        validated against the FogRegion contract before storage -
         unknown fields raise, missing required fields raise.
         """
         if regions is None or len(regions) == 0:
@@ -320,7 +311,7 @@ class MapAsset(MediaAssetAggregate):
 
     def delete_fog_region(self, region_id: str) -> None:
         """Remove a region. Raises if region's role is 'live' (the
-        live region is structural — every map keeps one for ad-hoc
+        live region is structural - every map keeps one for ad-hoc
         paint at runtime).
         """
         regions = self.get_fog_regions()
@@ -355,7 +346,7 @@ class MapAsset(MediaAssetAggregate):
     ) -> None:
         """Inverse of build_fog_config_for_game(). Persists the final
         runtime fog state back onto the asset on session end. None
-        means the runtime cleared the fog — propagate that to PSQL.
+        means the runtime cleared the fog - propagate that to PSQL.
         """
         if game_fog_config is None:
             self.update_fog_config(regions=None)
@@ -369,7 +360,7 @@ class MapAsset(MediaAssetAggregate):
     def to_contract(self, file_path: str) -> MapConfig:
         """Project this aggregate to the MapConfig contract for the
         api-game boundary. Single source of truth for which aggregate
-        fields populate which contract fields — adding a new MapConfig
+        fields populate which contract fields - adding a new MapConfig
         field updates this method and every consumer (cold→hot ETL,
         future ETL-like callers) benefits automatically.
 
@@ -391,7 +382,7 @@ class MapAsset(MediaAssetAggregate):
         Inverse of to_contract(). Same single-source-of-truth role for
         the hot→cold direction at session end.
 
-        Note: this is the *owner* path for fog — null means "the runtime
+        Note: this is the *owner* path for fog - null means "the runtime
         cleared the fog, persist that". Surfaces that merely chaperone
         a MapConfig (e.g. WS map_load) need to apply the preserve rule
         themselves before calling this.

@@ -10,3 +10,10 @@ export { useUploadAsset } from './hooks/useUploadAsset'
 export { useBulkUploadAssets } from './hooks/useBulkUploadAssets'
 export { useDeleteAsset } from './hooks/useDeleteAsset'
 export { useAssociateAsset } from './hooks/useAssociateAsset'
+export { useUpdateAssetTags } from './hooks/useUpdateAssetTags'
+export { useToggleFavorite } from './hooks/useToggleFavorite'
+export { useCollections } from './hooks/useCollections'
+export {
+  useCreateCollection, useUpdateCollection, useDeleteCollection, useToggleCollectionMember,
+} from './hooks/useCollectionMutations'
+export { EMPTY_FILTERS, hasActiveFilters, applyAssetFilters, aggregateTagCounts } from './utils/assetFilters'
