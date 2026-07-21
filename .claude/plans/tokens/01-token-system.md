@@ -1,6 +1,6 @@
 # Map Tokens v1 — Plan
 
-> **Status:** preen track (PRs 1–2) **shipped to main via PR #148** (verified 2026-07-20 — `map-tokens` branch tree is identical to main). Token track not started. Decisions 11–14 settled 2026-07-20; spike PR 0 dissolved (see §3.3).
+> **Status:** COMPLETE on `map-tokens` (2026-07-20). Preen track (PRs 1–2) shipped to main via PR #148. Token track (PRs 3+4+5) built, code-reviewed, and QA'd on the branch — pending merge. Decisions 11–15 settled 2026-07-20 (hold-lock, markers-only v1, stacking allowed, panel-housed chips, NPC = DM-rose); spike PR 0 dissolved (§3.3). Remaining open: §6.4 cross-session clean-board confirmation, §6.5 seat_layout persistence (optional preen), and the live-drag fast-follow (§3.3 gate).
 > **Scope:** physical representations of character/NPC positions on the battle map, live-synced across the table, persisted across pause/resume.
 > **Governing philosophy:** [product-principles.md](../core/product-principles.md) — inform maximally, constrain minimally. A token system is the purest test of it: the entire feature is "a shared board everyone can touch."
 
