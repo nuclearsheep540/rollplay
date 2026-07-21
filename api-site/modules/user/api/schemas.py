@@ -33,6 +33,16 @@ class SetAccountNameRequest(BaseModel):
     account_name: str
 
 
+class UserColorUpdateRequest(BaseModel):
+    """
+    Request schema for setting the user's identity color.
+
+    Value must be one of the curated USER_COLORS palette — enforced in the
+    domain layer (UserAggregate.set_color), not here.
+    """
+    color: str
+
+
 # RESPONSE SCHEMAS
 
 class UserResponse(BaseModel):
@@ -51,6 +61,7 @@ class UserResponse(BaseModel):
     account_identifier: Optional[str]  # Combined format: "claude#2345"
     created_at: datetime
     last_login: Optional[datetime]
+    color: Optional[str] = None  # Identity color hex (USER_COLORS palette); None = not chosen
 
 
 class PublicUserResponse(BaseModel):
@@ -67,6 +78,7 @@ class PublicUserResponse(BaseModel):
     account_tag: Optional[str]  # 4-digit discriminator
     account_identifier: Optional[str]  # Combined format: "name#tag"
     created_at: datetime
+    color: Optional[str] = None  # Identity color hex (USER_COLORS palette); None = not chosen
 
 
 class AccountNameResponse(BaseModel):

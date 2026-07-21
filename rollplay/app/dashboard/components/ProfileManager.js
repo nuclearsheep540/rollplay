@@ -10,6 +10,8 @@ import { authFetch } from '@/app/shared/utils/authFetch'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCopy, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
+import { USER_COLORS, resolveUserColor } from '@/app/utils/userColors'
+import UserDisc from '@/app/shared/components/UserDisc'
 import { Button } from './shared/Button'
 
 const SPOTIFY_GREEN = '#1DB954'
@@ -30,6 +32,7 @@ export default function ProfileManager({ user, onUserUpdate }) {
   const [copiedAccountTag, setCopiedAccountTag] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [updatingColor, setUpdatingColor] = useState(false)
 
   // Spotify connection state
   const [spotify, setSpotify] = useState({ loading: true, connected: false, profile: null })
@@ -131,6 +134,36 @@ export default function ProfileManager({ user, onUserUpdate }) {
     }
   }
 
+  // Set identity color — saves immediately on swatch click
+  const updateColor = async (colorChoice) => {
+    setUpdatingColor(true)
+    setError(null)
+
+    try {
+      const response = await authFetch('/api/users/me/color', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ color: colorChoice })
+      })
+
+      if (response.ok) {
+        const updatedUser = await response.json()
+        onUserUpdate(updatedUser)
+      } else {
+        const errorData = await response.json()
+        setError(errorData.detail || 'Failed to update color')
+      }
+    } catch (error) {
+      console.error('Error updating color:', error)
+      setError('Failed to update color')
+    } finally {
+      setUpdatingColor(false)
+    }
+  }
+
   // Soft delete account (production)
   const handleDeleteAccount = async () => {
     setDeleting(true)
@@ -183,18 +216,16 @@ export default function ProfileManager({ user, onUserUpdate }) {
         Your Profile
       </h2>
 
-      {/* User Info Display */}
+      {/* User Info Display — the shared UserDisc, at avatar size. Initial
+          prefers the immutable account handle (same precedence as the nav
+          account icon), then screen name, then email. */}
       <div className="flex items-center mb-6">
-        <div
-          className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold mr-4 border-2"
-          style={{
-            backgroundColor: `${THEME.textAccent}30`,
-            borderColor: `${THEME.textAccent}80`,
-            color: THEME.textAccent
-          }}
-        >
-          {user.screen_name ? user.screen_name[0].toUpperCase() : user.email[0].toUpperCase()}
-        </div>
+        <UserDisc
+          userId={user.id}
+          color={user.color}
+          name={user.account_name || user.screen_name || user.email}
+          className="w-16 h-16 text-3xl mr-4 border-2 border-black/40"
+        />
         <div>
           <p className="text-xl font-semibold" style={{color: THEME.textOnDark}}>
             {user.screen_name || user.email.split('@')[0]}
@@ -288,6 +319,34 @@ export default function ProfileManager({ user, onUserUpdate }) {
             </div>
             <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
               Your unique identifier for friend requests (cannot be changed)
+            </p>
+          </div>
+
+          {/* Identity Color — curated palette; saves on click */}
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{color: THEME.textOnDark}}>
+              Identity Color <span style={{color: THEME.textSecondary}}>(Account icon & how friends see you)</span>
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {USER_COLORS.map((paletteColor) => {
+                const selected = paletteColor === resolveUserColor(user.color, user.id)
+                return (
+                  <button
+                    key={paletteColor}
+                    onClick={() => updateColor(paletteColor)}
+                    disabled={updatingColor}
+                    aria-label={`Set identity color ${paletteColor}`}
+                    className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 disabled:opacity-50"
+                    style={{
+                      backgroundColor: paletteColor,
+                      borderColor: selected ? THEME.textOnDark : 'rgba(0, 0, 0, 0.4)',
+                    }}
+                  />
+                )
+              })}
+            </div>
+            <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
+              Colors your account icon and your disc in friends&apos; social panes
             </p>
           </div>
         </div>

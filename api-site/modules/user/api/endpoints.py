@@ -14,11 +14,12 @@ from .schemas import (
     PublicUserResponse,
     SetAccountNameRequest,
     AccountNameResponse,
-    InternalUserResolveResponse
+    InternalUserResolveResponse,
+    UserColorUpdateRequest
 )
 from modules.user.dependencies.providers import user_repository
 from modules.user.repositories.user_repository import UserRepository
-from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, SoftDeleteUser, HardDeleteUser
+from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, UpdateUserColor, SoftDeleteUser, HardDeleteUser, UserNotFoundError
 from modules.user.application.queries import GetUserDashboard, GetUserByEmail
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.campaign.dependencies.providers import campaign_repository
@@ -50,6 +51,7 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
         account_identifier=user.account_identifier,
         created_at=user.created_at,
         last_login=user.last_login,
+        color=user.color,
     )
 
 
@@ -62,7 +64,8 @@ def _to_public_user_response(user: UserAggregate) -> PublicUserResponse:
         account_name=user.account_name,
         account_tag=user.account_tag,
         account_identifier=user.account_identifier,
-        created_at=user.created_at
+        created_at=user.created_at,
+        color=user.color,
     )
 
 
@@ -519,6 +522,11 @@ async def update_screen_name(
 
         return _to_user_response(updated_user)
 
+    except UserNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -528,6 +536,39 @@ async def update_screen_name(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during screen name update"
+        )
+
+
+@router.put("/me/color", response_model=UserResponse)
+async def update_user_color(
+    request: UserColorUpdateRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    Set the user's identity color (account icon + their disc in other
+    users' social panes). Constrained to the curated USER_COLORS palette.
+    """
+    try:
+        command = UpdateUserColor(user_repo)
+        updated_user = command.execute(user_id, request.color)
+
+        return _to_user_response(updated_user)
+
+    except UserNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid color: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during color update"
         )
 
 

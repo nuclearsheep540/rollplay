@@ -12,6 +12,15 @@ from shared.services.s3_service import S3Service
 logger = logging.getLogger(__name__)
 
 
+class UserNotFoundError(Exception):
+    """Raised when a command targets a user id that doesn't resolve.
+
+    Distinct from ValueError (domain validation, e.g. a bad color or screen
+    name) so endpoints can map missing-user to 404 instead of a misleading
+    400 — the library module's PresetNotFoundError precedent.
+    """
+
+
 class GetOrCreateUser:
     """Get existing user or create new one."""
 
@@ -58,10 +67,25 @@ class UpdateScreenName:
         """Update user screen name with business rule validation"""
         user = self.repository.get_by_id(user_id)
         if not user:
-            raise ValueError(f"User {user_id} not found")
+            raise UserNotFoundError(f"User {user_id} not found")
 
         # Business logic in aggregate
         user.update_screen_name(screen_name)
+        self.repository.save(user)
+        return user
+
+
+class UpdateUserColor:
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
+
+    def execute(self, user_id: UUID, color: str) -> UserAggregate:
+        """Set the user's identity color (validated against USER_COLORS in the aggregate)."""
+        user = self.repository.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError(f"User {user_id} not found")
+
+        user.set_color(color)
         self.repository.save(user)
         return user
 

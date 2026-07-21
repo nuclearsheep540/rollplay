@@ -13,7 +13,7 @@ import { faUserGroup, faBell, faCheck, faUserPlus, faXmark, faCopy } from '@fort
 import { ToastNotification } from './ToastNotification'
 import { formatPanelMessage, getNavigationTab } from '../config/eventConfig'
 import { formatRelativeTime } from '../utils/formatTime'
-import { getSeatColorHex } from '@/app/utils/seatColors'
+import UserDisc from './UserDisc'
 import { Button } from '@/app/dashboard/components/shared/Button'
 import { useFriendships } from '@/app/dashboard/hooks/useFriendships'
 import { useCampaigns } from '@/app/dashboard/hooks/useCampaigns'
@@ -253,16 +253,7 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
     setSentToName(null)
   }
 
-  // Stable per-friend disc tint from the seat palette (friend character
-  // colors aren't in the friendships response; hash keeps it varied and
-  // consistent without a backend round trip)
-  const discColorFor = (friendId) => {
-    let hash = 0
-    for (const char of String(friendId)) hash = (hash + char.charCodeAt(0)) % 8
-    return getSeatColorHex(hash)
-  }
-
-  const sectionLabelClass = 'px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-widest text-content-secondary flex items-center gap-2'
+  const sectionLabelClass ='px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-widest text-content-secondary flex items-center gap-2'
 
   return (
     <div className="relative">
@@ -346,15 +337,16 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                     {/* Offline dimming lives on the identity elements, NOT the
                         row container — container opacity would flatten the
                         whole subtree, making the invite dropdown translucent */}
-                    <span
-                      className={`relative w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-none text-surface-secondary ${!friend.is_online ? 'opacity-60' : ''}`}
-                      style={{ backgroundColor: discColorFor(friend.friend_id) }}
+                    <UserDisc
+                      userId={friend.friend_id}
+                      color={friend.friend_color}
+                      name={friend.friend_screen_name}
+                      className={`w-8 h-8 text-sm ${!friend.is_online ? 'opacity-60' : ''}`}
                     >
-                      {(friend.friend_screen_name || '?')[0].toUpperCase()}
                       <span
                         className={`absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-secondary ${friend.is_online ? 'bg-feedback-success' : 'bg-border'}`}
                       />
-                    </span>
+                    </UserDisc>
                     <span className={`flex-1 min-w-0 ${!friend.is_online ? 'opacity-60' : ''}`}>
                       <span className="block text-sm text-content-on-dark truncate">{friend.friend_screen_name || 'Unknown'}</span>
                       <span className="block text-xs text-content-secondary truncate">
@@ -435,12 +427,12 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                 <div className={sectionLabelClass}>Requests <span className="normal-case tracking-normal opacity-60">· {friendRequests.length} pending</span></div>
                 {friendRequests.map(request => (
                   <div key={request.id} className="flex items-center gap-3 px-4 py-2">
-                    <span
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-none text-surface-secondary"
-                      style={{ backgroundColor: discColorFor(request.requester_id) }}
-                    >
-                      {(request.requester_screen_name || '?')[0].toUpperCase()}
-                    </span>
+                    <UserDisc
+                      userId={request.requester_id}
+                      color={request.requester_color}
+                      name={request.requester_screen_name}
+                      className="w-8 h-8 text-sm"
+                    />
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm text-content-on-dark truncate">{request.requester_screen_name || 'Unknown'}</span>
                       <span className="block text-xs text-content-secondary">sent you a friend request</span>
@@ -560,12 +552,12 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                       <span className="text-content-secondary">Looking up…</span>
                     ) : matchedUser ? (
                       <span className="flex items-center gap-2 text-content-secondary">
-                        <span
-                          className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold text-surface-secondary"
-                          style={{ backgroundColor: discColorFor(matchedUser.id) }}
-                        >
-                          {(matchedUser.screen_name || '?')[0].toUpperCase()}
-                        </span>
+                        <UserDisc
+                          userId={matchedUser.id}
+                          color={matchedUser.color}
+                          name={matchedUser.screen_name}
+                          className="w-4 h-4 text-[10px]"
+                        />
                         <span className="text-content-on-dark">{matchedUser.screen_name || 'Unknown'}</span>
                         {matchedUser.account_identifier}
                       </span>
