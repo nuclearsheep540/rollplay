@@ -46,6 +46,7 @@ export default function MapTokenLayer({
   displayNameMap = {},
   thisUserId,
   gridConfig = null,
+  mapAssetId = null,
   attachTokenLayer,
   grabToken,
   streamTokenDrag,
@@ -241,7 +242,7 @@ export default function MapTokenLayer({
   // fresh frame (markers-only sender, or stream gap > staleness) the target
   // is the committed position, so this also degrades gracefully.
   useEffect(() => {
-    if (!LIVE_DRAG_STREAMING || !remoteDragFramesRef) return;
+    if (!LIVE_DRAG_STREAMING || !remoteDragFramesRef || !mapAssetId) return;
     const heldTokenIds = Object.keys(heldTokens);
     if (!heldTokenIds.length || renderScale <= 0) return;
 
@@ -260,7 +261,7 @@ export default function MapTokenLayer({
         const committed = committedByTokenId[tokenId];
         if (!element || !committed) return;
 
-        const frame = remoteDragFramesRef.current[tokenId];
+        const frame = remoteDragFramesRef.current[mapAssetId]?.[tokenId];
         const frameFresh = frame && nowMs - frame.atMs <= DRAG_FRAME_STALENESS_MS;
         const target = frameFresh
           ? { left: frame.x * renderScale, top: frame.y * renderScale }
@@ -301,7 +302,7 @@ export default function MapTokenLayer({
         }
       });
     };
-  }, [heldTokens, tokens, renderScale, remoteDragFramesRef]);
+  }, [heldTokens, tokens, renderScale, remoteDragFramesRef, mapAssetId]);
 
   // Wrapper stays mounted even with nothing to draw — chip drops need its
   // rect. Discs render only once the image is laid out.

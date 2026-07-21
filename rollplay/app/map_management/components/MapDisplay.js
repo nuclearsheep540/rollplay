@@ -43,9 +43,9 @@ const MapDisplay = ({
   // Map tokens — the shared board's pieces (app/map_tokens slice).
   // Renders above fog AND grid: hidden monsters are unplaced monsters.
   mapTokens = [],            // MapToken list for the active map's board
-  mapTokenHolds = {},        // token_id → { holderUserId } remote-hand presence
+  mapTokenHolds = {},        // token_id → { holderUserId } remote-hand presence (active board only)
   mapTokenDenial = null,     // latest grab denial (layer snaps the drag home)
-  mapTokensApi = null,       // { attachTokenLayer, grabToken, releaseToken, commitTokenMove, removeToken }
+  mapTokensApi = null,       // { attachTokenLayer, grabToken, streamTokenDrag, releaseToken, commitTokenMove, clearDenial, remoteDragFramesRef }
   playerMetadata = {},       // owner color/name derivation (character-owned, decision 9)
   playerSeatMap = {},        // seat-palette fallback colors
   displayNameMap = {},       // held-by nameplate names
@@ -398,6 +398,7 @@ const MapDisplay = ({
             displayNameMap={displayNameMap}
             thisUserId={thisUserId}
             gridConfig={activeMap?.map_config?.grid_config || null}
+            mapAssetId={activeMap?.map_config?.asset_id || null}
             attachTokenLayer={mapTokensApi.attachTokenLayer}
             grabToken={mapTokensApi.grabToken}
             streamTokenDrag={mapTokensApi.streamTokenDrag}

@@ -1691,7 +1691,7 @@ class WebsocketEvent():
                     return WebsocketEventResult.error("Invalid map token drag: x/y must be finite numbers")
 
         if phase == "grab":
-            blocking_holder = map_token_holds.try_grab(room_id, token_id, user_id)
+            blocking_holder = map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
             if blocking_holder is not None:
                 # Answered to the requester only — their optimistic drag snaps
                 # back. held_by is a user_id; the client resolves the nameplate
@@ -1707,17 +1707,17 @@ class WebsocketEvent():
                 await websocket.send_json(deny_message)
                 return WebsocketEventResult(broadcast_message=None)
         elif phase == "move":
-            if map_token_holds.holder(room_id, token_id) != user_id:
+            if map_token_holds.holder(room_id, asset_id, token_id) != user_id:
                 # Stale frame after an expired/denied hold — drop silently,
                 # no error spam at stream frequency.
                 return WebsocketEventResult(broadcast_message=None)
             # A live stream is an active hand — refresh the hold so a long
             # careful drag can't staleness-expire mid-stream (same-user
             # try_grab resets the clock).
-            map_token_holds.try_grab(room_id, token_id, user_id)
+            map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
         else:
-            released = map_token_holds.release(room_id, token_id, user_id)
-            if not released and map_token_holds.holder(room_id, token_id) is not None:
+            released = map_token_holds.release(room_id, asset_id, token_id, user_id)
+            if not released and map_token_holds.holder(room_id, asset_id, token_id) is not None:
                 # Someone else still holds this token — a spurious release
                 # (denied grab's pointerup, stale client) must not clear the
                 # real holder's lift affordance room-wide. Drop silently.

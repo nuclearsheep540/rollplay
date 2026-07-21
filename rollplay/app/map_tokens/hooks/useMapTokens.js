@@ -37,12 +37,16 @@ export const useMapTokens = ({
 }) => {
   // asset_id → [MapToken] — every map in the session keeps its own board.
   const [mapTokenState, setMapTokenState] = useState({});
-  // token_id → { holderUserId, heldAtMs } — remote hands only (own drags
-  // live in MapTokenLayer's refs; the server echo is filtered out).
+  // asset_id → { token_id → { holderUserId, heldAtMs } } — remote hands
+  // only (own drags live in MapTokenLayer's refs; the server echo is
+  // filtered out). Scoped per map: token ids are only unique per board and
+  // NPC stamps reuse one id across maps, so a hold on map A must never
+  // block or steer the same-id token on map B.
   const [heldTokens, setHeldTokens] = useState({});
-  // token_id → { x, y, atMs } (native px) — live-drag move frames. A ref,
-  // never state: frames arrive at ~20 Hz and must not re-render the tree;
-  // MapTokenLayer's rAF loop reads this and lerps discs directly.
+  // asset_id → { token_id → { x, y, atMs } } (native px) — live-drag move
+  // frames. A ref, never state: frames arrive at ~20 Hz and must not
+  // re-render the tree; MapTokenLayer's rAF loop reads this and lerps
+  // discs directly.
   const remoteDragFramesRef = useRef({});
   // Latest grab denial — MapTokenLayer watches this to snap an optimistic
   // drag back home.
@@ -74,11 +78,15 @@ export const useMapTokens = ({
     // the release frame usually arrives first, but reconcile regardless.
   }, []);
 
-  const applyRemoteDrag = useCallback(({ tokenId, phase, holderUserId, x, y }) => {
+  const applyRemoteDrag = useCallback(({ tokenId, assetId, phase, holderUserId, x, y }) => {
+    if (!assetId) return;
     if (phase === 'grab') {
       setHeldTokens((previousHolds) => ({
         ...previousHolds,
-        [tokenId]: { holderUserId, heldAtMs: Date.now() },
+        [assetId]: {
+          ...(previousHolds[assetId] || {}),
+          [tokenId]: { holderUserId, heldAtMs: Date.now() },
+        },
       }));
     } else if (phase === 'move') {
       // Hot path (~20 Hz): straight into the ref — no state, no re-render.
@@ -86,15 +94,20 @@ export const useMapTokens = ({
       // seen grab (join-mid-drag) still steers once the grab lands; until
       // then it's just a ref entry the layer ignores.
       if (typeof x === 'number' && typeof y === 'number') {
-        remoteDragFramesRef.current[tokenId] = { x, y, atMs: Date.now() };
+        if (!remoteDragFramesRef.current[assetId]) {
+          remoteDragFramesRef.current[assetId] = {};
+        }
+        remoteDragFramesRef.current[assetId][tokenId] = { x, y, atMs: Date.now() };
       }
     } else if (phase === 'release') {
-      delete remoteDragFramesRef.current[tokenId];
+      if (remoteDragFramesRef.current[assetId]) {
+        delete remoteDragFramesRef.current[assetId][tokenId];
+      }
       setHeldTokens((previousHolds) => {
-        if (!previousHolds[tokenId]) return previousHolds;
-        const nextHolds = { ...previousHolds };
-        delete nextHolds[tokenId];
-        return nextHolds;
+        if (!previousHolds[assetId]?.[tokenId]) return previousHolds;
+        const nextBoardHolds = { ...previousHolds[assetId] };
+        delete nextBoardHolds[tokenId];
+        return { ...previousHolds, [assetId]: nextBoardHolds };
       });
     }
   }, []);
@@ -111,7 +124,8 @@ export const useMapTokens = ({
   // HELD_STALENESS_MS reverts (mirrors the server's lazy expiry). Deps on
   // the boolean, not the dict: hold churn must not keep resetting the
   // interval or a crashed holder's ghost could outlive its timeout.
-  const hasHeldTokens = Object.keys(heldTokens).length > 0;
+  const hasHeldTokens = Object.values(heldTokens).some(
+    (boardHolds) => Object.keys(boardHolds).length > 0);
   useEffect(() => {
     if (!hasHeldTokens) return;
     const sweep = setInterval(() => {
@@ -119,16 +133,26 @@ export const useMapTokens = ({
       setHeldTokens((previousHolds) => {
         const nextHolds = {};
         let changed = false;
-        Object.entries(previousHolds).forEach(([tokenId, hold]) => {
-          // A recent move frame counts as hand activity — streaming drags
-          // refresh the hold without touching state (frames live in a ref).
-          const lastFrameAtMs = remoteDragFramesRef.current[tokenId]?.atMs || 0;
-          const lastActivityMs = Math.max(hold.heldAtMs, lastFrameAtMs);
-          if (nowMs - lastActivityMs > HELD_STALENESS_MS) {
-            changed = true;
-            delete remoteDragFramesRef.current[tokenId];
-          } else {
-            nextHolds[tokenId] = hold;
+        Object.entries(previousHolds).forEach(([assetId, boardHolds]) => {
+          const nextBoardHolds = {};
+          Object.entries(boardHolds).forEach(([tokenId, hold]) => {
+            // A recent move frame counts as hand activity — streaming drags
+            // refresh the hold without touching state (frames live in a ref).
+            const lastFrameAtMs = remoteDragFramesRef.current[assetId]?.[tokenId]?.atMs || 0;
+            const lastActivityMs = Math.max(hold.heldAtMs, lastFrameAtMs);
+            if (nowMs - lastActivityMs > HELD_STALENESS_MS) {
+              changed = true;
+              if (remoteDragFramesRef.current[assetId]) {
+                delete remoteDragFramesRef.current[assetId][tokenId];
+              }
+            } else {
+              nextBoardHolds[tokenId] = hold;
+            }
+          });
+          if (Object.keys(nextBoardHolds).length > 0) {
+            nextHolds[assetId] = nextBoardHolds;
+          } else if (Object.keys(boardHolds).length > 0) {
+            changed = true; // board emptied entirely
           }
         });
         return changed ? nextHolds : previousHolds;
@@ -143,11 +167,20 @@ export const useMapTokens = ({
     setHeldTokens((previousHolds) => {
       const nextHolds = {};
       let changed = false;
-      Object.entries(previousHolds).forEach(([tokenId, hold]) => {
-        if (hold.holderUserId === userId) {
-          changed = true;
-        } else {
-          nextHolds[tokenId] = hold;
+      Object.entries(previousHolds).forEach(([assetId, boardHolds]) => {
+        const nextBoardHolds = {};
+        Object.entries(boardHolds).forEach(([tokenId, hold]) => {
+          if (hold.holderUserId === userId) {
+            changed = true;
+            if (remoteDragFramesRef.current[assetId]) {
+              delete remoteDragFramesRef.current[assetId][tokenId];
+            }
+          } else {
+            nextBoardHolds[tokenId] = hold;
+          }
+        });
+        if (Object.keys(nextBoardHolds).length > 0) {
+          nextHolds[assetId] = nextBoardHolds;
         }
       });
       return changed ? nextHolds : previousHolds;
@@ -331,12 +364,19 @@ export const useMapTokens = ({
     [mapTokenState, activeAssetId]
   );
 
+  // The layer only ever renders the active board, so it only sees the
+  // active board's holds — presence from other maps can't leak in.
+  const heldTokensForActiveMap = useMemo(
+    () => (activeAssetId ? heldTokens[activeAssetId] || {} : {}),
+    [heldTokens, activeAssetId]
+  );
+
   return {
     // state
     mapTokenState,
     setMapTokenState, // initial_state hydration
     tokensForActiveMap,
-    heldTokens,
+    heldTokensForActiveMap,
     lastDenial,
     clearDenial,
     npcDrafts,

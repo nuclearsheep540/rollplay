@@ -2387,7 +2387,7 @@ export default function GameContent() {
               fogShowRegionLabels={isDM}
               // Map tokens — the shared board's pieces (render above fog + grid)
               mapTokens={mapTokens.tokensForActiveMap}
-              mapTokenHolds={mapTokens.heldTokens}
+              mapTokenHolds={mapTokens.heldTokensForActiveMap}
               mapTokenDenial={mapTokens.lastDenial}
               mapTokensApi={mapTokensApi}
               playerMetadata={playerMetadata}
