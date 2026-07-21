@@ -40,6 +40,10 @@ export const useMapTokens = ({
   // token_id → { holderUserId, heldAtMs } — remote hands only (own drags
   // live in MapTokenLayer's refs; the server echo is filtered out).
   const [heldTokens, setHeldTokens] = useState({});
+  // token_id → { x, y, atMs } (native px) — live-drag move frames. A ref,
+  // never state: frames arrive at ~20 Hz and must not re-render the tree;
+  // MapTokenLayer's rAF loop reads this and lerps discs directly.
+  const remoteDragFramesRef = useRef({});
   // Latest grab denial — MapTokenLayer watches this to snap an optimistic
   // drag back home.
   const [lastDenial, setLastDenial] = useState(null);
@@ -70,13 +74,22 @@ export const useMapTokens = ({
     // the release frame usually arrives first, but reconcile regardless.
   }, []);
 
-  const applyRemoteDrag = useCallback(({ tokenId, phase, holderUserId }) => {
+  const applyRemoteDrag = useCallback(({ tokenId, phase, holderUserId, x, y }) => {
     if (phase === 'grab') {
       setHeldTokens((previousHolds) => ({
         ...previousHolds,
         [tokenId]: { holderUserId, heldAtMs: Date.now() },
       }));
+    } else if (phase === 'move') {
+      // Hot path (~20 Hz): straight into the ref — no state, no re-render.
+      // The layer's rAF loop picks it up. A frame from a holder we haven't
+      // seen grab (join-mid-drag) still steers once the grab lands; until
+      // then it's just a ref entry the layer ignores.
+      if (typeof x === 'number' && typeof y === 'number') {
+        remoteDragFramesRef.current[tokenId] = { x, y, atMs: Date.now() };
+      }
     } else if (phase === 'release') {
+      delete remoteDragFramesRef.current[tokenId];
       setHeldTokens((previousHolds) => {
         if (!previousHolds[tokenId]) return previousHolds;
         const nextHolds = { ...previousHolds };
@@ -84,8 +97,6 @@ export const useMapTokens = ({
         return nextHolds;
       });
     }
-    // v1 is markers-only: 'move' frames are reserved for the live-drag
-    // fast-follow and ignored here.
   }, []);
 
   const applyGrabDenial = useCallback(({ tokenId, heldBy }) => {
@@ -109,8 +120,13 @@ export const useMapTokens = ({
         const nextHolds = {};
         let changed = false;
         Object.entries(previousHolds).forEach(([tokenId, hold]) => {
-          if (nowMs - hold.heldAtMs > HELD_STALENESS_MS) {
+          // A recent move frame counts as hand activity — streaming drags
+          // refresh the hold without touching state (frames live in a ref).
+          const lastFrameAtMs = remoteDragFramesRef.current[tokenId]?.atMs || 0;
+          const lastActivityMs = Math.max(hold.heldAtMs, lastFrameAtMs);
+          if (nowMs - lastActivityMs > HELD_STALENESS_MS) {
             changed = true;
+            delete remoteDragFramesRef.current[tokenId];
           } else {
             nextHolds[tokenId] = hold;
           }
@@ -215,6 +231,13 @@ export const useMapTokens = ({
     return sendFunctions.sendMapTokenGrab(activeAssetId, tokenId);
   }, [activeAssetId, sendFunctions]);
 
+  // Live-drag streaming (v1.1): relay one throttled mid-drag frame. The
+  // layer owns the throttle; this is fire-and-forget presence.
+  const streamTokenDrag = useCallback((tokenId, nativeX, nativeY) => {
+    if (!activeAssetId) return false;
+    return sendFunctions.sendMapTokenDragFrame(activeAssetId, tokenId, nativeX, nativeY);
+  }, [activeAssetId, sendFunctions]);
+
   const releaseToken = useCallback((tokenId, x, y) => {
     if (!activeAssetId) return false;
     return sendFunctions.sendMapTokenRelease(activeAssetId, tokenId, x, y);
@@ -297,12 +320,14 @@ export const useMapTokens = ({
     npcDrafts,
     // layer wiring
     attachTokenLayer,
+    remoteDragFramesRef,
     // committed ops
     commitTokenPlace,
     commitTokenMove,
     removeToken,
     // presence
     grabToken,
+    streamTokenDrag,
     releaseToken,
     clearHoldsForUser,
     // carry flow

@@ -1711,6 +1711,10 @@ class WebsocketEvent():
                 # Stale frame after an expired/denied hold — drop silently,
                 # no error spam at stream frequency.
                 return WebsocketEventResult(broadcast_message=None)
+            # A live stream is an active hand — refresh the hold so a long
+            # careful drag can't staleness-expire mid-stream (same-user
+            # try_grab resets the clock).
+            map_token_holds.try_grab(room_id, token_id, user_id)
         else:
             released = map_token_holds.release(room_id, token_id, user_id)
             if not released and map_token_holds.holder(room_id, token_id) is not None:

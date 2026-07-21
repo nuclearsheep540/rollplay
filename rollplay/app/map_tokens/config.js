@@ -26,6 +26,19 @@ export const GRIDLESS_ASSUMED_CELL_PX = 100;
 // affordance with no release after this long reverts to committed state.
 export const HELD_STALENESS_MS = 10000;
 
+// Live-drag streaming (v1.1, plan §3.3 fast-follow). Flip the flag off to
+// ship markers-only — the backend relays move frames either way.
+export const LIVE_DRAG_STREAMING = true;
+// Sender throttle: minimum gap between relayed move frames (~20 Hz). The
+// devtools-throttled head-of-line test (§3.3) is what tunes or vetoes this.
+export const DRAG_STREAM_INTERVAL_MS = 50;
+// A remote drag with no frame for this long stops steering the disc — it
+// reverts to its committed position (the lift stays until release/hold expiry).
+export const DRAG_FRAME_STALENESS_MS = 2000;
+// Remote lerp factor per animation frame — how fast the disc chases the
+// latest relayed position (0–1; higher = snappier, lower = smoother).
+export const DRAG_LERP_FACTOR = 0.3;
+
 // NPC disc default: DM-rose (decision, 2026-07-20), matching the DM panel
 // theme (Tailwind rose-500). Distinct from the 8-color seat fallback palette.
 export const NPC_TOKEN_COLOR = '#f43f5e';

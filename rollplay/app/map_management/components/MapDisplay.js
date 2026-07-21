@@ -400,10 +400,12 @@ const MapDisplay = ({
             gridConfig={activeMap?.map_config?.grid_config || null}
             attachTokenLayer={mapTokensApi.attachTokenLayer}
             grabToken={mapTokensApi.grabToken}
+            streamTokenDrag={mapTokensApi.streamTokenDrag}
             releaseToken={mapTokensApi.releaseToken}
             commitTokenMove={mapTokensApi.commitTokenMove}
             removeToken={mapTokensApi.removeToken}
             clearDenial={mapTokensApi.clearDenial}
+            remoteDragFramesRef={mapTokensApi.remoteDragFramesRef}
           />
         )}
       </div>

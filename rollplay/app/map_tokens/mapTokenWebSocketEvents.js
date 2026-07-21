@@ -12,8 +12,9 @@
  *    server applies the op atomically and broadcasts the map's full token
  *    array; every client (including the sender, via its echo) replaces
  *    that board wholesale. Authoritative reconciliation.
- *  - map_token_drag / map_token_drag_denied — ephemeral presence (grab /
- *    release lift affordances). v1 is markers-only: no mid-drag frames.
+ *  - map_token_drag / map_token_drag_denied — ephemeral presence: grab /
+ *    release lift affordances, plus throttled mid-drag move frames when
+ *    LIVE_DRAG_STREAMING is on (v1.1) — relayed, never persisted.
  */
 
 /** Committed-state fragment: replace one map's token array wholesale. */
@@ -34,7 +35,7 @@ export const handleMapTokenStateUpdate = (data, { applyTokenBoard, addToLog }) =
   }
 };
 
-/** Presence lane: someone's hand grabbed or released a token. */
+/** Presence lane: someone's hand grabbed, moved, or released a token. */
 export const handleMapTokenDrag = (data, { thisUserId, applyRemoteDrag }) => {
   if (!data?.token_id || !applyRemoteDrag) return;
   if (data.holder_user_id === thisUserId) return; // own echo — local state already reflects it
@@ -44,6 +45,8 @@ export const handleMapTokenDrag = (data, { thisUserId, applyRemoteDrag }) => {
     assetId: data.asset_id,
     phase: data.phase,
     holderUserId: data.holder_user_id,
+    x: data.x,
+    y: data.y,
   });
 };
 
@@ -78,9 +81,12 @@ export const createMapTokenSendFunctions = (webSocket, isConnected) => {
   const sendMapTokenConfigure = (assetId, token) =>
     send('map_token_update', { asset_id: assetId, op: 'configure', token });
 
-  // Lane 2 — presence. grab on pointer-capture, release on pointer-up.
+  // Lane 2 — presence. grab on pointer-capture, throttled move frames while
+  // streaming (LIVE_DRAG_STREAMING), release on pointer-up.
   const sendMapTokenGrab = (assetId, tokenId) =>
     send('map_token_drag', { asset_id: assetId, token_id: tokenId, phase: 'grab' });
+  const sendMapTokenDragFrame = (assetId, tokenId, x, y) =>
+    send('map_token_drag', { asset_id: assetId, token_id: tokenId, phase: 'move', x, y });
   const sendMapTokenRelease = (assetId, tokenId, x, y) =>
     send('map_token_drag', { asset_id: assetId, token_id: tokenId, phase: 'release', x, y });
 
@@ -90,6 +96,7 @@ export const createMapTokenSendFunctions = (webSocket, isConnected) => {
     sendMapTokenRemove,
     sendMapTokenConfigure,
     sendMapTokenGrab,
+    sendMapTokenDragFrame,
     sendMapTokenRelease,
   };
 };

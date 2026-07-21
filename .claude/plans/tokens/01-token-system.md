@@ -140,6 +140,7 @@ Full-array-per-map fragment = atomic truth (fog's "no-flicker" philosophy; the a
 
 - **Finding (code-read, 2026-07-20):** the original acceptance criterion ("no unbounded asyncio send-queue growth") watched the wrong failure mode. `ConnectionManager.update_room_data` (`connection_manager.py:182-204`) has **no send queue** — it's a serial loop of `await websocket.send_json(...)` per client. The real risk at 20–30 Hz is **head-of-line blocking**: one slow client's TCP backpressure delays every other client's frames.
 - **Fast-follow gate:** with the `move` phase enabled behind a config flag, Matt drives two browsers + one devtools-throttled third client; healthy clients' relay RTT must stay comfortably under ~150 ms p95 despite the throttled peer. If it degrades, fix candidates are per-connection send tasks or drop-stale-frames for lane 2 — decided then, not now.
+- **v1.1 BUILT (2026-07-21):** live-drag streaming shipped behind `LIVE_DRAG_STREAMING` in `map_tokens/config.js` (sender throttle 50 ms ≈ 20 Hz, remote lerp factor 0.3, frame staleness 2 s). Frames ride the existing `move` relay (no Mongo write, no log); the server refreshes the hold on each frame so long drags can't staleness-expire mid-stream. Remote animation is rAF + direct style writes off a ref — zero React re-renders per frame. The throttled-client test above remains the go/no-go: flip the flag off to revert to markers-only with zero rework.
 
 ### 3.4 New frontend slice: `app/map_tokens/`
 

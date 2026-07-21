@@ -1276,13 +1276,16 @@ export default function GameContent() {
   const mapTokensApi = useMemo(() => ({
     attachTokenLayer: mapTokens.attachTokenLayer,
     grabToken: mapTokens.grabToken,
+    streamTokenDrag: mapTokens.streamTokenDrag,
     releaseToken: mapTokens.releaseToken,
     commitTokenMove: mapTokens.commitTokenMove,
     removeToken: mapTokens.removeToken,
     clearDenial: mapTokens.clearDenial,
+    remoteDragFramesRef: mapTokens.remoteDragFramesRef,
   }), [
-    mapTokens.attachTokenLayer, mapTokens.grabToken, mapTokens.releaseToken,
-    mapTokens.commitTokenMove, mapTokens.removeToken, mapTokens.clearDenial,
+    mapTokens.attachTokenLayer, mapTokens.grabToken, mapTokens.streamTokenDrag,
+    mapTokens.releaseToken, mapTokens.commitTokenMove, mapTokens.removeToken,
+    mapTokens.clearDenial, mapTokens.remoteDragFramesRef,
   ]);
 
   // Mixer drawer transport handlers — send via WebSocket batch

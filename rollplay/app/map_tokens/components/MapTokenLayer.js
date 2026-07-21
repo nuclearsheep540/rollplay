@@ -7,7 +7,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import {
+  DRAG_FRAME_STALENESS_MS,
+  DRAG_LERP_FACTOR,
+  DRAG_STREAM_INTERVAL_MS,
   FALLBACK_TOKEN_COLOR,
+  LIVE_DRAG_STREAMING,
   NPC_TOKEN_COLOR,
   tokenDiameterPx,
 } from '../config';
@@ -44,10 +48,12 @@ export default function MapTokenLayer({
   gridConfig = null,
   attachTokenLayer,
   grabToken,
+  streamTokenDrag,
   releaseToken,
   commitTokenMove,
   removeToken,
   clearDenial,
+  remoteDragFramesRef = null,
 }) {
   useRenderTracker('MapTokenLayer');
   const wrapperRef = useRef(null);
@@ -55,9 +61,12 @@ export default function MapTokenLayer({
   const [naturalDims, setNaturalDims] = useState({ w: 0, h: 0 });
   // Re-render trigger for drag start/end only — pointer moves stay in refs.
   const [draggingTokenId, setDraggingTokenId] = useState(null);
-  // { tokenId, token, element, startClientX/Y, startLeft/Top, currentLeft/Top, moved }
-  // — single source of truth for the in-flight drag (survives re-renders).
+  // { tokenId, token, element, renderScale, startClientX/Y, startLeft/Top,
+  //   currentLeft/Top, moved, lastFrameSentAtMs } — single source of truth
+  // for the in-flight drag (survives re-renders).
   const dragRef = useRef(null);
+  // token_id → element, for the remote lerp loop's direct style writes.
+  const tokenElementsRef = useRef({});
 
   // Track rendered + natural image size (fog wrapper pattern).
   useEffect(() => {
@@ -156,6 +165,7 @@ export default function MapTokenLayer({
       tokenId: token.id,
       token,
       element: event.currentTarget,
+      renderScale,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startLeft,
@@ -163,6 +173,7 @@ export default function MapTokenLayer({
       currentLeft: startLeft,
       currentTop: startTop,
       moved: false,
+      lastFrameSentAtMs: 0,
     };
     setDraggingTokenId(token.id);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -189,7 +200,22 @@ export default function MapTokenLayer({
 
     drag.element.style.left = `${drag.currentLeft}px`;
     drag.element.style.top = `${drag.currentTop}px`;
-  }, []);
+
+    // Live-drag streaming (v1.1): relay a throttled frame so remote hands
+    // glide instead of teleporting on commit. Presence only — the lane-1
+    // commit at release is still what settles position.
+    if (LIVE_DRAG_STREAMING && streamTokenDrag && drag.renderScale > 0) {
+      const nowMs = Date.now();
+      if (nowMs - (drag.lastFrameSentAtMs || 0) >= DRAG_STREAM_INTERVAL_MS) {
+        drag.lastFrameSentAtMs = nowMs;
+        streamTokenDrag(
+          drag.tokenId,
+          drag.currentLeft / drag.renderScale,
+          drag.currentTop / drag.renderScale
+        );
+      }
+    }
+  }, [streamTokenDrag]);
 
   const handleTokenPointerUp = useCallback((event) => {
     const drag = dragRef.current;
@@ -212,6 +238,74 @@ export default function MapTokenLayer({
     event.stopPropagation();
     removeToken(token.id);
   }, [removeToken]);
+
+  // Remote lerp loop (v1.1 live-drag): while any remote hand holds a token,
+  // an rAF loop steers its disc toward the latest relayed frame — direct
+  // style writes on the hot path, zero React re-renders per frame. With no
+  // fresh frame (markers-only sender, or stream gap > staleness) the target
+  // is the committed position, so this also degrades gracefully.
+  useEffect(() => {
+    if (!LIVE_DRAG_STREAMING || !remoteDragFramesRef) return;
+    const heldTokenIds = Object.keys(heldTokens);
+    if (!heldTokenIds.length || renderScale <= 0) return;
+
+    const committedByTokenId = {};
+    tokens.forEach((token) => {
+      committedByTokenId[token.id] = { left: token.x * renderScale, top: token.y * renderScale };
+    });
+
+    const lerpPositions = {};
+    let frameHandle = null;
+
+    const animate = () => {
+      const nowMs = Date.now();
+      heldTokenIds.forEach((tokenId) => {
+        const element = tokenElementsRef.current[tokenId];
+        const committed = committedByTokenId[tokenId];
+        if (!element || !committed) return;
+
+        const frame = remoteDragFramesRef.current[tokenId];
+        const frameFresh = frame && nowMs - frame.atMs <= DRAG_FRAME_STALENESS_MS;
+        const target = frameFresh
+          ? { left: frame.x * renderScale, top: frame.y * renderScale }
+          : committed;
+
+        // Seed from the element's current inline style so effect restarts
+        // (board commits elsewhere) don't visibly snap the disc.
+        let current = lerpPositions[tokenId];
+        if (!current) {
+          const styleLeft = parseFloat(element.style.left);
+          const styleTop = parseFloat(element.style.top);
+          current = Number.isFinite(styleLeft) && Number.isFinite(styleTop)
+            ? { left: styleLeft, top: styleTop }
+            : { ...committed };
+          lerpPositions[tokenId] = current;
+        }
+
+        current.left += (target.left - current.left) * DRAG_LERP_FACTOR;
+        current.top += (target.top - current.top) * DRAG_LERP_FACTOR;
+        element.style.left = `${current.left}px`;
+        element.style.top = `${current.top}px`;
+      });
+      frameHandle = requestAnimationFrame(animate);
+    };
+    frameHandle = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(frameHandle);
+      // Direct mutations bypass React; on release the committed values may
+      // match React's last-rendered ones (diff skips the write), so put the
+      // steered discs back by hand.
+      heldTokenIds.forEach((tokenId) => {
+        const element = tokenElementsRef.current[tokenId];
+        const committed = committedByTokenId[tokenId];
+        if (element && committed) {
+          element.style.left = `${committed.left}px`;
+          element.style.top = `${committed.top}px`;
+        }
+      });
+    };
+  }, [heldTokens, tokens, renderScale, remoteDragFramesRef]);
 
   // Wrapper stays mounted even with nothing to draw — chip drops need its
   // rect. Discs render only once the image is laid out.
@@ -264,6 +358,13 @@ export default function MapTokenLayer({
         return (
           <div
             key={token.id}
+            ref={(element) => {
+              if (element) {
+                tokenElementsRef.current[token.id] = element;
+              } else {
+                delete tokenElementsRef.current[token.id];
+              }
+            }}
             className="absolute cursor-grab"
             style={{
               left: `${left}px`,
