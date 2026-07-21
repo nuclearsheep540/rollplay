@@ -14,6 +14,7 @@ from shared_contracts.display import ActiveDisplayType
 from shared_contracts.cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
+from shared_contracts.map_token import MapToken
 from shared_contracts.session import (
     LogEntry,
     PlayerState,
@@ -692,3 +693,121 @@ class TestMapConstraints:
         config = GridConfig(offset_x=-50, offset_y=-50)
         assert config.offset_x == -50
         assert config.offset_y == -50
+
+
+class TestMapTokenRoundTrip:
+    def _valid_token(self, **overrides):
+        token = {
+            "id": "3f1c9a2e-0000-4000-8000-000000000001",
+            "kind": "pc",
+            "owner_user_id": "user-1",
+            "character_id": "char-1",
+            "x": 512.5,
+            "y": 384.0,
+            "created_by": "user-1",
+        }
+        token.update(overrides)
+        return token
+
+    def test_round_trip_preserves_fields(self):
+        token = MapToken.model_validate(self._valid_token())
+        restored = MapToken.model_validate(token.model_dump())
+        assert restored == token
+
+    def test_defaults(self):
+        token = MapToken.model_validate(self._valid_token())
+        assert token.footprint == 1
+        assert token.label is None
+        assert token.updated_at is None
+
+    def test_npc_token_needs_no_owner(self):
+        token = MapToken.model_validate(
+            self._valid_token(kind="npc", owner_user_id=None, character_id=None, label="Goblin 3")
+        )
+        assert token.owner_user_id is None
+        assert token.label == "Goblin 3"
+
+
+class TestMapTokenConstraints:
+    def _valid_token(self, **overrides):
+        token = {
+            "id": "token-1",
+            "kind": "pc",
+            "x": 0.0,
+            "y": 0.0,
+            "created_by": "user-1",
+        }
+        token.update(overrides)
+        return token
+
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(color="#ff0000"))
+
+    def test_rejects_unknown_kind(self):
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(kind="monster"))
+
+    def test_rejects_empty_id(self):
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(id=""))
+
+    def test_rejects_non_finite_coordinates(self):
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(x=float("inf")))
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(y=float("nan")))
+
+    def test_footprint_bounds(self):
+        assert MapToken.model_validate(self._valid_token(footprint=4)).footprint == 4
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(footprint=0))
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(footprint=5))
+
+    def test_label_rejects_oversized(self):
+        with pytest.raises(ValidationError):
+            MapToken.model_validate(self._valid_token(label="x" * 65))
+
+
+class TestMapTokenSessionEtl:
+    def _board(self):
+        return {
+            "asset-1": [
+                {
+                    "id": "token-1", "kind": "pc", "owner_user_id": "user-1",
+                    "character_id": "char-1", "x": 100.0, "y": 200.0,
+                    "footprint": 1, "created_by": "user-1",
+                    "updated_at": "2026-07-20T12:00:00+00:00",
+                },
+                {
+                    "id": "token-2", "kind": "npc", "label": "Goblin 3",
+                    "x": 300.0, "y": 400.0, "footprint": 2, "created_by": "dm-1",
+                },
+            ]
+        }
+
+    def test_start_payload_round_trips_token_boards(self):
+        payload = SessionStartPayload(
+            session_id="s1", campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="dm-1", player_name="Matt"),
+            map_token_state=self._board(),
+        )
+        restored = SessionStartPayload.model_validate(payload.model_dump())
+        assert restored == payload
+        assert restored.map_token_state["asset-1"][0].id == "token-1"
+
+    def test_final_state_round_trips_token_boards(self):
+        final_state = SessionEndFinalState(map_token_state=self._board())
+        restored = SessionEndFinalState.model_validate(final_state.model_dump())
+        assert restored == final_state
+        assert restored.map_token_state["asset-1"][1].label == "Goblin 3"
+
+    def test_token_boards_default_empty(self):
+        assert SessionEndFinalState().map_token_state == {}
+
+    def test_malformed_board_token_rejected(self):
+        board = self._board()
+        board["asset-1"][0]["x"] = float("nan")
+        with pytest.raises(ValidationError):
+            SessionEndFinalState(map_token_state=board)

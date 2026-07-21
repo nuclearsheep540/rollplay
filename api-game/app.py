@@ -28,7 +28,9 @@ from shared_contracts.session import (
     PlayerState,
     SessionStats,
 )
+from pydantic import ValidationError
 from shared_contracts.map import MapConfig
+from shared_contracts.map_token import MapToken
 from shared_contracts.image import ImageConfig
 from schemas.session_schemas import SessionEndRequest
 from datetime import datetime, timezone
@@ -521,6 +523,15 @@ async def create_session(request: SessionStartPayload):
             spotify_restore["playback_state"] = "paused"
             spotify_restore["is_playing"] = False
 
+        # Restore per-map token boards (cold → hot). api-site already pruned
+        # orphan boards for deleted maps; contract validation happened at the
+        # payload boundary, so this is a straight re-shape to stored dicts.
+        restored_map_token_state = {}
+        for board_asset_id, board_tokens in request.map_token_state.items():
+            restored_map_token_state[board_asset_id] = [
+                board_token.model_dump() for board_token in board_tokens
+            ]
+
         # Create minimal session
         settings = GameSettings(
             max_players=request.max_players,
@@ -533,6 +544,7 @@ async def create_session(request: SessionStartPayload):
             audio_state={k: v.model_dump() for k, v in request.audio_config.items()} if request.audio_config else {},
             audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {},
             spotify=spotify_restore,
+            map_token_state=restored_map_token_state,
             urls_expire_at=request.urls_expire_at or ""
         )
 
@@ -683,6 +695,28 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 prompt_id=log_doc.get("prompt_id"),
             ))
 
+        # Token boards for cold storage — salvage per token: a malformed dict
+        # (e.g. old-shape data sitting hot across a contract change) is
+        # dropped with a warning rather than failing the whole pause and
+        # stranding the session ACTIVE. Adventure-log extraction is lenient
+        # for the same reason. Boards left empty after salvage (or by the
+        # last $pull) are culled so key clutter never accumulates cold.
+        raw_token_boards = room.get("map_token_state", {}) or {}
+        token_boards = {}
+        if isinstance(raw_token_boards, dict):
+            for board_asset_id, board_tokens in raw_token_boards.items():
+                salvaged_tokens = []
+                for board_token in board_tokens or []:
+                    try:
+                        salvaged_tokens.append(MapToken(**board_token))
+                    except (ValidationError, TypeError) as token_error:
+                        logger.warning(
+                            f"Dropped malformed map token on board {board_asset_id} "
+                            f"at session end: {token_error}"
+                        )
+                if salvaged_tokens:
+                    token_boards[board_asset_id] = salvaged_tokens
+
         # Get active map state for ETL — contract data is nested under map_config
         active_map = map_service.get_active_map(request.session_id)
         map_state = None
@@ -735,6 +769,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
             image_state=image_state,
             active_display=active_display,
             adventure_log=log_entries,
+            map_token_state=token_boards,
         )
 
         # If not validate_only, delete the game (deprecated flow)

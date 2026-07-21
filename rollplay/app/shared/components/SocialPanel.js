@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Transition, Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUserGroup, faBell, faRightToBracket, faCheck, faUserPlus, faXmark, faCopy } from '@fortawesome/free-solid-svg-icons'
+import { faUserGroup, faBell, faCheck, faUserPlus, faXmark, faCopy } from '@fortawesome/free-solid-svg-icons'
 import { ToastNotification } from './ToastNotification'
 import { formatPanelMessage, getNavigationTab } from '../config/eventConfig'
 import { formatRelativeTime } from '../utils/formatTime'
@@ -397,7 +397,7 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                           className="w-8 h-8 flex-none flex items-center justify-center rounded-sm transition-colors text-content-accent hover:opacity-80"
                           title="Invite to campaign"
                         >
-                          <FontAwesomeIcon icon={faRightToBracket} />
+                          <FontAwesomeIcon icon={faUserPlus} />
                         </MenuButton>
                         <MenuItems className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-sm border border-border bg-surface-elevated shadow-lg focus:outline-none">
                           <div className="p-2 text-xs font-semibold border-b border-border-subtle text-content-secondary">

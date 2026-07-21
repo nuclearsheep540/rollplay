@@ -27,5 +27,9 @@ MESSAGE_TEMPLATES = {
     "messages_cleared": "{player} cleared {count} messages",
     "player_kicked": "{player} was removed from the game",
     "dice_prompt": "{target}, roll a {roll_type}",
-    "initiative_prompt": "DM prompted all players for Initiative: {players}"
+    "initiative_prompt": "DM prompted all players for Initiative: {players}",
+    # Map tokens — cell_suffix is " at D7" on an addressable grid, else ""
+    "map_token_placed": "{player} placed {token}{cell_suffix}",
+    "map_token_removed": "{player} removed {token}",
+    "map_token_moved_by_other": "{player} moved {token}'s token"
 }

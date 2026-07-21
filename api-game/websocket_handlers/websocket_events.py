@@ -1,5 +1,6 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
+import math
 import time
 import logging
 from typing import Optional, Dict, Any
@@ -7,6 +8,7 @@ from typing import Optional, Dict, Any
 logger = logging.getLogger(__name__)
 
 from fastapi import WebSocket
+from pydantic import ValidationError
 from .connection_manager import ConnectionManager
 from message_templates import format_message, MESSAGE_TEMPLATES
 from adventure_log_service import AdventureLogService
@@ -14,9 +16,12 @@ from models.log_type import LogType
 from mapservice import MapService, MapSettings
 from imageservice import ImageService, ImageSettings
 from gameservice import GameService
+from map_token_ops import VALID_MAP_TOKEN_OPS, grid_cell_label, is_valid_asset_key
+from map_token_holds import MapTokenHolds
 from site_client import fetch_character_summary
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
+from shared_contracts.map_token import MapToken
 from shared_contracts.audio import AudioChannelState, AudioTrackConfig, AudioEffects
 from shared_contracts.spotify import SpotifyState
 
@@ -24,6 +29,7 @@ from shared_contracts.spotify import SpotifyState
 adventure_log = AdventureLogService()
 map_service = MapService()
 image_service = ImageService()
+map_token_holds = MapTokenHolds()
 
 
 def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any]:
@@ -675,6 +681,10 @@ class WebsocketEvent():
     async def player_disconnect(websocket, data, event_data, user_id, client_id, manager):
         """Handle player disconnect event"""
         display_name = WebsocketEvent._display_name(client_id, user_id)
+
+        # Drop any map-token holds the leaver had — remote clients clear their
+        # lift affordances off this handler's player_disconnected broadcast.
+        map_token_holds.release_all_for_user(client_id, user_id)
 
         # Log player disconnection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=display_name)
@@ -1503,6 +1513,230 @@ class WebsocketEvent():
         except Exception as e:
             print(f"❌ Error updating fog config for room {room_id}: {e}")
             return WebsocketEventResult(broadcast_message={"error": f"Failed to update fog config: {str(e)}"})
+
+    @staticmethod
+    def _map_token_display_name(token: Dict[str, Any], player_metadata: Dict[str, Any]) -> str:
+        """Name a token for log lines: owner's character name, else its label.
+        Never a raw user_id (UUID = PII)."""
+        owner_user_id = token.get("owner_user_id") or ""
+        owner_metadata = player_metadata.get(owner_user_id, {}) if isinstance(player_metadata, dict) else {}
+        fallback = "an NPC" if token.get("kind") == "npc" else "Unknown Adventurer"
+        return owner_metadata.get("character_name") or token.get("label") or fallback
+
+    @staticmethod
+    def _map_token_place_cell_suffix(room_id: str, asset_id: str, token: Dict[str, Any]) -> str:
+        """' at D7' when the placed token lands on the active map's addressable
+        grid; empty string otherwise (gridless, untuned, off-grid, or the op
+        targets a non-active map's board)."""
+        active_map = map_service.get_active_map(room_id)
+        map_config = active_map.get("map_config", {}) if active_map else {}
+        if map_config.get("asset_id") != asset_id:
+            return ""
+
+        cell_label = grid_cell_label(token["x"], token["y"], map_config.get("grid_config"))
+        return f" at {cell_label}" if cell_label else ""
+
+    @staticmethod
+    def _write_map_token_log(room_id: str, user_id: str, template_key: str,
+                             subject_token: Dict[str, Any], cell_suffix: str = "") -> str:
+        """Resolve names, format one map-token log line, and persist it.
+        Called only from branches that actually log — routine ops must not
+        pay the metadata fetch (see map_token_update docstring)."""
+        player_metadata = WebsocketEvent._get_player_metadata(room_id)
+        mover_name = WebsocketEvent._display_name(room_id, user_id, player_metadata)
+        token_name = WebsocketEvent._map_token_display_name(subject_token, player_metadata)
+        log_message = format_message(
+            MESSAGE_TEMPLATES[template_key],
+            player=mover_name, token=token_name, cell_suffix=cell_suffix
+        )
+        adventure_log.add_log_entry(
+            room_id=room_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            from_player=None
+        )
+        return log_message
+
+    @staticmethod
+    async def map_token_update(websocket, data, event_data, user_id, client_id, manager):
+        """Lane 1 — committed MapToken state (authoritative).
+
+        Validates shape + invariants (MapToken contract: finite x/y,
+        footprint 1–4), applies the op as one atomic Mongo array update via
+        GameService.apply_map_token_op, then broadcasts the map's full token
+        array as the reconciliation fragment (fog's no-flicker philosophy —
+        the array is tiny). Attribution (created_by/updated_by) is stamped
+        from the connection's user_id, never trusted from the wire.
+
+        Adventure-log rules (inform, don't enforce):
+          place  → always ("Matt placed Elara at D7")
+          remove → always ("Matt removed Goblin 3")
+          move   → only when a pc token is moved by someone other than its
+                   owner — the social-correction signal. Routine own-token
+                   and npc moves are not logged (log-flood informs nobody).
+        """
+        room_id = client_id
+        event_data = event_data or {}
+        asset_id = event_data.get("asset_id")
+        op = event_data.get("op")
+
+        if not is_valid_asset_key(asset_id):
+            return WebsocketEventResult.error("Invalid map token update: bad asset_id")
+        if op not in VALID_MAP_TOKEN_OPS:
+            return WebsocketEventResult.error(f"Invalid map token op: {op}")
+
+        token_payload = None
+        token_id = event_data.get("token_id")
+        if op == "remove":
+            if not token_id or not isinstance(token_id, str):
+                return WebsocketEventResult.error("Invalid map token remove: missing token_id")
+        else:
+            try:
+                token = MapToken.model_validate(event_data.get("token"))
+            except ValidationError as validation_error:
+                return WebsocketEventResult.error(f"Invalid map token payload: {validation_error}")
+            if op == "place":
+                token = token.model_copy(update={"created_by": user_id})
+            token_id = token.id
+            token_payload = token.model_dump()
+
+        # Pre-op snapshot only for remove — the name of what's vanishing is
+        # gone from the post-op array. move reads its attribution fields from
+        # the post-op array instead (a move never changes them), so the
+        # dominant commit path costs no extra read.
+        pre_op_token = None
+        if op == "remove":
+            for existing_token in GameService.get_map_tokens(room_id, asset_id):
+                if existing_token.get("id") == token_id:
+                    pre_op_token = existing_token
+                    break
+
+        try:
+            tokens = GameService.apply_map_token_op(
+                room_id, asset_id, op, token=token_payload, token_id=token_id
+            )
+        except ValueError as op_error:
+            return WebsocketEventResult.error(str(op_error))
+
+        log_message = None
+        if op == "place":
+            cell_suffix = WebsocketEvent._map_token_place_cell_suffix(room_id, asset_id, token_payload)
+            log_message = WebsocketEvent._write_map_token_log(
+                room_id, user_id, "map_token_placed", token_payload, cell_suffix
+            )
+        elif op == "remove" and pre_op_token:
+            log_message = WebsocketEvent._write_map_token_log(
+                room_id, user_id, "map_token_removed", pre_op_token
+            )
+        elif op == "move":
+            moved_token = None
+            for candidate_token in tokens:
+                if candidate_token.get("id") == token_id:
+                    moved_token = candidate_token
+                    break
+            # The social-correction signal: log only a pc token moved by
+            # someone other than its stored owner. Routine own-token and npc
+            # moves stay unlogged (log-flood informs nobody).
+            if moved_token and moved_token.get("kind") == "pc":
+                owner_user_id = moved_token.get("owner_user_id")
+                if owner_user_id and owner_user_id != user_id:
+                    log_message = WebsocketEvent._write_map_token_log(
+                        room_id, user_id, "map_token_moved_by_other", moved_token
+                    )
+
+        broadcast = {
+            "event_type": "map_token_state_update",
+            "data": {
+                "asset_id": asset_id,
+                "tokens": tokens,
+                "op": op,
+                "token_id": token_id,
+                "updated_by": user_id,
+                "log_message": log_message,
+            },
+        }
+        return WebsocketEventResult(broadcast_message=broadcast)
+
+    @staticmethod
+    async def map_token_drag(websocket, data, event_data, user_id, client_id, manager):
+        """Lane 2 — ephemeral drag presence. No Mongo write, no log (the
+        remote_audio_resume precedent), but not a pure relay: grabs go through
+        the in-memory hold map (product decision 11 — first hand on the mini
+        wins; concurrency, not ownership).
+
+        v1 clients send grab/release only. "move" is accepted and relayed
+        (holder-validated) so the live-drag fast-follow is a client-side flag
+        flip, not a backend deploy. A denied grab is answered to the requester
+        only (map_token_drag_denied) — their optimistic drag snaps back.
+        """
+        room_id = client_id
+        event_data = event_data or {}
+        asset_id = event_data.get("asset_id")
+        token_id = event_data.get("token_id")
+        phase = event_data.get("phase")
+
+        if not is_valid_asset_key(asset_id):
+            return WebsocketEventResult.error("Invalid map token drag: bad asset_id")
+        if not token_id:
+            return WebsocketEventResult.error("Invalid map token drag: missing token_id")
+        if phase not in ("grab", "move", "release"):
+            return WebsocketEventResult.error(f"Invalid map token drag phase: {phase}")
+
+        drag_x = event_data.get("x")
+        drag_y = event_data.get("y")
+        for coordinate in (drag_x, drag_y):
+            if coordinate is not None:
+                if not isinstance(coordinate, (int, float)) or isinstance(coordinate, bool) \
+                        or not math.isfinite(coordinate):
+                    return WebsocketEventResult.error("Invalid map token drag: x/y must be finite numbers")
+
+        if phase == "grab":
+            blocking_holder = map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
+            if blocking_holder is not None:
+                # Answered to the requester only — their optimistic drag snaps
+                # back. held_by is a user_id; the client resolves the nameplate
+                # from the player_metadata it already holds.
+                deny_message = {
+                    "event_type": "map_token_drag_denied",
+                    "data": {
+                        "asset_id": asset_id,
+                        "token_id": token_id,
+                        "held_by": blocking_holder,
+                    },
+                }
+                await websocket.send_json(deny_message)
+                return WebsocketEventResult(broadcast_message=None)
+        elif phase == "move":
+            if map_token_holds.holder(room_id, asset_id, token_id) != user_id:
+                # Stale frame after an expired/denied hold — drop silently,
+                # no error spam at stream frequency.
+                return WebsocketEventResult(broadcast_message=None)
+            # A live stream is an active hand — refresh the hold so a long
+            # careful drag can't staleness-expire mid-stream (same-user
+            # try_grab resets the clock).
+            map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
+        else:
+            released = map_token_holds.release(room_id, asset_id, token_id, user_id)
+            if not released and map_token_holds.holder(room_id, asset_id, token_id) is not None:
+                # Someone else still holds this token — a spurious release
+                # (denied grab's pointerup, stale client) must not clear the
+                # real holder's lift affordance room-wide. Drop silently.
+                return WebsocketEventResult(broadcast_message=None)
+            # released, or unheld (expired hold): relay so remote lift
+            # affordances clear; the lane-1 commit settles actual position.
+
+        drag_message = {
+            "event_type": "map_token_drag",
+            "data": {
+                "asset_id": asset_id,
+                "token_id": token_id,
+                "phase": phase,
+                "x": drag_x,
+                "y": drag_y,
+                "holder_user_id": user_id,
+            },
+        }
+        return WebsocketEventResult(broadcast_message=drag_message)
 
     @staticmethod
     async def map_request(websocket, data, event_data, user_id, client_id, manager):

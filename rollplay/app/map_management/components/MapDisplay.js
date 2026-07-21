@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
 import { FogRegionStack, FogRegionLabels } from '@/app/fog_management';
+import { MapTokenLayer } from '@/app/map_tokens';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
@@ -39,6 +40,16 @@ const MapDisplay = ({
   fogGetEngine = null,       // (regionId) => FogEngine — typically from useFogRegions().getEngine
   fogActiveRegionId = null,  // region currently receiving paint events
   fogShowRegionLabels = false, // overlay region names at the centroid of each painted alpha (DM-only)
+  // Map tokens — the shared board's pieces (app/map_tokens slice).
+  // Renders above fog AND grid: hidden monsters are unplaced monsters.
+  mapTokens = [],            // MapToken list for the active map's board
+  mapTokenHolds = {},        // token_id → { holderUserId } remote-hand presence (active board only)
+  mapTokenDenial = null,     // latest grab denial (layer snaps the drag home)
+  mapTokensApi = null,       // { attachTokenLayer, grabToken, streamTokenDrag, releaseToken, commitTokenMove, clearDenial, remoteDragFramesRef }
+  playerMetadata = {},       // owner color/name derivation (character-owned, decision 9)
+  playerSeatMap = {},        // seat-palette fallback colors
+  displayNameMap = {},       // held-by nameplate names
+  thisUserId = null,
 }) => {
   useRenderTracker('MapDisplay');
   const mapImageRef = useRef(null);
@@ -314,7 +325,10 @@ const MapDisplay = ({
           }}
         />
 
-        {/* Fog of war — sits between the map image and the grid.
+        {/* Fog of war — sits above the map image but BELOW the grid
+            (product decision 5: the grid clears fog; tokens clear all).
+            z-stack inside contentRef: fog 25 → grid 28 → fog cursor 29 /
+            labels 30 (DM-edit affordances) → tokens 35.
             Renders only when the caller provides both the regions list
             and the engine accessor. */}
         {mapLoaded && fogRegions && fogGetEngine && (
@@ -347,7 +361,7 @@ const MapDisplay = ({
             boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)',
             mixBlendMode: 'difference',
             transform: 'translate(-50%, -50%)',
-            zIndex: 26,
+            zIndex: 29,
           }}
         />
         {mapLoaded && fogRegions && fogGetEngine && fogShowRegionLabels && (
@@ -371,9 +385,30 @@ const MapDisplay = ({
             offsetY={offsetY}
           />
         )}
-      </div>
 
-      {/* Future: Position markers will be added here */}
+        {/* Map tokens — inside contentRef so pieces pan/zoom with the map */}
+        {mapLoaded && mapTokensApi && (
+          <MapTokenLayer
+            mapImageRef={mapImageRef}
+            tokens={mapTokens}
+            heldTokens={mapTokenHolds}
+            lastDenial={mapTokenDenial}
+            playerMetadata={playerMetadata}
+            playerSeatMap={playerSeatMap}
+            displayNameMap={displayNameMap}
+            thisUserId={thisUserId}
+            gridConfig={activeMap?.map_config?.grid_config || null}
+            mapAssetId={activeMap?.map_config?.asset_id || null}
+            attachTokenLayer={mapTokensApi.attachTokenLayer}
+            grabToken={mapTokensApi.grabToken}
+            streamTokenDrag={mapTokensApi.streamTokenDrag}
+            releaseToken={mapTokensApi.releaseToken}
+            commitTokenMove={mapTokensApi.commitTokenMove}
+            clearDenial={mapTokensApi.clearDenial}
+            remoteDragFramesRef={mapTokensApi.remoteDragFramesRef}
+          />
+        )}
+      </div>
     </div>
   );
 };

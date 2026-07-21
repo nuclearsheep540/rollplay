@@ -85,6 +85,12 @@ export const handleInitialState = (data, handlers) => {
     handlers.setGameSeats(seats);
   }
 
+  // Map token boards (asset_id → token list) — late joiners get the full
+  // shared board; no extra fetch (plan §3.2 hydration).
+  if (handlers.setMapTokenState) {
+    handlers.setMapTokenState(data.map_token_state || {});
+  }
+
   // Sync audio state for late-joiners (plays active tracks at correct position)
   if (audio_state && handlers.syncAudioState) {
     handlers.syncAudioState(audio_state);
@@ -278,13 +284,19 @@ export const handleCombatState = (data, { setCombatActive }) => {
   setCombatActive(newCombatState);
 };
 
-export const handlePlayerDisconnected = (data, { thisUserId, setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts }) => {
+export const handlePlayerDisconnected = (data, { thisUserId, setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts, clearMapTokenHoldsForUser }) => {
   console.log("received player disconnect:", data);
   const disconnected_user_id = data["disconnected_user_id"];
 
   // Server will handle seat cleanup and broadcast updated layout
   if (disconnected_user_id !== thisUserId) {
     // Backend handles disconnect logging
+  }
+
+  // Ghost-hold cleanup: any map token lifted by the leaver reverts to its
+  // committed position (the server dropped its hold on the same event).
+  if (clearMapTokenHoldsForUser) {
+    clearMapTokenHoldsForUser(disconnected_user_id);
   }
 
   // Handle lobby disconnect visualization (just mark as disconnecting)

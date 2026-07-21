@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import FogPixiTextureLayer from './FogPixiTextureLayer';
+import { screenPointToSpace } from '@/app/shared/utils/screenToImage';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 /**
@@ -66,16 +67,11 @@ export default function FogRegionStack({
   }, [mapImageRef]);
 
   const screenToMask = useCallback((clientX, clientY) => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper || !activeEngine) return null;
-    const rect = wrapper.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    const xRatio = (clientX - rect.left) / rect.width;
-    const yRatio = (clientY - rect.top) / rect.height;
-    return {
-      x: Math.max(0, Math.min(activeEngine.width, xRatio * activeEngine.width)),
-      y: Math.max(0, Math.min(activeEngine.height, yRatio * activeEngine.height)),
-    };
+    if (!activeEngine) return null;
+    return screenPointToSpace(
+      wrapperRef.current, clientX, clientY,
+      activeEngine.width, activeEngine.height
+    );
   }, [activeEngine]);
 
   // The cursor div lives as a sibling of this wrapper, inside contentRef,

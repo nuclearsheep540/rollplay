@@ -1,6 +1,6 @@
 # Map Tokens v1 — Plan
 
-> **Status:** planned, not started. Feature branch TBD.
+> **Status:** COMPLETE on `map-tokens` (2026-07-20). Preen track (PRs 1–2) shipped to main via PR #148. Token track (PRs 3+4+5) built, code-reviewed, and QA'd on the branch — pending merge. Decisions 11–15 settled 2026-07-20 (hold-lock, markers-only v1, stacking allowed, panel-housed chips, NPC = DM-rose); spike PR 0 dissolved (§3.3). Remaining open: §6.4 cross-session clean-board confirmation, §6.5 seat_layout persistence (optional preen), and the live-drag fast-follow (§3.3 gate).
 > **Scope:** physical representations of character/NPC positions on the battle map, live-synced across the table, persisted across pause/resume.
 > **Governing philosophy:** [product-principles.md](../core/product-principles.md) — inform maximally, constrain minimally. A token system is the purest test of it: the entire feature is "a shared board everyone can touch."
 
@@ -17,7 +17,11 @@
 7. **One coordinate system.** Positions are `{x, y}` in **map-image-native pixels**, center-anchored. Grid snapping is a *client-side interaction affordance* at drag-end, not a storage format. Rationale: gridless maps force x,y to exist anyway; cell storage would couple positions to mutable/deletable `grid_config` (retune ⇒ every token teleports; grid off ⇒ positions undefined). x,y drift after a grid retune is cosmetic and self-heals on next move. No auto re-snap (that would be the app moving pieces nobody touched); a manual "re-snap all" DM convenience is a *future* affordance if ever missed.
 8. **Sizing:** `diameter = footprint × cellPx`. `footprint` ∈ {1, 2, 3, 4} cells per side, labeled with D&D size names ("Medium — 5 ft", "Large — 10 ft", "Huge — 15 ft", "Gargantuan — 20 ft"; Small shares 1 with Medium). `cellPx` = `grid_config.grid_cell_size` when a grid exists, else `GRIDLESS_ASSUMED_CELL_PX = 100` (modern VTT convention: Roll20 70px, Foundry 100px default) clamped to `[smallerMapDim/50, smallerMapDim/10]`. PC tokens default footprint 1; DM ad-hoc tokens get a footprint picker.
 9. **Colors belong to characters, not seat indexes** (Matt, 2026-07-19: "we're setting character's colors, and the seat represents the color of the character, *not the other way around*"). The current seat-index color system predates having any character data shape and is now backwards. Folded into this work as its own PR (§3.8): `characters.color` is the cold authority; seats and tokens *display* the sitter's/owner's character color.
-10. **The concept is named `MapToken`** (agreed 2026-07-19). Bare "token" collides with auth/Spotify tokens throughout the codebase, `CharacterToken` misnames NPC pieces, and `EntityToken` overloads DDD's "entity". **Boundary rule:** the qualified name is canonical at every shared surface — contract class `MapToken`, WS events `map_token_update`/`map_token_drag`/`map_token_state_update`, hot/cold field `map_token_state`, slice `app/map_tokens/`, components `MapTokenLayer`/`MapTokenTray`. *Inside* the slice, contextually-obvious short names (`token`, `token_id`) are fine — readability over stutter.
+10. **The concept is named `MapToken`** (agreed 2026-07-19). Bare "token" collides with auth/Spotify tokens throughout the codebase, `CharacterToken` misnames NPC pieces, and `EntityToken` overloads DDD's "entity". **Boundary rule:** the qualified name is canonical at every shared surface — contract class `MapToken`, WS events `map_token_update`/`map_token_drag`/`map_token_state_update`, hot/cold field `map_token_state`, slice `app/map_tokens/`, components `MapTokenLayer`/`MapTokenChip`/`MapTokenCreator`. *Inside* the slice, contextually-obvious short names (`token`, `token_id`) are fine — readability over stutter.
+11. **Hold-lock on interaction** (Matt, 2026-07-20). While a token is actively grabbed, other players' grabs are **denied** — first hand on the mini wins; the loser's optimistic drag snaps back. This is a **concurrency lock, not an ownership check**: decision 2 stands untouched (anyone can still move any token — just not one currently in someone's hand). Server keeps an ephemeral in-memory per-room hold map (no Mongo); holds clear on release, holder disconnect, or staleness timeout.
+12. **v1 is markers-only** (Matt, 2026-07-20). Lane 2 sends `grab`/`release` only — token lifts with the "held by *name*" nameplate on remote clients, and lands at the committed position on release. Mid-drag `move` streaming is a **fast-follow**, not v1: the event contract reserves the `move` phase, and the client work on top is small (~throttled sends + remote lerp + staleness timer). The known relay risk to test before enabling it: `update_room_data` sends serially per client, so one slow client head-of-line-blocks the room (see §3.3).
+13. **Stacking allowed** (Matt, 2026-07-20). Two tokens on one square is legal — rejecting or resetting a deliberate drop would be movement-rule enforcement (axis 2). Last-moved renders on top so a stack is always separable; a cosmetic render-only fan-out is a future affordance if overlap annoys.
+14. **Placement homes in existing panels — no floating tray** (Matt, 2026-07-20). Player tokens live as chips in the **party drawer** (showing on-map/off-map state); placement is **drag from the drawer onto the map**. The DM's "+ Add token" (label + footprint) lives in **`CombatControlsPanel`** — UI housing only, no combat/initiative data linkage (decision 4 stands). Supersedes the §3.6 map-edge strip.
 
 ### Facilitate-don't-enforce, applied to tokens
 
@@ -110,30 +114,33 @@ server → { event_type: "map_token_state_update",
 
 Full-array-per-map fragment = atomic truth (fog's "no-flicker" philosophy; the array is tiny), while `op`/`updated_by` metadata drives attribution. Sender receives its own echo and treats it as authoritative reconciliation.
 
-**Lane 2 — ephemeral gesture stream (relay-only).** New WS event **`map_token_drag`**, following the `remote_audio_resume` precedent — validate, broadcast, **no Mongo write, no log**:
+**Lane 2 — ephemeral gesture stream (hold-lock + relay).** New WS event **`map_token_drag`** — **no Mongo write, no log**, but (per decision 11) no longer a pure stateless relay: the server keeps an **in-memory per-room hold map** `{room_id: {token_id: holder_user_id}}` in api-game:
 
 ```
 { event_type: "map_token_drag",
-  data: { asset_id, token_id, phase: "grab"|"move"|"release", x, y, holder_user_id } }
+  data: { asset_id, token_id, phase: "grab"|"release", x, y, holder_user_id } }
+  # phase "move" is RESERVED for the live-drag fast-follow (decision 12), not sent in v1
 ```
 
-- Client sends `grab` on pointer-capture, throttled `move` frames (~30–50 ms; spike tunes), `release` on pointer-up, then immediately commits via lane 1 (`op: "move"`).
-- Remote clients: `grab` → lift affordance + "held by *name*" nameplate; `move` → lerp toward relayed position; `release` → hold until the lane-1 fragment lands, then reconcile.
+- **`grab`** → if the token is unheld, server records the hold and broadcasts; if held, server sends a **deny** to just the requester (`map_token_drag_denied {token_id, held_by}`), no broadcast.
+- **Client grab is optimistic:** the local drag starts on pointerdown (no round-trip wait); on the rare deny, the drag cancels and the token snaps home. First hand on the mini wins.
+- **`release`** → server clears the hold and broadcasts; the client immediately commits via lane 1 (`op: "move"` — or `"place"` for a first drop from the drawer). Both messages ride the same WS connection, so per-sender ordering is preserved.
+- Remote clients: `grab` → lift affordance + "✋ held by *name*" nameplate + locally refuse grabs on that token; `release` → hold rendering until the lane-1 fragment lands, then reconcile.
 - Sender filters its own echo (`holder_user_id === thisUserId` → ignore).
-- **Ghost-drag cleanup:** any in-flight drag clears on (a) `release`, (b) `player_disconnect` broadcast for the holder, or (c) a client-side staleness timeout (~2 s without a frame) — token reverts to last committed position. Because lane 2 never touches state, a dropped stream loses nothing.
+- **Ghost-hold cleanup** (server + client mirror): a hold clears on (a) `release`, (b) holder disconnect (hook the existing disconnect path), or (c) a staleness timeout (~10 s server-side; clients also revert the lift on the same signal). A dropped stream loses nothing — the token stays at its last committed position.
+- **Fast-follow (live streaming):** enable throttled `move` frames (~30–50 ms) + remote lerp (~10 lines) + a ~2 s frame-staleness revert. Gate on the §3.3 head-of-line test, driven with devtools network throttling.
 
-**Why this respects the server-authoritative principle:** the rule protects *state*. Lane 2 is presence — "what someone's hand is doing" — and can never become state without the lane-1 commit, which the server alone writes. This is the same distinction the codebase already draws for `remote_audio_resume` and `combat_state`. The CLAUDE.md "HTTP API → MongoDB → broadcast" flow is, in the map domain's practice, "WS event → server Mongo write → broadcast" (`map_load`, `fog_config_update`) — same authority, different transport. Tokens follow the domain idiom.
+**Why this respects the server-authoritative principle:** the rule protects *state*. Lane 2 is presence — "what someone's hand is doing" — and can never become state without the lane-1 commit, which the server alone writes. The hold map is presence too: ephemeral, in-memory, dies with the process, never persisted. This is the same distinction the codebase already draws for `remote_audio_resume` and `combat_state`. The CLAUDE.md "HTTP API → MongoDB → broadcast" flow is, in the map domain's practice, "WS event → server Mongo write → broadcast" (`map_load`, `fog_config_update`) — same authority, different transport. Tokens follow the domain idiom.
 
 **Hydration:** `map_token_state` joins the WS `initial_state` payload (`app_websocket.py:36-52`) and the GET `/game/{room_id}` response (`app.py:271`) — late joiners and the initial HTTP room load both get the full board; no extra fetch. (No NGINX changes: everything rides existing `/ws/` and `/api/game/` routes.)
 
-### 3.3 Spike — PR 0 (decision gate)
+### 3.3 ~~Spike — PR 0~~ Dissolved (decided 2026-07-20)
 
-The open question is **not** whether the relay works (audio events already stream through it) but whether it holds at drag frequency:
+**PR 0 no longer exists.** Matt chose markers-only for v1 outright (decision 12), which removes the latency question from the v1 critical path — `grab`/`release` at human hand frequency is far below any relay concern. What the spike would have measured becomes the **gate on the live-drag fast-follow**, recorded here:
 
-- **Method:** temporarily register a `map_token_drag` echo-relay in api-game (the real lane-2 handler, ~20 lines) + a throwaway harness page/console script driving two browser clients through nginx-dev; measure relay RTT distribution at 20–30 Hz for 60 s, watch send-queue growth and CPU.
-- **Acceptance:** p95 relay latency comfortably under ~150 ms with 3+ connected clients; no unbounded asyncio send-queue growth; sub-pixel-threshold + Hz throttle constants chosen.
-- **Fallback if it disappoints:** v1 ships **markers-only** — `grab`/`release` (lift + "held by" nameplate) without mid-drag streaming; remote tokens jump on commit. Still feels like a table (you see the hand reach for the mini); live streaming becomes a fast-follow. Lane 1 is unaffected either way.
-- The spike branch is disposable; its output is the go/no-go and the tuning constants, recorded in this doc.
+- **Finding (code-read, 2026-07-20):** the original acceptance criterion ("no unbounded asyncio send-queue growth") watched the wrong failure mode. `ConnectionManager.update_room_data` (`connection_manager.py:182-204`) has **no send queue** — it's a serial loop of `await websocket.send_json(...)` per client. The real risk at 20–30 Hz is **head-of-line blocking**: one slow client's TCP backpressure delays every other client's frames.
+- **Fast-follow gate:** with the `move` phase enabled behind a config flag, Matt drives two browsers + one devtools-throttled third client; healthy clients' relay RTT must stay comfortably under ~150 ms p95 despite the throttled peer. If it degrades, fix candidates are per-connection send tasks or drop-stale-frames for lane 2 — decided then, not now.
+- **v1.1 BUILT (2026-07-21):** live-drag streaming shipped behind `LIVE_DRAG_STREAMING` in `map_tokens/config.js` (sender throttle 50 ms ≈ 20 Hz, remote lerp factor 0.3, frame staleness 2 s). Frames ride the existing `move` relay (no Mongo write, no log); the server refreshes the hold on each frame so long drags can't staleness-expire mid-stream. Remote animation is rAF + direct style writes off a ref — zero React re-renders per frame. The throttled-client test above remains the go/no-go: flip the flag off to revert to markers-only with zero rework.
 
 ### 3.4 New frontend slice: `app/map_tokens/`
 
@@ -143,10 +150,11 @@ Structural template: `fog_management` (hook-owned state at GameContent level, co
 app/map_tokens/
 ├── components/
 │   ├── MapTokenLayer.js      # contentRef child; renders discs + name subtitles; owns drag
-│   └── MapTokenTray.js       # thin placement strip (see 3.6)
-├── hooks/useMapTokens.js     # map_token_state slice of client state; per-map selector
-├── mapTokenWebSocketEvents.js # registerHandler('map_token_state_update'|'map_token_drag'), send fns
-├── config.js              # TOKEN_FOOTPRINTS, GRIDLESS_ASSUMED_CELL_PX, clamp, throttle Hz
+│   ├── MapTokenChip.js       # party-drawer chip: on-map/off-map state; drag-out placement (see 3.6)
+│   └── MapTokenCreator.js    # DM "+ Add token" (label + footprint), mounted in CombatControlsPanel
+├── hooks/useMapTokens.js     # map_token_state slice of client state; per-map selector; hold map mirror
+├── mapTokenWebSocketEvents.js # registerHandler('map_token_state_update'|'map_token_drag'|'map_token_drag_denied'), send fns
+├── config.js              # TOKEN_FOOTPRINTS, GRIDLESS_ASSUMED_CELL_PX, clamp, staleness timeouts
 └── index.js
 ```
 
@@ -165,11 +173,11 @@ app/map_tokens/
   - `move` → logged **only when mover ≠ owner**: "*Matt moved Elara's token*" — the social-correction signal. Routine own-token moves are NOT logged (they'd flood the 200-line log cap and inform nobody of anything).
 - Names resolved server-side via the existing `_display_name` helpers (never raw UUIDs in messages).
 
-### 3.6 Placement UX — MapTokenTray (thin)
+### 3.6 Placement UX — existing panels, no floating tray (decision 14)
 
-- A small collapsible strip (map area edge): every seated player's token appears here when **unplaced on the current map**; drag from tray → map places it (lane 1 `place`). Drag a placed token back to the tray (or context action) → `remove`.
-- DM additionally gets **"+ Add token"**: label + footprint picker (D&D size names) → creates an `npc` token in the tray. NPC discs default to a neutral/rose tone distinct from the 8 seat colors.
-- That is the whole tray. No token library, no search, no art.
+- **Players — `MapTokenChip` in the party drawer:** each party member's entry shows their token chip with on-map/off-map state. Placement is **drag from the drawer onto the map**: pointer capture on the chip, drop coordinates convert via the shared rect-ratio util (§7), drop commits lane 1 `place`. Drop outside the map = no-op snap-back. **Removal (revised 2026-07-21): the chip is the token's home** — while placed it shows a "↩ return" CTA that commits lane-1 `remove`. Right-click removal was dropped: the OS context menu wins that gesture.
+- **DM — `MapTokenCreator` in `CombatControlsPanel`:** "+ Add token" with label + footprint picker (D&D size names) → creates an `npc` token chip ready to drag out the same way. **The placed list derives from the board, not local drafts** (revised 2026-07-21): every npc token on the current map gets a return chip — including tokens placed before a refresh or from another browser — and recalling one rebuilds its draft so it's immediately re-placeable. Local drafts are just unplaced stamps (one draft can place on each map); discard (✕) only offered while unplaced. UI housing only — no combat/initiative data linkage (decision 4). NPC discs default to **DM-rose** (Matt, 2026-07-20), distinct from character colors.
+- No token library, no search, no art.
 
 ### 3.7 ETL & persistence (split: PR 2 ships the preens, PR 5 ships token persistence)
 
@@ -208,23 +216,24 @@ All items here are the same move — a contract field pair (`SessionStartPayload
 
 ## 4. PR sequence
 
-Two tracks. The **preen track (PRs 1–2) ships first, releasable immediately** — no token dependency, and it proves the contract-bump + ETL machinery on small PRs before tokens lean on it. The **token track (PRs 0, 3–5)** follows.
+Two tracks. The **preen track (PRs 1–2) is SHIPPED** — landed on main via PR #148, verified 2026-07-20; the ETL wiring tokens lean on is proven. The **token track (PRs 3–5)** remains. PR 0 (spike) is dissolved per §3.3.
 
 | PR | Contents | Pattern fit |
 |---|---|---|
-| **1 — Character color** *(preen, next release)* | §3.8 in full: `characters.color` column (autogenerate); `color` on `PlayerCharacter` + `PlayerState` contracts and the character-summary endpoint; `color_change` re-pointed to `player_metadata` + seat-colors dict/endpoint removal; hot→cold color sync at pause/finish; frontend derivation swap + picker "in use by X" hint. | character rails: `_build_session_users`, `fetch_character_summary`, HP-sync precedent (`DisconnectFromGame`) |
-| **2 — ETL preen: adventure log + audio fix** *(preen, next release)* | Adventure log hot+cold per §3.7 (`LogEntry` contract, `sessions.adventure_log` JSONB, seed/extract); `audio_track_config` restore fix. Both edit the same two ETL functions — one PR, one migration. | `spotify_config` full-dump precedent (`session_model.py:62`); `_extract_and_sync_game_state` |
-| **0 — Spike** *(token track; any time before PR 3)* | `map_token_drag` relay + latency harness; go/no-go on live-drag; tuning constants. Disposable branch. | `remote_audio_resume` (`websocket_events.py:871`) |
-| **3 — Tokens: contracts + hot backend** | `shared_contracts/map_token.py`; `GameSettings.map_token_state`; `map_token_update` handler (place/move/remove/configure, atomic array ops) + `map_token_state_update` broadcast; `initial_state` + GET room hydration; log templates + attribution rules; **fix `broadcast_to_room` AttributeError (`app.py:847`)**. | fog handler (`websocket_events.py:1470-1501`), `mapservice.update_fog_config` |
-| **4 — Tokens: frontend slice** | `map_tokens` slice; MapTokenLayer (render, drag, snap, echo-filter, reconciliation) + MapTokenTray; lane-2 live-drag per spike verdict (held-by nameplate ships regardless); **z-order re-stack incl. grid-above-fog**; character-color/name derivation. | `fog_management` slice; FogRegionStack drag (`:140-190`); GridOverlay math (`:34-60`) |
+| **1 — Character color** ✅ *shipped (PR #148)* | §3.8 in full: `characters.color` column (autogenerate); `color` on `PlayerCharacter` + `PlayerState` contracts and the character-summary endpoint; `color_change` re-pointed to `player_metadata` + seat-colors dict/endpoint removal; hot→cold color sync at pause/finish; frontend derivation swap + picker "in use by X" hint. | character rails: `_build_session_users`, `fetch_character_summary`, HP-sync precedent (`DisconnectFromGame`) |
+| **2 — ETL preen: adventure log + audio fix** ✅ *shipped (PR #148)* | Adventure log hot+cold per §3.7 (`LogEntry` contract, `sessions.adventure_log` JSONB, seed/extract); `audio_track_config` restore fix. Both edit the same two ETL functions — one PR, one migration. | `spotify_config` full-dump precedent (`session_model.py:62`); `_extract_and_sync_game_state` |
+| ~~0 — Spike~~ | **Dissolved 2026-07-20** (§3.3): markers-only v1 removes the latency question; the measurement becomes the live-drag fast-follow gate. | — |
+| **3 — Tokens: contracts + hot backend** | `shared_contracts/map_token.py`; `GameSettings.map_token_state`; `map_token_update` handler (place/move/remove/configure, atomic array ops) + `map_token_state_update` broadcast; `map_token_drag` grab/release handler + **in-memory hold map** (grab-deny, disconnect/staleness cleanup — decision 11); `initial_state` + GET room hydration; log templates + attribution rules. *(`broadcast_to_room` AttributeError already fixed on main via PR #148.)* | fog handler (`websocket_events.py:1470-1501`), `mapservice.update_fog_config`, `remote_audio_resume` relay shape |
+| **4 — Tokens: frontend slice** | `map_tokens` slice; MapTokenLayer (render, drag, snap, echo-filter, reconciliation, optimistic-grab + deny snap-back, last-moved-on-top stacking) + MapTokenChip (party drawer, drag-out placement) + MapTokenCreator (CombatControlsPanel); held-by nameplate; **z-order re-stack incl. grid-above-fog**; character-color/name derivation. Markers-only (decision 12) — no `move` streaming. | `fog_management` slice; FogRegionStack drag (`:140-190`); GridOverlay math (`:34-60`) |
 | **5 — Tokens: session persistence** | `map_token_state` ETL fields + `sessions.map_token_state` JSONB + orphan pruning (§3.7) — a field-for-field repeat of the pattern PR 2 proved; resume verified through manual pause **and** the expiry sweeper. | PR 2's own wiring |
 
 Each PR is independently shippable: 1 and 2 preen the product on their own; 3+4 deliver the live token feature (tokens work, vanish at pause); 5 completes persistence. GPL headers on all new source files. No NGINX changes. No `authFetch` concern for tokens (WS-only); the color picker's only cold write happens server-side via ETL, so no new authenticated frontend calls there either.
 
 ## 5. What we will NOT build (v1 discipline)
 
-- No movement-range/wall/turn **enforcement of any kind**, and no reactive warnings (axis 2 is fully open)
-- No permission checks on moving others' tokens — attribution only
+- No movement-range/wall/turn **enforcement of any kind**, and no reactive warnings (axis 2 is fully open) — including **no stacking rejection**: two tokens on one square is legal (decision 13)
+- No permission checks on moving others' tokens — attribution only (the decision-11 hold-lock is transient concurrency while a token is in someone's hand, not permission)
+- No mid-drag position streaming in v1 (decision 12) — `move` phase reserved; fast-follow gated on the §3.3 head-of-line test
 - No combat/initiative integration
 - No token artwork/images (seat-color discs only)
 - No auto re-snap on grid retune (manual DM "re-snap all" is a *future* affordance at most)
@@ -234,11 +243,11 @@ Each PR is independently shippable: 1 and 2 preen the product on their own; 3+4 
 
 ## 6. Open questions for Matt
 
-1. **Spike gate:** if live-drag misses the latency bar, ship v1 as markers-only (grab/release + nameplate) with streaming as fast-follow — pre-agree this fallback?
-2. **MapTokenTray placement/behavior** (§3.6): thin strip on the map edge acceptable for v1, or should unplaced-token access live in an existing panel (e.g. party drawer)?
-3. **NPC default color:** neutral graphite vs DM-rose — any preference?
+1. ~~Spike gate~~ **Resolved 2026-07-20:** markers-only chosen for v1 outright (decision 12); streaming is a gated fast-follow (§3.3).
+2. ~~MapTokenTray placement~~ **Resolved 2026-07-20:** party-drawer chips + DM creator in CombatControlsPanel, drag-from-drawer placement (decision 14, §3.6).
+3. ~~NPC default color~~ **Resolved 2026-07-20:** DM-rose.
 4. Confirm cross-session-entity behavior (clean board on a brand-new session) matches your reading of "save between session."
-5. **Persist `seat_layout`?** (Colors are resolved — they live on the character, §3.8.) Persisting the *layout* would let returning players find their seats pre-assigned on resume — but it changes the join flow (a seat shows its absent owner until they reconnect). If wanted, it fits naturally in **PR 2** (the session-resume preen) — same contract bump, same wiring pass.
+5. **Persist `seat_layout`?** (Colors are resolved — they live on the character, §3.8.) Persisting the *layout* would let returning players find their seats pre-assigned on resume — but it changes the join flow (a seat shows its absent owner until they reconnect). PR 2 shipped without it, so if wanted it becomes its own small preen PR (same contract-bump + ETL wiring pattern).
 
 ---
 
@@ -271,8 +280,7 @@ Rollplay is a desktop app (§3.4) — QA is desktop-browser, two-window/two-mach
 
 - **PR 1 (color):** unit-test the aggregate change; two-browser QA: change color mid-session → both browsers repaint seat + log borders; swap seats → **color follows the character, not the seat**; pause/resume → color survives; new session → color still there (character-owned durability).
 - **PR 2 (ETL preen):** pause → inspect `sessions.adventure_log` via `docker exec postgres-dev psql` → resume → log history returns in the drawer; audio: tweak a track, swap it out of its channel, pause, resume, re-load the track → tweaks intact (the §2-defect-3 repro, now fixed); both paths repeated via the **expiry sweeper** (short `urls_expire_at`).
-- **PR 0 (spike):** RTT distribution + asyncio send-queue behavior recorded **in this doc** with the go/no-go and chosen constants. Honest numbers need a second machine on a real network, not two tabs on localhost.
-- **PR 3 (token hot backend):** unit-test the token op application (place/move/remove/configure against the array, including same-token last-write-wins and different-token non-clobber); contract round-trip serialization.
-- **PR 4 (token frontend):** two-browser QA checklist: place from tray syncs; drag → remote glides (or lifts+lands, per spike verdict); echo reconciliation doesn't double-move the dragger's token; snap on gridded map / free placement on gridless; "held by" nameplate; wrong-token move → attribution log line; z-order — grid visibly above fog, tokens above all; footprint sizes render at cell multiples.
+- **PR 3 (token hot backend):** unit-test the token op application (place/move/remove/configure against the array, including same-token last-write-wins and different-token non-clobber); hold-map behavior (grab-deny while held, clear on release/disconnect/staleness); contract round-trip serialization.
+- **PR 4 (token frontend):** two-browser QA checklist: drag chip from party drawer onto map syncs; drag a placed token → remote lifts with "held by" nameplate, lands on release commit; second browser grabs a held token → denied, snaps home; echo reconciliation doesn't double-move the dragger's token; snap on gridded map / free placement on gridless; two tokens dropped on one cell → both stay, last-moved on top; wrong-token move → attribution log line; z-order — grid visibly above fog, tokens above all; footprint sizes render at cell multiples. *(Live-drag fast-follow, when attempted: devtools-throttled third client per §3.3.)*
 - **PR 5 (token persistence):** pause → inspect `sessions.map_token_state` via psql → resume → board returns; expiry-sweeper repeat; deleted-map orphan pruning logged.
 - **Process:** `/code-review` runs before each commit is proposed; Matt runs all git writes and the alembic autogenerate commands; every contract-touching PR (1, 2, 3, 5) requires rebuilding **both** api images (stale-deps gotcha). Dev-loop caveat: HMR is broken in Docker dev — frontend QA iterations need the cache-clear+restart cycle or a local `npm run dev`.

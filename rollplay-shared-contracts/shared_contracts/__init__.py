@@ -11,6 +11,7 @@ from .cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionCo
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
+from .map_token import MapToken
 from .session import (
     PlayerState,
     SessionEndFinalState,
@@ -39,6 +40,7 @@ __all__ = [
     "GridConfig",
     "ImageConfig",
     "MapConfig",
+    "MapToken",
     "FilmGrainOverlay",
     "VisualOverlay",
     "PlayerState",
