@@ -51,10 +51,10 @@ class MediaAsset(Base):
 
     # Associations (many-to-many via ARRAY for POC simplicity)
     # Full implementation may use junction tables
-    campaign_ids = Column(ARRAY(UUID(as_uuid=True)), default=[], nullable=False)
+    campaign_ids = Column(ARRAY(UUID(as_uuid=True)), default=list, nullable=False)
 
     # User-created searchable tags (normalized lowercase in the aggregate)
-    tags = Column(ARRAY(String), default=[], server_default=text("'{}'"), nullable=False)
+    tags = Column(ARRAY(String), default=list, server_default=text("'{}'"), nullable=False)
 
     # Library favorite flag (starred in the dashboard library)
     favorite = Column(Boolean, default=False, server_default=text("false"), nullable=False)

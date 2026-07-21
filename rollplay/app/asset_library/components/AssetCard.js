@@ -10,7 +10,7 @@ import Badge from '@/app/shared/components/Badge'
 import AudioWaveThumb from './AudioWaveThumb'
 
 export function formatFileSize(bytes) {
-  if (!bytes) return 'Unknown size'
+  if (bytes == null) return 'Unknown size'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`

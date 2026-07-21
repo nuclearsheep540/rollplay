@@ -8,12 +8,9 @@ AssetCollection Repository - Data access layer for AssetCollection aggregate
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as DbSession
-import logging
 
 from modules.library.model.collection_model import AssetCollectionModel
 from modules.library.domain.collection_aggregate import AssetCollectionAggregate
-
-logger = logging.getLogger(__name__)
 
 
 class AssetCollectionRepository:

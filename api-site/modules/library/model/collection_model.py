@@ -44,7 +44,7 @@ class AssetCollectionModel(Base):
     )
 
     # Manual collections: explicit member asset ids
-    asset_ids = Column(ARRAY(UUID(as_uuid=True)), default=[], server_default=text("'{}'"), nullable=False)
+    asset_ids = Column(ARRAY(UUID(as_uuid=True)), default=list, server_default=text("'{}'"), nullable=False)
 
     # Smart collections: stored filter query
     # { "version": 1, "types": [...], "tags": [...], "campaigns": [...], "text": "" }
