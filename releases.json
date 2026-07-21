@@ -1,5 +1,5 @@
 {
-  "latest": "0.58.0",
+  "latest": "0.59.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -713,6 +713,21 @@
       "services": {
         "app": "0.41.0",
         "api_site": "0.37.0",
+        "api_game": "0.27.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.9.0",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.59.0": {
+      "date": "2026-07-21",
+      "commit": "d5054a6",
+      "description": "Updated Libary UI + Character UI bugfixes",
+      "services": {
+        "app": "0.42.0",
+        "api_site": "0.38.0",
         "api_game": "0.27.0",
         "api_auth": "0.3.0",
         "nginx": "0.9.0",
