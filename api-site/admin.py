@@ -59,6 +59,9 @@ from modules.library.model.asset_model import MediaAsset  # noqa: F401
 from modules.library.model.map_asset_model import MapAssetModel  # noqa: F401
 from modules.library.model.music_asset_model import MusicAssetModel  # noqa: F401
 from modules.library.model.sfx_asset_model import SfxAssetModel  # noqa: F401
+from modules.library.model.image_asset_model import ImageAssetModel  # noqa: F401
+from modules.library.model.preset_model import PresetModel  # noqa: F401
+from integrations.spotify.models import SpotifyAccount  # noqa: F401
 from modules.session.application.commands import PauseSession
 from modules.session.repositories.session_repository import SessionRepository
 from modules.user.repositories.user_repository import UserRepository
@@ -67,6 +70,27 @@ from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.events.repositories.notification_repository import NotificationRepository
 from modules.events.websocket_manager import event_connection_manager
 from modules.events.event_manager import EventManager
+
+
+def _run_draining_tasks(coroutine):
+    """Run an async command and let its fire-and-forget tasks finish.
+
+    asyncio.run() closes its loop the moment the main coroutine returns,
+    CANCELLING anything still scheduled — and PauseSession spawns its phase-3
+    cleanup (api-game room delete + "Session ended" socket close) via
+    asyncio.create_task. The app's long-lived loop never hits this; a fresh
+    CLI loop does. So: await the command, then drain every remaining task
+    before the loop closes. Cleanup failures log themselves and the hourly
+    orphan cron remains the backstop, exactly as in the app.
+    """
+    async def run_then_drain():
+        result = await coroutine
+        pending = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        return result
+
+    return asyncio.run(run_then_drain())
 
 
 @click.group()
@@ -122,7 +146,7 @@ def _build_pause_command(db, session_repo):
 @admin.command("pause-all")
 @click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
 def pause_all_sessions(yes):
-    """Gracefully pause EVERY active session will full ETL.
+    """Gracefully pause EVERY active session with full ETL.
 
     Sessions are paused independently — one wedged game doesn't block the
     rest (sweeper pattern). Exit code is non-zero if any session failed.
@@ -148,7 +172,7 @@ def pause_all_sessions(yes):
                 # Optional ids for the type checker.
                 continue
             try:
-                asyncio.run(pause.execute(session.id, host_id=session.host_id))
+                _run_draining_tasks(pause.execute(session.id, host_id=session.host_id))
                 click.echo(f"  paused  {session.id} ('{session.name}')")
                 paused_count += 1
             except ValueError as reason:
@@ -190,7 +214,7 @@ def pause_session(session_id):
         pause = _build_pause_command(db, session_repo)
 
         try:
-            asyncio.run(pause.execute(session.id, host_id=session.host_id))
+            _run_draining_tasks(pause.execute(session.id, host_id=session.host_id))
         except ValueError as reason:
             # PauseSession's ACTIVE-only guard and ETL failures surface here
             # with self-explanatory messages (session already paused, api-game
