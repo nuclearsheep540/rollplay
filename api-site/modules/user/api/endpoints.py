@@ -19,7 +19,7 @@ from .schemas import (
 )
 from modules.user.dependencies.providers import user_repository
 from modules.user.repositories.user_repository import UserRepository
-from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, UpdateUserColor, SoftDeleteUser, HardDeleteUser
+from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, UpdateUserColor, SoftDeleteUser, HardDeleteUser, UserNotFoundError
 from modules.user.application.queries import GetUserDashboard, GetUserByEmail
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.campaign.dependencies.providers import campaign_repository
@@ -522,6 +522,11 @@ async def update_screen_name(
 
         return _to_user_response(updated_user)
 
+    except UserNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -550,6 +555,11 @@ async def update_user_color(
 
         return _to_user_response(updated_user)
 
+    except UserNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
