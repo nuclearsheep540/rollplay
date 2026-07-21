@@ -79,6 +79,16 @@ class SessionRepository:
         models = self.db.query(SessionModel).order_by(SessionModel.created_at.desc()).all()
         return [self._model_to_aggregate(model) for model in models]
 
+    def get_active_sessions(self) -> List[SessionEntity]:
+        """All currently ACTIVE sessions — the admin command's work list."""
+        models = (
+            self.db.query(SessionModel)
+            .filter(SessionModel.status == SessionStatus.ACTIVE.value)
+            .order_by(SessionModel.started_at.desc())
+            .all()
+        )
+        return [self._model_to_aggregate(model) for model in models]
+
     def save(self, aggregate: SessionEntity) -> UUID:
         """Save session aggregate"""
         if aggregate.id:

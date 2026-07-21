@@ -17,3 +17,4 @@ cryptography==43.0.1  # RSA signing for CloudFront signed URLs
 livekit-api==0.8.2  # LiveKit server SDK for AccessToken minting (sandbox/stream)
 mistune==3.0.2  # Markdown AST parser used by scripts/parse_srd.py
 beautifulsoup4==4.12.3  # HTML table parser used by scripts/parse_srd.py
+click==8.4.2  # Admin management commands (admin.py) — already present transitively via uvicorn, pinned here because we import it directly
