@@ -1,5 +1,5 @@
 {
-  "latest": "0.56.0",
+  "latest": "0.57.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -683,6 +683,21 @@
       "services": {
         "app": "0.41.0",
         "api_site": "0.36.0",
+        "api_game": "0.27.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.9.0",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.57.0": {
+      "date": "2026-07-21",
+      "commit": "ba53460",
+      "description": "Added admin commands",
+      "services": {
+        "app": "0.41.0",
+        "api_site": "0.37.0",
         "api_game": "0.27.0",
         "api_auth": "0.3.0",
         "nginx": "0.9.0",
