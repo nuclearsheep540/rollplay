@@ -179,8 +179,9 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
             </div>
           )}
 
-          {/* Controls Sidebar */}
-          <div className="w-72 flex-shrink-0 overflow-y-auto">
+          {/* Controls Sidebar - same onyx pane as the library rail and
+              the other workshop tool panels */}
+          <div className="w-72 flex-shrink-0 overflow-y-auto rounded-sm border border-border bg-surface-elevated p-4">
             <ImageDisplayControls
               imageFit={imageFit}
               aspectRatio={aspectRatio}

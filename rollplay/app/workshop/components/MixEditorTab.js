@@ -33,7 +33,7 @@ export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
   const mix = useWorkshopMixEngine(selectedPreset);
 
   return (
-    <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
+    <div className="flex flex-col h-full border border-border bg-surface-elevated overflow-hidden">
       <FileMenuBar
         items={[
           {

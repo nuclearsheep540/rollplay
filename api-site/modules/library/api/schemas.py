@@ -31,7 +31,7 @@ class ConfirmUploadRequest(BaseModel):
 
 
 class AssociateRequest(BaseModel):
-    """Request to associate a media asset with a campaign"""
+    """Request to associate/disassociate a media asset with a campaign"""
     campaign_id: UUID = Field(..., description="Campaign to associate with")
 
 

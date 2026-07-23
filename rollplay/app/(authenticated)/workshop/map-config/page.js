@@ -5,7 +5,6 @@
 
 'use client'
 
-import { useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MapConfigTool from '@/app/workshop/components/MapConfigTool'
 
@@ -24,31 +23,44 @@ export default function MapConfigPage() {
     ? searchParams.get('tool')
     : 'move'
 
-  // Capture the entry point once on mount (library vs workshop navigation)
-  const entryFromRef = useRef(null)
-  if (entryFromRef.current === null) {
-    entryFromRef.current = searchParams.get('from') || 'workshop'
-  }
+  // Entry point (library vs workshop) rides the URL and is carried
+  // through every internal navigation, so it survives refresh and
+  // deep links - no mount-time capture needed.
+  const fromLibrary = searchParams.get('from') === 'library'
+  const fromSuffix = fromLibrary ? '&from=library' : ''
 
   const backLabel = !selectedAssetId
     ? 'Workshop'
-    : entryFromRef.current === 'library' ? 'Library' : 'Map Config'
+    : fromLibrary ? 'Library' : 'Map Config'
 
   // URL is the source of truth for both asset and tool selection.
   const handleAssetSelect = (assetId) => {
     if (assetId) {
-      router.push(`/workshop/map-config?asset_id=${assetId}&tool=${tool}`)
+      router.push(`/workshop/map-config?asset_id=${assetId}&tool=${tool}${fromSuffix}`)
     } else {
       router.push('/workshop/map-config')
     }
   }
 
+  // Tool changes are editor state, not navigation - replace keeps them
+  // out of history so the browser back button skips the tool clicks too.
   const handleToolChange = (toolId) => {
     if (!selectedAssetId) return
-    router.push(`/workshop/map-config?asset_id=${selectedAssetId}&tool=${toolId}`)
+    router.replace(`/workshop/map-config?asset_id=${selectedAssetId}&tool=${toolId}${fromSuffix}`)
   }
 
-  const handleBack = () => router.back()
+  // Explicit destinations instead of router.back(): history depth varies
+  // with how the user got here (and back() leaves the app entirely on a
+  // pasted link), so each state names the place its backLabel promises.
+  const handleBack = () => {
+    if (!selectedAssetId) {
+      router.push('/dashboard?tab=workshop')
+    } else if (fromLibrary) {
+      router.push('/dashboard?tab=library')
+    } else {
+      router.push('/workshop/map-config')
+    }
+  }
 
   return (
     <main className="flex-1 min-h-0">

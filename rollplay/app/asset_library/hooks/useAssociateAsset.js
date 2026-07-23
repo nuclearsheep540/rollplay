@@ -5,18 +5,19 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
- * Mutation hook for associating an asset with a campaign.
+ * Mutation hook for an asset's campaign association.
  *
- * @returns TanStack mutation with mutate({ assetId, campaignId })
+ * @returns TanStack mutation with mutate({ assetId, campaignId, member })
+ *   - member true (the default) associates, false removes the association
  */
 export function useAssociateAsset() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ assetId, campaignId }) => {
+    mutationFn: async ({ assetId, campaignId, member = true }) => {
       const body = { campaign_id: campaignId }
 
-      const response = await authFetch(`/api/library/${assetId}/associate`, {
+      const response = await authFetch(`/api/library/${assetId}/${member ? 'associate' : 'disassociate'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -24,7 +25,9 @@ export function useAssociateAsset() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to associate asset')
+        throw new Error(errorData.detail || (member
+          ? 'Failed to associate asset'
+          : 'Failed to remove asset from campaign'))
       }
 
       return response.json()

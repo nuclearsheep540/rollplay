@@ -451,6 +451,53 @@ class AssociateWithCampaign:
         return asset
 
 
+class DisassociateFromCampaign:
+    """
+    Remove a media asset's association with a campaign.
+    """
+
+    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+        self.repository = repository
+        self.session_repository = session_repository
+
+    def execute(
+        self,
+        asset_id: UUID,
+        campaign_id: UUID,
+        user_id: UUID
+    ) -> MediaAssetAggregate:
+        """
+        Disassociate media asset from campaign.
+
+        Args:
+            asset_id: The asset to disassociate
+            campaign_id: The campaign to remove the association with
+            user_id: The requesting user's ID
+
+        Returns:
+            Updated MediaAssetAggregate
+
+        Raises:
+            ValueError: If asset not found or not owned by user
+            AssetInUseError: If asset is in an active session
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        if self.session_repository:
+            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+
+        asset.disassociate_from_campaign(campaign_id)
+
+        self.repository.save(asset)
+
+        return asset
+
+
 class UpdateGridConfig:
     """
     Update grid configuration for a map asset.

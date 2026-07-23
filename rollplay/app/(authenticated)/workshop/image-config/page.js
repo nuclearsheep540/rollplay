@@ -5,7 +5,6 @@
 
 'use client'
 
-import { useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft, faHouse } from '@fortawesome/free-solid-svg-icons'
@@ -19,18 +18,31 @@ export default function ImageConfigPage() {
   const searchParams = useSearchParams()
   const selectedAssetId = searchParams.get('asset_id')
 
-  const entryFromRef = useRef(null)
-  if (entryFromRef.current === null) {
-    entryFromRef.current = searchParams.get('from') || 'workshop'
-  }
+  // Entry point (library vs workshop) rides the URL and is carried
+  // through every internal navigation, so it survives refresh and
+  // deep links - no mount-time capture needed.
+  const fromLibrary = searchParams.get('from') === 'library'
 
   const backLabel = !selectedAssetId
     ? 'Workshop'
-    : entryFromRef.current === 'library' ? 'Library' : 'Image Config'
+    : fromLibrary ? 'Library' : 'Image Config'
 
   const handleAssetSelect = (assetId) => {
     if (assetId) {
-      router.push(`/workshop/image-config?asset_id=${assetId}`)
+      router.push(`/workshop/image-config?asset_id=${assetId}${fromLibrary ? '&from=library' : ''}`)
+    } else {
+      router.push('/workshop/image-config')
+    }
+  }
+
+  // Explicit destinations instead of router.back(): history depth varies
+  // with how the user got here (and back() leaves the app entirely on a
+  // pasted link), so each state names the place its backLabel promises.
+  const handleBack = () => {
+    if (!selectedAssetId) {
+      router.push('/dashboard?tab=workshop')
+    } else if (fromLibrary) {
+      router.push('/dashboard?tab=library')
     } else {
       router.push('/workshop/image-config')
     }
@@ -58,7 +70,7 @@ export default function ImageConfigPage() {
             </button>
           )}
           <button
-            onClick={() => router.back()}
+            onClick={handleBack}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
           >
             <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />

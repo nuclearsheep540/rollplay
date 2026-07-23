@@ -9,6 +9,7 @@ Provides REST endpoints for media asset management:
 - POST /confirm - Confirm upload and create media asset record
 - GET / - List media assets with optional filters
 - POST /{id}/associate - Associate media asset with campaign
+- POST /{id}/disassociate - Remove media asset's campaign association
 - DELETE /{id} - Delete media asset
 """
 
@@ -28,7 +29,7 @@ from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import (
-    ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset,
+    ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, DisassociateFromCampaign, RenameMediaAsset,
     ChangeAssetType, UpdateAssetTags, SetAssetFavorite,
     UpdateGridConfig, UpdateFogConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError,
     CreatePreset, RenamePreset, UpdatePresetSlots, DeletePreset,
@@ -680,6 +681,43 @@ async def associate_media_asset(
     except Exception as e:
         logger.error(f"Associate media asset error: {e}")
         raise HTTPException(status_code=500, detail="Failed to associate media asset")
+
+
+@router.post("/{asset_id}/disassociate", response_model=MediaAssetResponse)
+async def disassociate_media_asset(
+    asset_id: UUID,
+    request: AssociateRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Remove a media asset's association with a campaign.
+    """
+    try:
+        command = DisassociateFromCampaign(repo, session_repo)
+        asset = command.execute(
+            asset_id=asset_id,
+            campaign_id=request.campaign_id,
+            user_id=current_user.id
+        )
+
+        logger.info(f"Disassociated media asset {asset_id} from campaign {request.campaign_id}")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except AssetInUseError as e:
+        logger.warning(f"Disassociate media asset blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Disassociate media asset failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Disassociate media asset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to disassociate media asset")
 
 
 @router.patch("/{asset_id}", response_model=MediaAssetResponse)

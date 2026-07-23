@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faUpload, faTrash, faEye, faPen, faTags, faShapes, faSliders,
-  faStar, faTableCellsLarge, faList, faBolt, faFolder, faSquareCheck,
+  faStar, faTableCellsLarge, faList, faBolt, faFolder, faSquareCheck, faFlag,
 } from '@fortawesome/free-solid-svg-icons'
 import { useAssets } from '../hooks/useAssets'
 import { useAssetCount } from '../hooks/useAssetCount'
@@ -405,6 +405,7 @@ export default function AssetLibraryManager({ user }) {
       if (ownedCampaigns.length > 0) {
         bulkItems.push({
           label: `Add ${count} to Campaign`,
+          icon: <FontAwesomeIcon icon={faFlag} className="text-xs" />,
           subItems: ownedCampaigns.map(campaign => ({
             label: campaign.title,
             onClick: () => bulkAddToCampaign(campaign, targets),
@@ -488,7 +489,7 @@ export default function AssetLibraryManager({ user }) {
         subItems: manualCollections.map(collection => {
           const isMember = (collection.asset_ids || []).includes(asset.id)
           return {
-            label: isMember ? `✓ ${collection.name}` : collection.name,
+            label: collection.name,
             active: isMember,
             onClick: () => collectionMemberMutation.mutate({
               collectionId: collection.id,
@@ -500,23 +501,31 @@ export default function AssetLibraryManager({ user }) {
       })
     }
 
-    // Add to Campaign sub-menu (only campaigns the user owns)
+    // Campaigns sub-menu - toggle association per campaign, mirroring
+    // the Collections menu (only campaigns the user owns)
     if (ownedCampaigns.length > 0) {
       items.push({
-        label: 'Add to Campaign',
-        subItems: ownedCampaigns.map(campaign => ({
-          label: campaign.title,
-          disabled: asset.campaign_ids?.includes(campaign.id),
-          active: asset.campaign_ids?.includes(campaign.id),
-          onClick: () => associateMutation.mutate({ assetId: asset.id, campaignId: campaign.id }),
-        })),
+        label: 'Campaigns',
+        icon: <FontAwesomeIcon icon={faFlag} className="text-xs" />,
+        subItems: ownedCampaigns.map(campaign => {
+          const isMember = (asset.campaign_ids || []).includes(campaign.id)
+          return {
+            label: campaign.title,
+            active: isMember,
+            onClick: () => associateMutation.mutate({
+              assetId: asset.id,
+              campaignId: campaign.id,
+              member: !isMember,
+            }),
+          }
+        }),
       })
     }
 
     // Workshop bridge - asset-type-specific tools
     if (asset.asset_type === 'map') {
       items.push({
-        label: 'Configure Grid',
+        label: 'Configure Map',
         icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
         onClick: () => router.push(`/workshop/map-config?asset_id=${asset.id}&from=library`),
       })

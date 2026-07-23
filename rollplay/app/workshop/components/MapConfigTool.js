@@ -5,12 +5,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faHouse, faFileImport, faFloppyDisk, faCheckDouble } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faHouse, faFileImport, faFloppyDisk, faCheckDouble, faRotateLeft, faRotateRight } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
 import MapConfigToolbar from './MapConfigToolbar';
-import MapConfigUndoRedo from './MapConfigUndoRedo';
+import MapConfigUndoRedo, { UNDO_HINT, REDO_HINT } from './MapConfigUndoRedo';
 import WorkshopGridControls from './WorkshopGridControls';
 import FileMenuBar from './FileMenuBar';
 import { MapDisplay } from '@/app/map_management';
@@ -532,7 +532,7 @@ export default function MapConfigTool({
         </div>
 
         {/* Right — tool panel */}
-        <div className="w-72 flex-shrink-0 overflow-y-auto bg-surface-secondary">
+        <div className="w-72 flex-shrink-0 overflow-y-auto bg-surface-elevated">
           {isMoveTool && (
             <div className="p-4 text-xs text-content-secondary leading-relaxed">
               <p className="text-content-on-dark font-semibold mb-2">Move tool</p>
@@ -630,10 +630,20 @@ export default function MapConfigTool({
 
 function TopBar({ onBack, backLabel, fileMenuItems, title, history, onUndo, onRedo }) {
   const router = useRouter();
+  const menus = [{ label: 'File', items: fileMenuItems }];
+  if (history) {
+    menus.push({
+      label: 'Edit',
+      items: [
+        { label: 'Undo', icon: faRotateLeft, onClick: onUndo, disabled: !history.canUndo, hint: UNDO_HINT },
+        { label: 'Redo', icon: faRotateRight, onClick: onRedo, disabled: !history.canRedo, hint: REDO_HINT },
+      ],
+    });
+  }
   return (
     <>
-      <FileMenuBar items={fileMenuItems} />
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-secondary text-xs flex-shrink-0">
+      <FileMenuBar menus={menus} />
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-elevated text-xs flex-shrink-0">
         <div className="text-content-secondary uppercase tracking-wider">
           <span className="text-content-on-dark font-semibold">Map Config</span>
           {title && (
@@ -655,7 +665,7 @@ function TopBar({ onBack, backLabel, fileMenuItems, title, history, onUndo, onRe
           )}
           <button
             onClick={() => router.push('/dashboard')}
-            className="flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-secondary hover:bg-surface-elevated hover:text-content-on-dark transition-colors"
+            className="flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-secondary hover:bg-surface-hover hover:text-content-on-dark transition-colors"
           >
             <FontAwesomeIcon icon={faHouse} className="text-[10px]" />
             <span>Dashboard</span>
@@ -663,7 +673,7 @@ function TopBar({ onBack, backLabel, fileMenuItems, title, history, onUndo, onRe
           {onBack && (
             <button
               onClick={onBack}
-              className="flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-secondary hover:bg-surface-elevated hover:text-content-on-dark transition-colors"
+              className="flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-secondary hover:bg-surface-hover hover:text-content-on-dark transition-colors"
             >
               <FontAwesomeIcon icon={faArrowLeft} className="text-[10px]" />
               <span>{backLabel}</span>
