@@ -255,7 +255,13 @@ export function useAssetDownload(url, fileSize, assetId) {
       setBlobUrl(objectUrl);
       setReady(true);
     }).catch(() => {
-      if (!cancelled) setReady(false);
+      if (cancelled) return;
+      // Download failed (typically CORS on the CDN, which fetch() is
+      // subject to but <img> embedding is not) - fall back to the raw
+      // URL so the asset still displays. Costs byte-progress tracking
+      // and blob caching for this asset only.
+      setBlobUrl(url);
+      setReady(true);
     });
 
     return () => {
