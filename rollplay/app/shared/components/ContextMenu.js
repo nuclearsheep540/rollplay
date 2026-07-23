@@ -66,7 +66,7 @@ export default function ContextMenu({ children, items }) {
                           className={`group flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-default data-[highlighted]:bg-interactive-hover data-[highlighted]:text-content-bold ${
                             subItem.active
                               ? 'text-content-secondary'
-                              : 'text-content-on-dark disabled:opacity-50 disabled:pointer-events-none'
+                              : 'text-content-on-dark data-[disabled]:opacity-50 data-[disabled]:pointer-events-none'
                           }`}
                           disabled={subItem.disabled}
                           onSelect={subItem.onClick}
@@ -89,7 +89,7 @@ export default function ContextMenu({ children, items }) {
             return (
               <RadixContextMenu.Item
                 key={item.label}
-                className={`group flex items-center gap-2 px-3 py-2 text-sm outline-none data-[highlighted]:bg-interactive-hover cursor-default disabled:opacity-50 disabled:pointer-events-none ${variantClass}`}
+                className={`group flex items-center gap-2 px-3 py-2 text-sm outline-none data-[highlighted]:bg-interactive-hover cursor-default data-[disabled]:opacity-50 data-[disabled]:pointer-events-none ${variantClass}`}
                 disabled={item.disabled}
                 onSelect={item.onClick}
               >

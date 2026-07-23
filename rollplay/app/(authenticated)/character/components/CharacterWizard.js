@@ -18,6 +18,7 @@ import { useEditions, useEditionClasses } from '../hooks/useReferenceData'
 import { useSetCharacterAvatar } from '../hooks/useSetCharacterAvatar'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import { authFetch } from '@/app/shared/utils/authFetch'
+import { titleize } from '@/app/shared/utils/titleize'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 import CharacterAvatarPickerModal from './CharacterAvatarPickerModal'
@@ -80,11 +81,6 @@ function normaliseServerStep(serverStep) {
 // Code → display label (e.g. ``ability_scores`` → ``Ability Scores``).
 // Server-side codes are snake_case lowercase; the wizard's subtitle uses
 // title-cased natural text. Kept local to avoid pulling another util in.
-function titleize(code) {
-  return (code ?? '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
 
 /**
  * Resume the wizard on whatever step the server thinks the draft is at,

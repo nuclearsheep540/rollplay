@@ -1,19 +1,19 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-import React, { useEffect, useRef } from 'react'
+import React from 'react'
 import AssetCard from './AssetCard'
+import { useLoadMoreSentinel } from '../hooks/useLoadMoreSentinel'
 
 /**
  * Grid layout for displaying assets with empty state.
  *
- * Lazy pagination: when hasMore is set, an IntersectionObserver on a
- * full-width sentinel below the cards calls onLoadMore as it nears the
- * viewport, so the next page is revealed before the user hits the bottom.
+ * Lazy pagination: when hasMore is set, a full-width sentinel below the
+ * cards calls onLoadMore as it nears the scroll container's edge, so the
+ * next page is revealed before the user hits the bottom.
  */
 export default function AssetGrid({
   assets,
-  loading,
   getContextMenuItems,
   onAssetClick,
   onToggleFavorite,
@@ -24,26 +24,11 @@ export default function AssetGrid({
   columns = 4,
   hasMore = false,
   onLoadMore = null,
+  scrollRootRef = null,
 }) {
-  const sentinelRef = useRef(null)
-
-  useEffect(() => {
-    if (!hasMore || !onLoadMore || !sentinelRef.current) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          onLoadMore()
-        }
-      },
-      { rootMargin: '400px' }
-    )
-    observer.observe(sentinelRef.current)
-    return () => observer.disconnect()
-  }, [assets, hasMore, onLoadMore])
-
-  if (loading) {
-    return null
-  }
+  const sentinelRef = useLoadMoreSentinel({
+    assets, hasMore, onLoadMore, scrollRootRef, rootMargin: '400px',
+  })
 
   // Empty state
   if (!assets || assets.length === 0) {

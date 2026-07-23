@@ -69,7 +69,10 @@ export default function AssetLibraryManager({ user }) {
   // grows as the sentinel scrolls into view
   const [pageSize, setPageSize] = useState(() => {
     if (typeof window !== 'undefined') {
-      const stored = parseInt(localStorage.getItem('assetPageSize'))
+      // Fallback reads the pre-0.60 list-only key so saved prefs survive
+      const stored = parseInt(
+        localStorage.getItem('assetPageSize') ?? localStorage.getItem('assetListPageSize')
+      )
       if ([20, 50, 100].includes(stored)) return stored
     }
     return 20
@@ -97,6 +100,10 @@ export default function AssetLibraryManager({ user }) {
   const [pendingDropFiles, setPendingDropFiles] = useState(null)
   const dragDepth = useRef(0)
 
+  // The content scroll container - the sentinel observers' root, so
+  // their rootMargin preload works inside the nested scroll region
+  const contentScrollRef = useRef(null)
+
   // Smart collection builder view - replaces the pane when non-null:
   // { editing: collection | null, prefill: filters | null }
   const [builder, setBuilder] = useState(null)
@@ -116,12 +123,25 @@ export default function AssetLibraryManager({ user }) {
 
   useEffect(() => {
     localStorage.setItem('assetPageSize', pageSize.toString())
+    localStorage.removeItem('assetListPageSize')
   }, [pageSize])
 
-  // Rewind the window whenever what's shown (or its order) changes
-  useEffect(() => {
+  // Rewind the window whenever what's shown (or its order) changes.
+  // Adjusted during render (guarded setState) rather than in an effect so
+  // the first render after a change already uses the fresh window — an
+  // effect would first commit the full grown window against the new
+  // results. viewMode is deliberately absent: both views share the
+  // window, so toggling grid/list keeps the user's scroll depth.
+  const [prevWindowInputs, setPrevWindowInputs] = useState({ pageSize, context, filters, listSort })
+  if (
+    prevWindowInputs.pageSize !== pageSize
+    || prevWindowInputs.context !== context
+    || prevWindowInputs.filters !== filters
+    || prevWindowInputs.listSort !== listSort
+  ) {
+    setPrevWindowInputs({ pageSize, context, filters, listSort })
     setVisibleCount(pageSize)
-  }, [pageSize, context, filters, viewMode, listSort])
+  }
 
   // Full library, filtered client-side (see utils/assetFilters.js)
   const {
@@ -151,7 +171,10 @@ export default function AssetLibraryManager({ user }) {
     [campaignData, user?.id]
   )
 
-  const error = queryError?.message || deleteMutation.error?.message || null
+  const error = queryError?.message
+    || deleteMutation.error?.message
+    || associateMutation.error?.message
+    || null
 
   // ── Derived data for rail + filter bar ────────────────────────────
   const typeCounts = useMemo(() => {
@@ -596,13 +619,9 @@ export default function AssetLibraryManager({ user }) {
     () => sortAssets(visibleAssets, listSort),
     [visibleAssets, listSort]
   )
-  const listAssets = useMemo(
-    () => sortedListAssets.slice(0, visibleCount),
-    [sortedListAssets, visibleCount]
-  )
-  const gridAssets = useMemo(
-    () => visibleAssets.slice(0, visibleCount),
-    [visibleAssets, visibleCount]
+  const pagedAssets = useMemo(
+    () => (viewMode === 'list' ? sortedListAssets : visibleAssets).slice(0, visibleCount),
+    [viewMode, sortedListAssets, visibleAssets, visibleCount]
   )
   const hasMore = visibleCount < visibleAssets.length
   const handleLoadMore = useCallback(() => {
@@ -620,16 +639,24 @@ export default function AssetLibraryManager({ user }) {
 
   const filtersActive = hasActiveFilters(filters)
 
-  // "{shown} of {total} assets" while the window is still growing -
-  // total is the DB count for the plain library view, or the current
-  // result-set size when a context/filter narrows it.
-  const resultTotal = (context.kind === 'all' && !filtersActive)
-    ? (assetCount ?? visibleAssets.length)
-    : visibleAssets.length
-  const shownCount = Math.min(visibleCount, visibleAssets.length)
-  const resultText = shownCount < resultTotal
-    ? `${shownCount} of ${resultTotal} asset${resultTotal !== 1 ? 's' : ''}`
-    : `${resultTotal} asset${resultTotal !== 1 ? 's' : ''}`
+  // Result counter: "{shown} of {total}" while the window is growing.
+  // With filters active the denominator is the pre-filter baseline so
+  // the narrowing stays visible ("5 of 120 assets"), with the window
+  // prefix only when pagination hides part of the matches.
+  let resultText
+  if (filtersActive) {
+    const matchText = `${visibleAssets.length} of ${baseAssets.length} asset${baseAssets.length !== 1 ? 's' : ''}`
+    resultText = pagedAssets.length < visibleAssets.length
+      ? `${pagedAssets.length} shown · ${matchText}`
+      : matchText
+  } else {
+    const resultTotal = context.kind === 'all'
+      ? (assetCount ?? visibleAssets.length)
+      : visibleAssets.length
+    resultText = pagedAssets.length < resultTotal
+      ? `${pagedAssets.length} of ${resultTotal} asset${resultTotal !== 1 ? 's' : ''}`
+      : `${resultTotal} asset${resultTotal !== 1 ? 's' : ''}`
+  }
 
   return (
     <div
@@ -763,7 +790,9 @@ export default function AssetLibraryManager({ user }) {
                 onClick={() => setSelectedIds(new Set(visibleAssets.map((asset) => asset.id)))}
                 className="rounded-sm border border-border px-2.5 py-1.5 text-xs text-content-secondary transition-colors hover:border-border-active hover:text-content-primary"
               >
-                Select All
+                {/* Count makes the blast radius explicit - the windowed
+                    grid renders fewer cards than Select All selects */}
+                Select All ({visibleAssets.length})
               </button>
               <button
                 onClick={exitSelection}
@@ -874,7 +903,10 @@ export default function AssetLibraryManager({ user }) {
           <div className="mb-4 flex items-center justify-between rounded-sm border border-feedback-error bg-feedback-error/20 p-3">
             <p className="text-feedback-error">{error}</p>
             <button
-              onClick={() => deleteMutation.reset()}
+              onClick={() => {
+                deleteMutation.reset()
+                associateMutation.reset()
+              }}
               className="text-feedback-error hover:opacity-80"
               aria-label="Dismiss error"
             >
@@ -887,7 +919,7 @@ export default function AssetLibraryManager({ user }) {
 
         {/* Content - the only scrolling region; negative margins keep the
             scrollbar at the pane edge while content stays aligned */}
-        <div className="-mx-5 min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:-mx-8 md:px-8">
+        <div ref={contentScrollRef} className="-mx-5 min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:-mx-8 md:px-8">
           {loading ? (
             <div
               className="grid gap-4"
@@ -926,7 +958,7 @@ export default function AssetLibraryManager({ user }) {
             </div>
           ) : viewMode === 'list' && visibleAssets.length > 0 ? (
             <AssetListView
-              assets={listAssets}
+              assets={pagedAssets}
               getContextMenuItems={getContextMenuItems}
               onAssetClick={handleAssetClick}
               onToggleFavorite={handleToggleFavorite}
@@ -938,11 +970,11 @@ export default function AssetLibraryManager({ user }) {
               onLoadMore={handleLoadMore}
               sort={listSort}
               onSortChange={handleListSortChange}
+              scrollRootRef={contentScrollRef}
             />
           ) : (
             <AssetGrid
-              assets={gridAssets}
-              loading={loading}
+              assets={pagedAssets}
               getContextMenuItems={getContextMenuItems}
               onAssetClick={handleAssetClick}
               onToggleFavorite={handleToggleFavorite}
@@ -953,6 +985,7 @@ export default function AssetLibraryManager({ user }) {
               columns={7 - gridScale}
               hasMore={hasMore}
               onLoadMore={handleLoadMore}
+              scrollRootRef={contentScrollRef}
             />
           )}
         </div>

@@ -43,6 +43,18 @@ def check_asset_in_active_session(campaign_ids, session_repository):
                 )
 
 
+def get_owned_asset(repository, asset_id, user_id):
+    """Load an asset and verify ownership — the shared preamble for asset-mutating commands."""
+    asset = repository.get_by_id(asset_id)
+    if not asset:
+        raise ValueError(f"Media asset {asset_id} not found")
+
+    if not asset.is_owned_by(user_id):
+        raise ValueError("Cannot modify media asset owned by another user")
+
+    return asset
+
+
 class ConfirmUpload:
     """
     Confirm that an upload to S3 completed and create the media asset record.
@@ -432,17 +444,14 @@ class AssociateWithCampaign:
 
         Raises:
             ValueError: If asset not found or not owned by user
-            AssetInUseError: If asset is in an active session
+            AssetInUseError: If the target campaign has an active session
         """
-        asset = self.repository.get_by_id(asset_id)
-        if not asset:
-            raise ValueError(f"Media asset {asset_id} not found")
+        asset = get_owned_asset(self.repository, asset_id, user_id)
 
-        if not asset.is_owned_by(user_id):
-            raise ValueError("Cannot modify media asset owned by another user")
-
+        # Only the target campaign gates this operation — an active session
+        # in another campaign the asset belongs to is unaffected by it
         if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+            check_asset_in_active_session([campaign_id], self.session_repository)
 
         asset.associate_with_campaign(campaign_id)
 
@@ -479,17 +488,14 @@ class DisassociateFromCampaign:
 
         Raises:
             ValueError: If asset not found or not owned by user
-            AssetInUseError: If asset is in an active session
+            AssetInUseError: If the target campaign has an active session
         """
-        asset = self.repository.get_by_id(asset_id)
-        if not asset:
-            raise ValueError(f"Media asset {asset_id} not found")
+        asset = get_owned_asset(self.repository, asset_id, user_id)
 
-        if not asset.is_owned_by(user_id):
-            raise ValueError("Cannot modify media asset owned by another user")
-
+        # Only the target campaign gates this operation — an active session
+        # in another campaign the asset belongs to is unaffected by it
         if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+            check_asset_in_active_session([campaign_id], self.session_repository)
 
         asset.disassociate_from_campaign(campaign_id)
 

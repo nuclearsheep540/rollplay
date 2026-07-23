@@ -487,11 +487,14 @@ function LoopEditor({ initialAssetId }) {
     <div className="flex flex-col h-full border border-border bg-surface-elevated overflow-hidden">
       {/* ── Menu Bar ────────────────────────────────────────────────────── */}
       <FileMenuBar
-        items={[
-          { label: 'Open Asset', icon: faFileImport, onClick: () => setShowImportModal(true) },
-          { label: 'Save', icon: faFloppyDisk, onClick: handleSave, disabled: !hasChanges || !selectedAsset },
-          { label: 'Revert Changes', icon: faArrowRotateLeft, onClick: handleReset, disabled: !hasChanges },
-        ]}
+        menus={[{
+          label: 'File',
+          items: [
+            { label: 'Open Asset', icon: faFileImport, onClick: () => setShowImportModal(true) },
+            { label: 'Save', icon: faFloppyDisk, onClick: handleSave, disabled: !hasChanges || !selectedAsset },
+            { label: 'Revert Changes', icon: faArrowRotateLeft, onClick: handleReset, disabled: !hasChanges },
+          ],
+        }]}
       />
 
       {/* ── Transport Bar ───────────────────────────────────────────────── */}

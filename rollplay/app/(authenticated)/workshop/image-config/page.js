@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft, faHouse } from '@fortawesome/free-solid-svg-icons'
 import ImageConfigTool from '@/app/workshop/components/ImageConfigTool'
+import { useWorkshopToolNav } from '@/app/workshop/hooks/useWorkshopToolNav'
 
 // Site chrome (header, auth gate, WebSocket subscription, Suspense for
 // useSearchParams) is provided by the (authenticated) route group's
@@ -18,35 +19,12 @@ export default function ImageConfigPage() {
   const searchParams = useSearchParams()
   const selectedAssetId = searchParams.get('asset_id')
 
-  // Entry point (library vs workshop) rides the URL and is carried
-  // through every internal navigation, so it survives refresh and
-  // deep links - no mount-time capture needed.
-  const fromLibrary = searchParams.get('from') === 'library'
-
-  const backLabel = !selectedAssetId
-    ? 'Workshop'
-    : fromLibrary ? 'Library' : 'Image Config'
-
-  const handleAssetSelect = (assetId) => {
-    if (assetId) {
-      router.push(`/workshop/image-config?asset_id=${assetId}${fromLibrary ? '&from=library' : ''}`)
-    } else {
-      router.push('/workshop/image-config')
-    }
-  }
-
-  // Explicit destinations instead of router.back(): history depth varies
-  // with how the user got here (and back() leaves the app entirely on a
-  // pasted link), so each state names the place its backLabel promises.
-  const handleBack = () => {
-    if (!selectedAssetId) {
-      router.push('/dashboard?tab=workshop')
-    } else if (fromLibrary) {
-      router.push('/dashboard?tab=library')
-    } else {
-      router.push('/workshop/image-config')
-    }
-  }
+  // URL is the source of truth for asset and entry point — the shared
+  // hook owns the from=library threading and back destinations.
+  const { backLabel, handleAssetSelect, handleBack } = useWorkshopToolNav(
+    '/workshop/image-config',
+    'Image Config',
+  )
 
   return (
     <main className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 md:px-10 pt-6 pb-4">

@@ -6,6 +6,7 @@
 'use client'
 
 import { THEME, COLORS } from '@/app/styles/colorTheme'
+import { titleize } from '@/app/shared/utils/titleize'
 
 /**
  * Read-only character sheet view — used by ReviewStep and the [id] page.
@@ -30,10 +31,6 @@ function Section({ title, children }) {
       {children}
     </section>
   )
-}
-
-function titleize(code) {
-  return (code ?? '').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 function modSign(n) {

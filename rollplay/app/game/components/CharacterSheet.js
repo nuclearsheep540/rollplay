@@ -16,6 +16,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 import { useRuntimePatch } from '../hooks/useCharacterRuntime'
+import { titleize } from '@/app/shared/utils/titleize'
 
 /**
  * Runtime character sheet — used inside an active game session.
@@ -36,9 +37,6 @@ const ABILITY_LABELS = {
   wisdom: 'WIS',
   charisma: 'CHA',
 }
-
-const titleize = (code) =>
-  (code ?? '').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 
 const modSign = (n) => (n >= 0 ? `+${n}` : `${n}`)
 

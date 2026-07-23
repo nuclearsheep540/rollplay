@@ -284,13 +284,18 @@ export default function CharacterManager({
 
   // Cards fill the scroll row's full height; width is derived from the
   // 9:16 portrait aspect ratio. Min/max keep the cards usable on extreme
-  // viewports without re-introducing a fixed-width clamp.
+  // viewports without re-introducing a fixed-width clamp. Height clamps
+  // mirror the width clamps at 16/9 so the aspect genuinely holds —
+  // width clamps alone would win over aspect-ratio on very tall rows,
+  // skewing the wedge geometry the gradient angle is derived from.
   const CARD_STYLE = {
     height: '100%',
     width: 'auto',
     aspectRatio: '9/16',
     minWidth: '140px',
     maxWidth: '600px',
+    minHeight: '249px',
+    maxHeight: '1067px',
   }
 
   // Render character card (9:16 portrait aspect ratio for modern devices)
