@@ -33,7 +33,7 @@ const TOOL_BUTTON_CLASSES = (active) => `
   border border-transparent transition-all duration-100
   ${active
     ? 'bg-amber-500 text-slate-900 border-amber-300 shadow-md ring-2 ring-amber-400/60'
-    : 'bg-transparent text-content-secondary hover:bg-surface-elevated hover:text-content-on-dark'}
+    : 'bg-transparent text-content-secondary hover:bg-surface-hover hover:text-content-on-dark'}
 `;
 
 function ToolButton({ icon, label, active, onClick, shortcut, indent = false }) {
@@ -62,7 +62,7 @@ export default function MapConfigToolbar({ activeTool, onToolChange }) {
   };
 
   return (
-    <div className="flex flex-col items-stretch gap-1 p-2 border-r border-border bg-surface-secondary flex-shrink-0">
+    <div className="flex flex-col items-stretch gap-1 p-2 border-r border-border bg-surface-elevated flex-shrink-0">
       <ToolButton
         icon={faHandBackFist}
         label="Move (pan & zoom)"

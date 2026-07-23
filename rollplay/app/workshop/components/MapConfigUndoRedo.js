@@ -8,8 +8,8 @@ import { faRotateLeft, faRotateRight } from '@fortawesome/free-solid-svg-icons';
 
 const isMac = typeof navigator !== 'undefined'
   && /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
-const UNDO_HINT = isMac ? '⌘Z' : 'Ctrl+Z';
-const REDO_HINT = isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z';
+export const UNDO_HINT = isMac ? '⌘Z' : 'Ctrl+Z';
+export const REDO_HINT = isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z';
 
 /**
  * Undo / Redo buttons for the top context bar.
@@ -34,7 +34,7 @@ export default function MapConfigUndoRedo({
     ? `Redo: ${peekRedoLabel}  (${REDO_HINT})`
     : `Nothing to redo  (${REDO_HINT})`;
 
-  const baseCls = 'flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-on-dark hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
+  const baseCls = 'flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-on-dark hover:bg-surface-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
 
   return (
     <>

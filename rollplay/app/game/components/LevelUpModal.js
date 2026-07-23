@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Modal from '@/app/shared/components/Modal'
 
 import { useApplyLevelUp, useLevelUpPreview } from '../hooks/useCharacterRuntime'
+import { titleize } from '@/app/shared/utils/titleize'
 
 /**
  * Multi-step level-up wizard, modal-style.
@@ -36,9 +37,6 @@ const ABILITY_LABELS = {
 // 2024 models the Ability Score Improvement AS a (repeatable) feat, so at an ASI level it's just
 // one option in the feat list. Selecting it reveals the +2/+1 picker; every other feat doesn't.
 const ASI_FEAT_CODE = 'ability_score_improvement'
-
-const titleize = (code) =>
-  (code ?? '').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 
 function StepHeader({ stepNumber, totalSteps, title }) {
   return (

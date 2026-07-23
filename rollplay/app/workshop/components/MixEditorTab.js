@@ -33,22 +33,25 @@ export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
   const mix = useWorkshopMixEngine(selectedPreset);
 
   return (
-    <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
+    <div className="flex flex-col h-full border border-border bg-surface-elevated overflow-hidden">
       <FileMenuBar
-        items={[
-          {
-            label: 'Open Preset',
-            icon: faFolderOpen,
-            onClick: () => setShowOpenModal(true),
-            disabled: isLoading || presets.length === 0,
-          },
-          {
-            label: 'Close Preset',
-            icon: faFileCircleXmark,
-            onClick: () => onSelectPreset(null),
-            disabled: !selectedPreset,
-          },
-        ]}
+        menus={[{
+          label: 'File',
+          items: [
+            {
+              label: 'Open Preset',
+              icon: faFolderOpen,
+              onClick: () => setShowOpenModal(true),
+              disabled: isLoading || presets.length === 0,
+            },
+            {
+              label: 'Close Preset',
+              icon: faFileCircleXmark,
+              onClick: () => onSelectPreset(null),
+              disabled: !selectedPreset,
+            },
+          ],
+        }]}
       />
 
       {/* Context bar — active preset + transport */}

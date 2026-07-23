@@ -170,7 +170,6 @@ export default function SmartCollectionBuilder({
       {matches.length > 0 ? (
         <AssetGrid
           assets={matches}
-          loading={false}
           getContextMenuItems={() => []}
           columns={4}
         />

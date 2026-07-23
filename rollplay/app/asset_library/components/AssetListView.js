@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-import React, { useEffect, useRef } from 'react'
+import React from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faStar, faCheck, faSort, faSortUp, faSortDown } from '@fortawesome/free-solid-svg-icons'
 import { faStar as faStarOutline } from '@fortawesome/free-regular-svg-icons'
@@ -9,6 +9,7 @@ import ContextMenu from '@/app/shared/components/ContextMenu'
 import Badge from '@/app/shared/components/Badge'
 import AudioWaveThumb from './AudioWaveThumb'
 import { formatFileSize, formatDate } from './AssetCard'
+import { useLoadMoreSentinel } from '../hooks/useLoadMoreSentinel'
 
 // Shared column template so the header and rows always line up.
 const ROW_GRID = 'grid grid-cols-[4.5rem_minmax(0,2fr)_5.5rem_minmax(0,2fr)_5rem_6rem_6.5rem_2.5rem] items-center gap-3'
@@ -52,23 +53,12 @@ export default function AssetListView({
   onLoadMore = null,
   sort = null,
   onSortChange = null,
+  scrollRootRef = null,
 }) {
-  const sentinelRef = useRef(null)
+  const sentinelRef = useLoadMoreSentinel({
+    assets, hasMore, onLoadMore, scrollRootRef, rootMargin: '100px',
+  })
   const sentinelIndex = Math.max(0, assets.length - 3)
-
-  useEffect(() => {
-    if (!hasMore || !onLoadMore || !sentinelRef.current) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          onLoadMore()
-        }
-      },
-      { rootMargin: '100px' }
-    )
-    observer.observe(sentinelRef.current)
-    return () => observer.disconnect()
-  }, [assets, hasMore, onLoadMore])
 
   return (
     <div className="overflow-x-auto rounded-sm border border-border-subtle">
@@ -112,7 +102,7 @@ export default function AssetListView({
                 {/* Mini thumbnail */}
                 <div className="relative h-9 w-[4.5rem] overflow-hidden rounded-sm bg-surface-elevated">
                   {isImage && asset.s3_url ? (
-                    <img src={asset.s3_url} alt="" className="h-full w-full object-cover" />
+                    <img src={asset.s3_url} alt="" loading="lazy" className="h-full w-full object-cover" />
                   ) : (
                     <AudioWaveThumb asset={asset} barCount={18} />
                   )}

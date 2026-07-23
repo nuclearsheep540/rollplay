@@ -3,13 +3,17 @@
 
 import React from 'react'
 import AssetCard from './AssetCard'
+import { useLoadMoreSentinel } from '../hooks/useLoadMoreSentinel'
 
 /**
- * Grid layout for displaying assets with empty state
+ * Grid layout for displaying assets with empty state.
+ *
+ * Lazy pagination: when hasMore is set, a full-width sentinel below the
+ * cards calls onLoadMore as it nears the scroll container's edge, so the
+ * next page is revealed before the user hits the bottom.
  */
 export default function AssetGrid({
   assets,
-  loading,
   getContextMenuItems,
   onAssetClick,
   onToggleFavorite,
@@ -18,10 +22,13 @@ export default function AssetGrid({
   selectable = false,
   selectedIds = null,
   columns = 4,
+  hasMore = false,
+  onLoadMore = null,
+  scrollRootRef = null,
 }) {
-  if (loading) {
-    return null
-  }
+  const sentinelRef = useLoadMoreSentinel({
+    assets, hasMore, onLoadMore, scrollRootRef, rootMargin: '400px',
+  })
 
   // Empty state
   if (!assets || assets.length === 0) {
@@ -57,6 +64,9 @@ export default function AssetGrid({
           selected={selectedIds?.has(asset.id) || false}
         />
       ))}
+      {hasMore && (
+        <div ref={sentinelRef} className="col-span-full h-px" aria-hidden="true" />
+      )}
     </div>
   )
 }

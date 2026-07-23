@@ -16,7 +16,8 @@ import * as RadixContextMenu from '@radix-ui/react-context-menu'
  * @param {React.ReactNode} children - The element that triggers the context menu on right-click
  * @param {Array} items - Menu items: { label, onClick?, icon?, variant?, disabled?, active?, subItems? }
  *   subItems follow the same shape for nested sub-menus.
- *   Use active: true on disabled items to show a checkmark instead of a faded style.
+ *   active: true shows a checkmark; the item stays clickable (for toggles)
+ *   unless disabled is also set, which blocks selection without the faded style.
  */
 export default function ContextMenu({ children, items }) {
   return (
@@ -42,13 +43,16 @@ export default function ContextMenu({ children, items }) {
             if (item.subItems) {
               return (
                 <RadixContextMenu.Sub key={item.label}>
+                  {/* The silver highlight matches content-secondary, so every
+                      muted colour flips to content-bold (onyx) while highlighted
+                      - group-data variants keep the child spans in step */}
                   <RadixContextMenu.SubTrigger
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-content-on-dark outline-none data-[highlighted]:bg-interactive-hover cursor-default"
+                    className="group flex items-center gap-2 px-3 py-2 text-sm text-content-on-dark outline-none data-[highlighted]:bg-interactive-hover data-[highlighted]:text-content-bold cursor-default"
                     disabled={item.disabled}
                   >
-                    {item.icon && <span className="w-4 text-center text-content-secondary">{item.icon}</span>}
+                    {item.icon && <span className="w-4 text-center text-content-secondary group-data-[highlighted]:text-content-bold">{item.icon}</span>}
                     <span className="flex-1">{item.label}</span>
-                    <span className="text-content-secondary text-xs ml-4">&#x25B8;</span>
+                    <span className="text-content-secondary group-data-[highlighted]:text-content-bold text-xs ml-4">&#x25B8;</span>
                   </RadixContextMenu.SubTrigger>
 
                   <RadixContextMenu.Portal>
@@ -59,17 +63,17 @@ export default function ContextMenu({ children, items }) {
                       {item.subItems.map((subItem) => (
                         <RadixContextMenu.Item
                           key={subItem.label}
-                          className={`flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-default ${
+                          className={`group flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-default data-[highlighted]:bg-interactive-hover data-[highlighted]:text-content-bold ${
                             subItem.active
-                              ? 'text-content-secondary pointer-events-none'
-                              : 'text-content-on-dark data-[highlighted]:bg-interactive-hover disabled:opacity-50 disabled:pointer-events-none'
+                              ? 'text-content-secondary'
+                              : 'text-content-on-dark data-[disabled]:opacity-50 data-[disabled]:pointer-events-none'
                           }`}
                           disabled={subItem.disabled}
                           onSelect={subItem.onClick}
                         >
-                          {subItem.icon && <span className="w-4 text-center text-content-secondary">{subItem.icon}</span>}
+                          {subItem.icon && <span className="w-4 text-center text-content-secondary group-data-[highlighted]:text-content-bold">{subItem.icon}</span>}
                           <span className="flex-1">{subItem.label}</span>
-                          {subItem.active && <span className="text-xs text-content-secondary ml-2">&#x2713;</span>}
+                          {subItem.active && <span className="text-xs text-content-secondary group-data-[highlighted]:text-content-bold ml-2">&#x2713;</span>}
                         </RadixContextMenu.Item>
                       ))}
                     </RadixContextMenu.SubContent>
@@ -80,16 +84,16 @@ export default function ContextMenu({ children, items }) {
 
             const variantClass = item.variant === 'danger'
               ? 'text-feedback-error data-[highlighted]:text-feedback-error'
-              : 'text-content-on-dark'
+              : 'text-content-on-dark data-[highlighted]:text-content-bold'
 
             return (
               <RadixContextMenu.Item
                 key={item.label}
-                className={`flex items-center gap-2 px-3 py-2 text-sm outline-none data-[highlighted]:bg-interactive-hover cursor-default disabled:opacity-50 disabled:pointer-events-none ${variantClass}`}
+                className={`group flex items-center gap-2 px-3 py-2 text-sm outline-none data-[highlighted]:bg-interactive-hover cursor-default data-[disabled]:opacity-50 data-[disabled]:pointer-events-none ${variantClass}`}
                 disabled={item.disabled}
                 onSelect={item.onClick}
               >
-                {item.icon && <span className="w-4 text-center text-content-secondary">{item.icon}</span>}
+                {item.icon && <span className="w-4 text-center text-content-secondary group-data-[highlighted]:text-content-bold">{item.icon}</span>}
                 <span>{item.label}</span>
               </RadixContextMenu.Item>
             )

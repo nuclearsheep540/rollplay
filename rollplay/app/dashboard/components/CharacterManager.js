@@ -20,8 +20,21 @@ import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
 import { Button } from './shared/Button'
 import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
+import { characterMetaLine } from '../utils/characterMeta'
 import CharacterAvatarPane from '@/app/(authenticated)/character/components/CharacterAvatarPane'
 import CharacterSheet from '@/app/(authenticated)/character/components/CharacterSheet'
+
+// Horizontal cousin of the workshop tiles' wedge: the avatar layer fills
+// the card and its bottom edge slants — 78% of card height at the left,
+// 64% at the right — revealing the metadata band beneath. At the fixed
+// 9:16 aspect that edge sits ~14° above horizontal; 346° is perpendicular
+// to it, so (as with the tiles) every point on the diagonal projects to
+// the same stop on the gradient axis and the inner shadow hugs the edge.
+// The diagonal crosses the axis at ~32%; everything before that is below
+// the edge and clipped away.
+const CARD_WEDGE_CLIP = 'polygon(0 0, 100% 0, 100% 64%, 0 78%)'
+const CARD_WEDGE_INNER_SHADOW =
+  'linear-gradient(346deg, rgba(0, 0, 0, 0.55) 32%, transparent 44%)'
 
 export default function CharacterManager({
   user,
@@ -271,46 +284,53 @@ export default function CharacterManager({
 
   // Cards fill the scroll row's full height; width is derived from the
   // 9:16 portrait aspect ratio. Min/max keep the cards usable on extreme
-  // viewports without re-introducing a fixed-width clamp.
+  // viewports without re-introducing a fixed-width clamp. Height clamps
+  // mirror the width clamps at 16/9 so the aspect genuinely holds —
+  // width clamps alone would win over aspect-ratio on very tall rows,
+  // skewing the wedge geometry the gradient angle is derived from.
   const CARD_STYLE = {
     height: '100%',
     width: 'auto',
     aspectRatio: '9/16',
     minWidth: '140px',
     maxWidth: '600px',
+    minHeight: '249px',
+    maxHeight: '1067px',
   }
 
   // Render character card (9:16 portrait aspect ratio for modern devices)
-  const renderCharacterCard = (char) => (
-    <div
-      key={char.id}
-      className="flex-shrink-0 rounded-sm border-2 overflow-hidden cursor-pointer"
-      style={{
-        ...CARD_STYLE,
-        backgroundColor: THEME.bgPanel,
-        borderColor: selectedCharacter?.id === char.id ? THEME.borderActive : THEME.borderDefault,
-        transition: isResizing ? 'none' : 'border-color 200ms ease-in-out',
-        display: 'grid',
-        gridTemplateRows: '3fr 1fr'
-      }}
-      onClick={() => toggleCharacterDetails(char)}
-    >
-      {/* Avatar area - 3/4 of card height; per-character avatar with
-          hero-image fallback */}
-      <div
-        className="flex items-center justify-center relative"
+  const renderCharacterCard = (char) => {
+    // Readability overlay - much lighter over a real avatar so the
+    // portrait stays visible. Folded into the background stack as a
+    // flat two-stop gradient so one element carries the whole wedge.
+    const overlay = char.avatar_url ? `${COLORS.onyx}26` : `${COLORS.onyx}80`
+
+    return (
+      // A real button so the card is keyboard-reachable (tab stop +
+      // Enter/Space), matching the create-card next to it
+      <button
+        type="button"
+        key={char.id}
+        aria-label={`View ${char.character_name || 'Unnamed'}`}
+        className="relative flex-shrink-0 rounded-sm border-2 overflow-hidden cursor-pointer origin-top hover:shadow-lg hover:scale-[1.01]"
         style={{
-          backgroundImage: `url(${char.avatar_url || '/heroes.png'})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
+          ...CARD_STYLE,
+          backgroundColor: THEME.bgPanel,
+          borderColor: selectedCharacter?.id === char.id ? THEME.borderActive : THEME.borderDefault,
+          transition: isResizing
+            ? 'none'
+            : 'border-color 200ms ease-in-out, transform 200ms ease-out, box-shadow 200ms ease-out',
         }}
+        onClick={() => toggleCharacterDetails(char)}
       >
-        {/* Overlay for badge readability - much lighter over a real
-            avatar so the portrait stays visible */}
+        {/* Avatar layer - single-element wedge trick from the workshop
+            tiles: overlay + inner shadow + image stacked in the
+            background, clip-path slants the bottom edge */}
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 bg-cover bg-center pointer-events-none"
           style={{
-            backgroundColor: char.avatar_url ? `${COLORS.onyx}26` : `${COLORS.onyx}80`
+            clipPath: CARD_WEDGE_CLIP,
+            backgroundImage: `linear-gradient(${overlay}, ${overlay}), ${CARD_WEDGE_INNER_SHADOW}, url(${char.avatar_url || '/heroes.png'})`,
           }}
         />
 
@@ -326,24 +346,23 @@ export default function CharacterManager({
             </span>
           </div>
         )}
-      </div>
 
-      {/* Name + Level bar - 1/4 of card height, centered text */}
-      <div
-        className="p-4 border-t flex flex-col justify-center items-center text-center"
-        style={{
-          borderTopColor: THEME.borderSubtle
-        }}
-      >
-        <h3 className="text-lg font-[family-name:var(--font-metamorphous)] truncate w-full" style={{color: THEME.textOnDark}}>
-          {char.character_name || 'Unnamed'}
-        </h3>
-        <p className="text-sm" style={{color: THEME.textSecondary}}>
-          Level {char.level || 1} {char.character_race || ''}
-        </p>
-      </div>
-    </div>
-  )
+        {/* Metadata band - fills the area the wedge reveals. Top at 78%
+            (the diagonal's lowest point) keeps text clear of the slant. */}
+        <div
+          className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-center px-4 text-center"
+          style={{ top: '78%' }}
+        >
+          <h3 className="text-lg font-[family-name:var(--font-metamorphous)] truncate w-full" style={{color: THEME.textOnDark}}>
+            {char.character_name || 'Unnamed'}
+          </h3>
+          <p className="text-sm truncate w-full" style={{color: THEME.textSecondary}}>
+            {characterMetaLine(char)}
+          </p>
+        </div>
+      </button>
+    )
+  }
 
   // Render Create New Character card - matches Campaign template styling but portrait
   const renderCreateCard = () => (

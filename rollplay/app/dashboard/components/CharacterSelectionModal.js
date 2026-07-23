@@ -12,24 +12,7 @@ import { faPlus } from '@fortawesome/free-solid-svg-icons'
 import Modal from '@/app/shared/components/Modal'
 import { Button } from './shared/Button'
 import { useSelectCharacter } from '../hooks/mutations/useCharacterMutations'
-
-const titleize = (code) =>
-  code ? code.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : null
-
-/**
- * "Level 3 Elf Ranger / Rogue" from whichever fields the character
- * carries: legacy character_race/character_class strings, or the v2
- * species_code + class_entries. Missing pieces are simply omitted.
- */
-function characterMetaLine(char) {
-  const species = char.character_race || titleize(char.species_code)
-  const classes = char.character_class || (
-    char.class_entries?.length
-      ? char.class_entries.map((entry) => titleize(entry.class_code)).join(' / ')
-      : null
-  )
-  return [`Level ${char.level || 1}`, species, classes].filter(Boolean).join(' ')
-}
+import { characterMetaLine } from '../utils/characterMeta'
 
 export default function CharacterSelectionModal({ campaign, characters, onClose, onCharacterSelected, onCreateCharacter = null, currentCharacterId = null, sessionActive = false }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)

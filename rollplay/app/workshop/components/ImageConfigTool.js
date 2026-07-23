@@ -113,11 +113,15 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
     }
   };
 
-  // Build a preview activeImage object for ImageDisplay (nested shape)
+  // Build a preview activeImage object for ImageDisplay (nested shape).
+  // asset_id + file_size feed the download manager's blob cache - without
+  // them every visit re-downloads (presigned URLs differ per fetch).
   const previewImage = useMemo(() => {
     if (!selectedAsset) return null;
     return {
       image_config: {
+        asset_id: selectedAsset.id,
+        file_size: selectedAsset.file_size,
         file_path: selectedAsset.s3_url,
         filename: selectedAsset.filename,
         original_filename: selectedAsset.filename,
@@ -130,7 +134,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
         motion: motion,
       },
     };
-  }, [selectedAsset?.s3_url, selectedAsset?.filename, imageFit, displayMode, aspectRatio, imagePositionX, imagePositionY, visualOverlays, motion]);
+  }, [selectedAsset?.id, selectedAsset?.file_size, selectedAsset?.s3_url, selectedAsset?.filename, imageFit, displayMode, aspectRatio, imagePositionX, imagePositionY, visualOverlays, motion]);
 
   // Track whether config has changed from saved state
   const savedFit = selectedAsset?.image_fit || 'float';
@@ -179,8 +183,9 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
             </div>
           )}
 
-          {/* Controls Sidebar */}
-          <div className="w-72 flex-shrink-0 overflow-y-auto">
+          {/* Controls Sidebar - same onyx pane as the library rail and
+              the other workshop tool panels */}
+          <div className="w-72 flex-shrink-0 overflow-y-auto rounded-sm border border-border bg-surface-elevated p-4">
             <ImageDisplayControls
               imageFit={imageFit}
               aspectRatio={aspectRatio}

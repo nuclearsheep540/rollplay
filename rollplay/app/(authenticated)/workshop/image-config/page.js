@@ -5,11 +5,11 @@
 
 'use client'
 
-import { useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft, faHouse } from '@fortawesome/free-solid-svg-icons'
 import ImageConfigTool from '@/app/workshop/components/ImageConfigTool'
+import { useWorkshopToolNav } from '@/app/workshop/hooks/useWorkshopToolNav'
 
 // Site chrome (header, auth gate, WebSocket subscription, Suspense for
 // useSearchParams) is provided by the (authenticated) route group's
@@ -19,22 +19,12 @@ export default function ImageConfigPage() {
   const searchParams = useSearchParams()
   const selectedAssetId = searchParams.get('asset_id')
 
-  const entryFromRef = useRef(null)
-  if (entryFromRef.current === null) {
-    entryFromRef.current = searchParams.get('from') || 'workshop'
-  }
-
-  const backLabel = !selectedAssetId
-    ? 'Workshop'
-    : entryFromRef.current === 'library' ? 'Library' : 'Image Config'
-
-  const handleAssetSelect = (assetId) => {
-    if (assetId) {
-      router.push(`/workshop/image-config?asset_id=${assetId}`)
-    } else {
-      router.push('/workshop/image-config')
-    }
-  }
+  // URL is the source of truth for asset and entry point — the shared
+  // hook owns the from=library threading and back destinations.
+  const { backLabel, handleAssetSelect, handleBack } = useWorkshopToolNav(
+    '/workshop/image-config',
+    'Image Config',
+  )
 
   return (
     <main className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 md:px-10 pt-6 pb-4">
@@ -58,7 +48,7 @@ export default function ImageConfigPage() {
             </button>
           )}
           <button
-            onClick={() => router.back()}
+            onClick={handleBack}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
           >
             <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />

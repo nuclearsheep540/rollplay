@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faUpload, faTrash, faEye, faPen, faTags, faShapes, faSliders,
-  faStar, faTableCellsLarge, faList, faBolt, faFolder, faSquareCheck,
+  faStar, faTableCellsLarge, faList, faBolt, faFolder, faSquareCheck, faFlag,
 } from '@fortawesome/free-solid-svg-icons'
 import { useAssets } from '../hooks/useAssets'
 import { useAssetCount } from '../hooks/useAssetCount'
@@ -65,16 +65,19 @@ export default function AssetLibraryManager({ user }) {
     return 2
   })
 
-  // List view pagination: page size from the toolbar, window grows as
-  // the sentinel row scrolls into view
-  const [listPageSize, setListPageSize] = useState(() => {
+  // Pagination (grid and list): page size from the toolbar, window
+  // grows as the sentinel scrolls into view
+  const [pageSize, setPageSize] = useState(() => {
     if (typeof window !== 'undefined') {
-      const stored = parseInt(localStorage.getItem('assetListPageSize'))
+      // Fallback reads the pre-0.60 list-only key so saved prefs survive
+      const stored = parseInt(
+        localStorage.getItem('assetPageSize') ?? localStorage.getItem('assetListPageSize')
+      )
       if ([20, 50, 100].includes(stored)) return stored
     }
     return 20
   })
-  const [listVisibleCount, setListVisibleCount] = useState(listPageSize)
+  const [visibleCount, setVisibleCount] = useState(pageSize)
   // List column sort: { key, dir } or null for default order
   const [listSort, setListSort] = useState(null)
 
@@ -97,6 +100,10 @@ export default function AssetLibraryManager({ user }) {
   const [pendingDropFiles, setPendingDropFiles] = useState(null)
   const dragDepth = useRef(0)
 
+  // The content scroll container - the sentinel observers' root, so
+  // their rootMargin preload works inside the nested scroll region
+  const contentScrollRef = useRef(null)
+
   // Smart collection builder view - replaces the pane when non-null:
   // { editing: collection | null, prefill: filters | null }
   const [builder, setBuilder] = useState(null)
@@ -115,13 +122,26 @@ export default function AssetLibraryManager({ user }) {
   }, [viewMode])
 
   useEffect(() => {
-    localStorage.setItem('assetListPageSize', listPageSize.toString())
-  }, [listPageSize])
+    localStorage.setItem('assetPageSize', pageSize.toString())
+    localStorage.removeItem('assetListPageSize')
+  }, [pageSize])
 
-  // Rewind the list window whenever what's listed (or its order) changes
-  useEffect(() => {
-    setListVisibleCount(listPageSize)
-  }, [listPageSize, context, filters, viewMode, listSort])
+  // Rewind the window whenever what's shown (or its order) changes.
+  // Adjusted during render (guarded setState) rather than in an effect so
+  // the first render after a change already uses the fresh window — an
+  // effect would first commit the full grown window against the new
+  // results. viewMode is deliberately absent: both views share the
+  // window, so toggling grid/list keeps the user's scroll depth.
+  const [prevWindowInputs, setPrevWindowInputs] = useState({ pageSize, context, filters, listSort })
+  if (
+    prevWindowInputs.pageSize !== pageSize
+    || prevWindowInputs.context !== context
+    || prevWindowInputs.filters !== filters
+    || prevWindowInputs.listSort !== listSort
+  ) {
+    setPrevWindowInputs({ pageSize, context, filters, listSort })
+    setVisibleCount(pageSize)
+  }
 
   // Full library, filtered client-side (see utils/assetFilters.js)
   const {
@@ -151,7 +171,10 @@ export default function AssetLibraryManager({ user }) {
     [campaignData, user?.id]
   )
 
-  const error = queryError?.message || deleteMutation.error?.message || null
+  const error = queryError?.message
+    || deleteMutation.error?.message
+    || associateMutation.error?.message
+    || null
 
   // ── Derived data for rail + filter bar ────────────────────────────
   const typeCounts = useMemo(() => {
@@ -405,6 +428,7 @@ export default function AssetLibraryManager({ user }) {
       if (ownedCampaigns.length > 0) {
         bulkItems.push({
           label: `Add ${count} to Campaign`,
+          icon: <FontAwesomeIcon icon={faFlag} className="text-xs" />,
           subItems: ownedCampaigns.map(campaign => ({
             label: campaign.title,
             onClick: () => bulkAddToCampaign(campaign, targets),
@@ -488,7 +512,7 @@ export default function AssetLibraryManager({ user }) {
         subItems: manualCollections.map(collection => {
           const isMember = (collection.asset_ids || []).includes(asset.id)
           return {
-            label: isMember ? `✓ ${collection.name}` : collection.name,
+            label: collection.name,
             active: isMember,
             onClick: () => collectionMemberMutation.mutate({
               collectionId: collection.id,
@@ -500,23 +524,31 @@ export default function AssetLibraryManager({ user }) {
       })
     }
 
-    // Add to Campaign sub-menu (only campaigns the user owns)
+    // Campaigns sub-menu - toggle association per campaign, mirroring
+    // the Collections menu (only campaigns the user owns)
     if (ownedCampaigns.length > 0) {
       items.push({
-        label: 'Add to Campaign',
-        subItems: ownedCampaigns.map(campaign => ({
-          label: campaign.title,
-          disabled: asset.campaign_ids?.includes(campaign.id),
-          active: asset.campaign_ids?.includes(campaign.id),
-          onClick: () => associateMutation.mutate({ assetId: asset.id, campaignId: campaign.id }),
-        })),
+        label: 'Campaigns',
+        icon: <FontAwesomeIcon icon={faFlag} className="text-xs" />,
+        subItems: ownedCampaigns.map(campaign => {
+          const isMember = (asset.campaign_ids || []).includes(campaign.id)
+          return {
+            label: campaign.title,
+            active: isMember,
+            onClick: () => associateMutation.mutate({
+              assetId: asset.id,
+              campaignId: campaign.id,
+              member: !isMember,
+            }),
+          }
+        }),
       })
     }
 
     // Workshop bridge - asset-type-specific tools
     if (asset.asset_type === 'map') {
       items.push({
-        label: 'Configure Grid',
+        label: 'Configure Map',
         icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
         onClick: () => router.push(`/workshop/map-config?asset_id=${asset.id}&from=library`),
       })
@@ -581,19 +613,20 @@ export default function AssetLibraryManager({ user }) {
     }
   }
 
-  // List pagination window - sorted first, then sliced
+  // Pagination window - list is column-sorted first, grid keeps the
+  // default order; both slice to the same growing window
   const sortedListAssets = useMemo(
     () => sortAssets(visibleAssets, listSort),
     [visibleAssets, listSort]
   )
-  const listAssets = useMemo(
-    () => sortedListAssets.slice(0, listVisibleCount),
-    [sortedListAssets, listVisibleCount]
+  const pagedAssets = useMemo(
+    () => (viewMode === 'list' ? sortedListAssets : visibleAssets).slice(0, visibleCount),
+    [viewMode, sortedListAssets, visibleAssets, visibleCount]
   )
-  const listHasMore = listVisibleCount < sortedListAssets.length
-  const handleListLoadMore = useCallback(() => {
-    setListVisibleCount((count) => count + listPageSize)
-  }, [listPageSize])
+  const hasMore = visibleCount < visibleAssets.length
+  const handleLoadMore = useCallback(() => {
+    setVisibleCount((count) => count + pageSize)
+  }, [pageSize])
 
   // Cycle a column: asc, then desc, then back to default order
   const handleListSortChange = useCallback((key) => {
@@ -606,19 +639,23 @@ export default function AssetLibraryManager({ user }) {
 
   const filtersActive = hasActiveFilters(filters)
 
-  // Grid: result count as before. List: "{loaded} of {total} assets" -
-  // total is the DB count for the plain library view, or the current
-  // result-set size when a context/filter narrows it.
+  // Result counter: "{shown} of {total}" while the window is growing.
+  // With filters active the denominator is the pre-filter baseline so
+  // the narrowing stays visible ("5 of 120 assets"), with the window
+  // prefix only when pagination hides part of the matches.
   let resultText
-  if (viewMode === 'list') {
-    const listTotal = (context.kind === 'all' && !filtersActive)
+  if (filtersActive) {
+    const matchText = `${visibleAssets.length} of ${baseAssets.length} asset${baseAssets.length !== 1 ? 's' : ''}`
+    resultText = pagedAssets.length < visibleAssets.length
+      ? `${pagedAssets.length} shown · ${matchText}`
+      : matchText
+  } else {
+    const resultTotal = context.kind === 'all'
       ? (assetCount ?? visibleAssets.length)
       : visibleAssets.length
-    resultText = `${listAssets.length} of ${listTotal} asset${listTotal !== 1 ? 's' : ''}`
-  } else if (filtersActive) {
-    resultText = `${visibleAssets.length} of ${baseAssets.length} asset${baseAssets.length !== 1 ? 's' : ''}`
-  } else {
-    resultText = `${visibleAssets.length} asset${visibleAssets.length !== 1 ? 's' : ''}`
+    resultText = pagedAssets.length < resultTotal
+      ? `${pagedAssets.length} of ${resultTotal} asset${resultTotal !== 1 ? 's' : ''}`
+      : `${resultTotal} asset${resultTotal !== 1 ? 's' : ''}`
   }
 
   return (
@@ -684,7 +721,7 @@ export default function AssetLibraryManager({ user }) {
           />
         </div>
       ) : (
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-5 py-5 md:px-8">
+      <div className="flex min-w-0 flex-1 flex-col px-5 pt-5 md:px-8">
         <AssetFilterBar
           filters={filters}
           onFiltersChange={setFilters}
@@ -753,7 +790,9 @@ export default function AssetLibraryManager({ user }) {
                 onClick={() => setSelectedIds(new Set(visibleAssets.map((asset) => asset.id)))}
                 className="rounded-sm border border-border px-2.5 py-1.5 text-xs text-content-secondary transition-colors hover:border-border-active hover:text-content-primary"
               >
-                Select All
+                {/* Count makes the blast radius explicit - the windowed
+                    grid renders fewer cards than Select All selects */}
+                Select All ({visibleAssets.length})
               </button>
               <button
                 onClick={exitSelection}
@@ -785,8 +824,8 @@ export default function AssetLibraryManager({ user }) {
             </button>
           )}
 
-          {/* Grid: size slider · List: page size */}
-          {viewMode === 'grid' ? (
+          {/* Grid size (grid only) + items per page (both views) */}
+          {viewMode === 'grid' && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-content-secondary">Grid Size</span>
               <input
@@ -800,26 +839,25 @@ export default function AssetLibraryManager({ user }) {
                 aria-label="Grid size"
               />
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-content-secondary">Show</span>
-              <div className="flex overflow-hidden rounded-sm border border-border">
-                {[20, 50, 100].map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setListPageSize(size)}
-                    className={`px-2.5 py-1.5 text-xs tabular-nums transition-colors ${
-                      listPageSize === size
-                        ? 'bg-surface-secondary text-content-on-dark'
-                        : 'text-content-secondary hover:text-content-primary'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
           )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-content-secondary">Items per page</span>
+            <div className="flex overflow-hidden rounded-sm border border-border">
+              {[20, 50, 100].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setPageSize(size)}
+                  className={`px-2.5 py-1.5 text-xs tabular-nums transition-colors ${
+                    pageSize === size
+                      ? 'bg-surface-secondary text-content-on-dark'
+                      : 'text-content-secondary hover:text-content-primary'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* View toggle */}
           <div className="flex overflow-hidden rounded-sm border border-border">
@@ -865,7 +903,10 @@ export default function AssetLibraryManager({ user }) {
           <div className="mb-4 flex items-center justify-between rounded-sm border border-feedback-error bg-feedback-error/20 p-3">
             <p className="text-feedback-error">{error}</p>
             <button
-              onClick={() => deleteMutation.reset()}
+              onClick={() => {
+                deleteMutation.reset()
+                associateMutation.reset()
+              }}
               className="text-feedback-error hover:opacity-80"
               aria-label="Dismiss error"
             >
@@ -876,8 +917,9 @@ export default function AssetLibraryManager({ user }) {
           </div>
         )}
 
-        {/* Content */}
-        <div className="min-h-0 flex-1">
+        {/* Content - the only scrolling region; negative margins keep the
+            scrollbar at the pane edge while content stays aligned */}
+        <div ref={contentScrollRef} className="-mx-5 min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:-mx-8 md:px-8">
           {loading ? (
             <div
               className="grid gap-4"
@@ -916,7 +958,7 @@ export default function AssetLibraryManager({ user }) {
             </div>
           ) : viewMode === 'list' && visibleAssets.length > 0 ? (
             <AssetListView
-              assets={listAssets}
+              assets={pagedAssets}
               getContextMenuItems={getContextMenuItems}
               onAssetClick={handleAssetClick}
               onToggleFavorite={handleToggleFavorite}
@@ -924,15 +966,15 @@ export default function AssetLibraryManager({ user }) {
               activeTags={filters.tags}
               selectable={selectionMode}
               selectedIds={selectedIds}
-              hasMore={listHasMore}
-              onLoadMore={handleListLoadMore}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMore}
               sort={listSort}
               onSortChange={handleListSortChange}
+              scrollRootRef={contentScrollRef}
             />
           ) : (
             <AssetGrid
-              assets={visibleAssets}
-              loading={loading}
+              assets={pagedAssets}
               getContextMenuItems={getContextMenuItems}
               onAssetClick={handleAssetClick}
               onToggleFavorite={handleToggleFavorite}
@@ -941,6 +983,9 @@ export default function AssetLibraryManager({ user }) {
               selectable={selectionMode}
               selectedIds={selectedIds}
               columns={7 - gridScale}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMore}
+              scrollRootRef={contentScrollRef}
             />
           )}
         </div>

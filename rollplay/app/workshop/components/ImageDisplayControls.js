@@ -134,7 +134,7 @@ export default function ImageDisplayControls({
 
   return (
     <div className="flex flex-col gap-5 h-full">
-      <h3 className="text-base font-bold text-content-bold">Image Settings</h3>
+      <h3 className="text-base font-bold text-content-on-dark">Image Settings</h3>
 
       {/* Image Fit */}
       <div>
@@ -150,7 +150,7 @@ export default function ImageDisplayControls({
               }}
               className={`w-full px-3 py-2 text-left text-xs rounded border transition-colors ${
                 imageFit === fit.id
-                  ? 'bg-surface-elevated text-content-on-dark border-content-on-dark'
+                  ? 'bg-surface-hover text-content-on-dark border-content-on-dark'
                   : 'bg-border text-content-secondary border-border hover:border-border-active hover:text-content-on-dark'
               }`}
             >
@@ -172,7 +172,7 @@ export default function ImageDisplayControls({
                 onClick={() => onAspectRatioChange(preset.id)}
                 className={`px-2.5 py-1.5 text-xs font-medium rounded border transition-colors ${
                   aspectRatio === preset.id
-                    ? 'bg-surface-elevated text-content-on-dark border-content-on-dark'
+                    ? 'bg-surface-hover text-content-on-dark border-content-on-dark'
                     : 'bg-border text-content-secondary border-border hover:border-border-active'
                 }`}
                 title={preset.description}
@@ -194,7 +194,7 @@ export default function ImageDisplayControls({
               <span>X: {imagePositionX ?? 50}%</span>
               <button
                 onClick={() => onImagePositionChange(50, imagePositionY ?? 50)}
-                className="text-content-secondary/50 hover:text-content-primary"
+                className="text-content-secondary/50 hover:text-content-on-dark"
               >
                 Reset
               </button>
@@ -203,7 +203,7 @@ export default function ImageDisplayControls({
               type="range" min="0" max="100" step="1"
               value={imagePositionX ?? 50}
               onChange={(e) => onImagePositionChange(parseFloat(e.target.value), imagePositionY ?? 50)}
-              className="w-full h-1.5 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+              className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer"
             />
           </div>
 
@@ -212,7 +212,7 @@ export default function ImageDisplayControls({
               <span>Y: {imagePositionY ?? 50}%</span>
               <button
                 onClick={() => onImagePositionChange(imagePositionX ?? 50, 50)}
-                className="text-content-secondary/50 hover:text-content-primary"
+                className="text-content-secondary/50 hover:text-content-on-dark"
               >
                 Reset
               </button>
@@ -221,7 +221,7 @@ export default function ImageDisplayControls({
               type="range" min="0" max="100" step="1"
               value={imagePositionY ?? 50}
               onChange={(e) => onImagePositionChange(imagePositionX ?? 50, parseFloat(e.target.value))}
-              className="w-full h-1.5 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+              className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer"
             />
           </div>
         </div>
@@ -235,7 +235,7 @@ export default function ImageDisplayControls({
             onClick={() => onDisplayModeChange('standard')}
             className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors ${
               displayMode === 'standard'
-                ? 'bg-surface-elevated text-content-on-dark border-content-on-dark'
+                ? 'bg-surface-hover text-content-on-dark border-content-on-dark'
                 : 'bg-border text-content-secondary border-border hover:border-border-active hover:text-content-on-dark'
             }`}
           >
@@ -245,7 +245,7 @@ export default function ImageDisplayControls({
             onClick={() => onDisplayModeChange('cine')}
             className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-2 ${
               displayMode === 'cine'
-                ? 'bg-surface-elevated text-content-on-dark border-content-on-dark'
+                ? 'bg-surface-hover text-content-on-dark border-content-on-dark'
                 : 'bg-border text-content-secondary border-border hover:border-border-active hover:text-content-on-dark'
             }`}
           >
@@ -296,7 +296,7 @@ export default function ImageDisplayControls({
                       <button
                         onClick={() => moveOverlay(index, -1)}
                         disabled={index === 0}
-                        className="text-[10px] text-content-secondary hover:text-content-primary disabled:opacity-30 disabled:cursor-not-allowed px-0.5"
+                        className="text-[10px] text-content-secondary hover:text-content-on-dark disabled:opacity-30 disabled:cursor-not-allowed px-0.5"
                         title="Move up"
                       >
                         ▲
@@ -304,7 +304,7 @@ export default function ImageDisplayControls({
                       <button
                         onClick={() => moveOverlay(index, 1)}
                         disabled={index === overlays.length - 1}
-                        className="text-[10px] text-content-secondary hover:text-content-primary disabled:opacity-30 disabled:cursor-not-allowed px-0.5"
+                        className="text-[10px] text-content-secondary hover:text-content-on-dark disabled:opacity-30 disabled:cursor-not-allowed px-0.5"
                         title="Move down"
                       >
                         ▼
@@ -328,7 +328,7 @@ export default function ImageDisplayControls({
                       type="range" min="0" max="100" step="1"
                       value={Math.round(overlay.opacity * 100)}
                       onChange={(e) => updateOverlay(index, { opacity: parseInt(e.target.value) / 100 })}
-                      className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer"
                     />
                   </div>
 
@@ -338,7 +338,7 @@ export default function ImageDisplayControls({
                       <select
                         value={overlay.style || 'vintage'}
                         onChange={(e) => updateOverlay(index, { style: e.target.value })}
-                        className="w-full text-[10px] bg-surface-tertiary text-content-primary border border-border rounded px-2 py-1"
+                        className="w-full text-[10px] bg-surface-elevated text-content-on-dark border border-border rounded px-2 py-1"
                       >
                         {GRAIN_STYLES.map((s) => (
                           <option key={s.id} value={s.id}>{s.label}</option>
@@ -347,7 +347,7 @@ export default function ImageDisplayControls({
                       <select
                         value={overlay.blend_mode || 'overlay'}
                         onChange={(e) => updateOverlay(index, { blend_mode: e.target.value })}
-                        className="w-full text-[10px] bg-surface-tertiary text-content-primary border border-border rounded px-2 py-1"
+                        className="w-full text-[10px] bg-surface-elevated text-content-on-dark border border-border rounded px-2 py-1"
                       >
                         {GRAIN_BLEND_MODES.map((bm) => (
                           <option key={bm.id} value={bm.id}>{bm.label}</option>
@@ -369,7 +369,7 @@ export default function ImageDisplayControls({
                       <select
                         value={overlay.blend_mode || 'multiply'}
                         onChange={(e) => updateOverlay(index, { blend_mode: e.target.value })}
-                        className="flex-1 text-[10px] bg-surface-tertiary text-content-primary border border-border rounded px-2 py-1"
+                        className="flex-1 text-[10px] bg-surface-elevated text-content-on-dark border border-border rounded px-2 py-1"
                       >
                         {COLOR_BLEND_MODES.map((bm) => (
                           <option key={bm.id} value={bm.id}>{bm.label}</option>
@@ -394,7 +394,7 @@ export default function ImageDisplayControls({
                       <button
                         key={type.id}
                         onClick={() => { addOverlay(type.id); setAddMenuIndex(null); }}
-                        className="block w-full px-3 py-1.5 text-left text-xs text-content-secondary hover:text-content-on-dark hover:bg-surface-tertiary whitespace-nowrap"
+                        className="block w-full px-3 py-1.5 text-left text-xs text-content-secondary hover:text-content-on-dark hover:bg-surface-hover whitespace-nowrap"
                       >
                         {type.label}
                       </button>
@@ -413,7 +413,7 @@ export default function ImageDisplayControls({
             onClick={toggleHandHeld}
             className={`w-full px-3 py-2 text-left text-xs rounded border transition-colors mb-2 ${
               handHeld
-                ? 'bg-surface-elevated text-content-on-dark border-content-on-dark'
+                ? 'bg-surface-hover text-content-on-dark border-content-on-dark'
                 : 'bg-border text-content-secondary border-border hover:border-border-active hover:text-content-on-dark'
             }`}
           >
@@ -432,7 +432,7 @@ export default function ImageDisplayControls({
                   type="range" min="2" max="30" step="1"
                   value={handHeld.track_points}
                   onChange={(e) => updateHandHeld({ track_points: parseInt(e.target.value) })}
-                  className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
@@ -445,7 +445,7 @@ export default function ImageDisplayControls({
                   type="range" min="2" max="20" step="1"
                   value={handHeld.distance}
                   onChange={(e) => updateHandHeld({ distance: parseInt(e.target.value) })}
-                  className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
@@ -459,7 +459,7 @@ export default function ImageDisplayControls({
                   type="range" min="1" max="15" step="1"
                   value={handHeld.speed}
                   onChange={(e) => updateHandHeld({ speed: parseInt(e.target.value) })}
-                  className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
@@ -472,7 +472,7 @@ export default function ImageDisplayControls({
                   type="range" min="-100" max="100" step="1"
                   value={handHeld.x_bias}
                   onChange={(e) => updateHandHeld({ x_bias: parseInt(e.target.value) })}
-                  className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer"
                 />
                 <div className="flex justify-between text-[9px] text-content-secondary/40 mt-0.5">
                   <span>↕ More vertical drift</span>
@@ -490,7 +490,7 @@ export default function ImageDisplayControls({
                   type="range" min="0" max="100" step="1"
                   value={handHeld.randomness}
                   onChange={(e) => updateHandHeld({ randomness: parseInt(e.target.value) })}
-                  className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             </div>

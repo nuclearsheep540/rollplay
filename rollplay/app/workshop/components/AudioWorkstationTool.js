@@ -60,7 +60,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
               onClick={() => setActiveTab(tab.id)}
               className={`px-5 py-2 text-xs font-medium uppercase tracking-wider border-r border-border transition-colors ${
                 isActive
-                  ? 'bg-surface-secondary text-content-on-dark'
+                  ? 'bg-surface-elevated text-content-on-dark'
                   : 'text-content-secondary hover:text-content-on-dark'
               }`}
             >
@@ -484,14 +484,17 @@ function LoopEditor({ initialAssetId }) {
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
+    <div className="flex flex-col h-full border border-border bg-surface-elevated overflow-hidden">
       {/* ── Menu Bar ────────────────────────────────────────────────────── */}
       <FileMenuBar
-        items={[
-          { label: 'Open Asset', icon: faFileImport, onClick: () => setShowImportModal(true) },
-          { label: 'Save', icon: faFloppyDisk, onClick: handleSave, disabled: !hasChanges || !selectedAsset },
-          { label: 'Revert Changes', icon: faArrowRotateLeft, onClick: handleReset, disabled: !hasChanges },
-        ]}
+        menus={[{
+          label: 'File',
+          items: [
+            { label: 'Open Asset', icon: faFileImport, onClick: () => setShowImportModal(true) },
+            { label: 'Save', icon: faFloppyDisk, onClick: handleSave, disabled: !hasChanges || !selectedAsset },
+            { label: 'Revert Changes', icon: faArrowRotateLeft, onClick: handleReset, disabled: !hasChanges },
+          ],
+        }]}
       />
 
       {/* ── Transport Bar ───────────────────────────────────────────────── */}
@@ -741,7 +744,7 @@ function LoopEditor({ initialAssetId }) {
 
         {/* ── Loop Points Drawer ──────────────────────────────────────── */}
         {loopDrawerOpen && selectedAsset && (
-          <div className="flex-shrink-0 border-t border-border-active bg-surface-secondary max-h-[50%] overflow-y-auto">
+          <div className="flex-shrink-0 border-t border-border-active bg-surface-elevated max-h-[50%] overflow-y-auto">
             {/* Header — constrained to match the body column */}
             <div className="mx-auto w-full" style={{ maxWidth: 'min(80vw, 1200px)' }}>
               <div className="flex items-center justify-between px-4 py-2 border-b border-border">

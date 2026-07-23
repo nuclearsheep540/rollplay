@@ -204,15 +204,18 @@ export default function AudioPresetsTool({ onMix }) {
   }, [selectedPreset, deletePreset]);
 
   return (
-    <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
+    <div className="flex flex-col h-full border border-border bg-surface-elevated overflow-hidden">
       <FileMenuBar
-        items={[
-          {
-            label: 'Create New Preset',
-            icon: faPlus,
-            onClick: () => { setNewPresetName(''); setShowCreateModal(true); },
-          },
-        ]}
+        menus={[{
+          label: 'File',
+          items: [
+            {
+              label: 'Create New Preset',
+              icon: faPlus,
+              onClick: () => { setNewPresetName(''); setShowCreateModal(true); },
+            },
+          ],
+        }]}
       />
       <div className="flex flex-1 min-h-0">
       {/* ── Left pane: preset list ─────────────────────────────────────── */}

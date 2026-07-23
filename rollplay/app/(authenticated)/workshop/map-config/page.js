@@ -5,9 +5,9 @@
 
 'use client'
 
-import { useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MapConfigTool from '@/app/workshop/components/MapConfigTool'
+import { useWorkshopToolNav } from '@/app/workshop/hooks/useWorkshopToolNav'
 
 const VALID_TOOLS = ['move', 'grid', 'paint', 'erase']
 
@@ -24,31 +24,20 @@ export default function MapConfigPage() {
     ? searchParams.get('tool')
     : 'move'
 
-  // Capture the entry point once on mount (library vs workshop navigation)
-  const entryFromRef = useRef(null)
-  if (entryFromRef.current === null) {
-    entryFromRef.current = searchParams.get('from') || 'workshop'
-  }
+  // URL is the source of truth for asset, tool, and entry point — the
+  // shared hook owns the from=library threading and back destinations.
+  const { fromSuffix, backLabel, handleAssetSelect, handleBack } = useWorkshopToolNav(
+    '/workshop/map-config',
+    'Map Config',
+    (assetId) => `asset_id=${assetId}&tool=${tool}`,
+  )
 
-  const backLabel = !selectedAssetId
-    ? 'Workshop'
-    : entryFromRef.current === 'library' ? 'Library' : 'Map Config'
-
-  // URL is the source of truth for both asset and tool selection.
-  const handleAssetSelect = (assetId) => {
-    if (assetId) {
-      router.push(`/workshop/map-config?asset_id=${assetId}&tool=${tool}`)
-    } else {
-      router.push('/workshop/map-config')
-    }
-  }
-
+  // Tool changes are editor state, not navigation - replace keeps them
+  // out of history so the browser back button skips the tool clicks too.
   const handleToolChange = (toolId) => {
     if (!selectedAssetId) return
-    router.push(`/workshop/map-config?asset_id=${selectedAssetId}&tool=${toolId}`)
+    router.replace(`/workshop/map-config?asset_id=${selectedAssetId}&tool=${toolId}${fromSuffix}`)
   }
-
-  const handleBack = () => router.back()
 
   return (
     <main className="flex-1 min-h-0">
