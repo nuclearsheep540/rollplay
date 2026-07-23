@@ -112,7 +112,7 @@ export default function AssetListView({
                 {/* Mini thumbnail */}
                 <div className="relative h-9 w-[4.5rem] overflow-hidden rounded-sm bg-surface-elevated">
                   {isImage && asset.s3_url ? (
-                    <img src={asset.s3_url} alt="" className="h-full w-full object-cover" />
+                    <img src={asset.s3_url} alt="" loading="lazy" className="h-full w-full object-cover" />
                   ) : (
                     <AudioWaveThumb asset={asset} barCount={18} />
                   )}

@@ -90,6 +90,7 @@ export default function AssetCard({
             <img
               src={asset.s3_url}
               alt={asset.filename}
+              loading="lazy"
               className="w-full h-full object-cover"
               onError={(e) => {
                 e.target.style.display = 'none'

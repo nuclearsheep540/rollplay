@@ -1,11 +1,15 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import AssetCard from './AssetCard'
 
 /**
- * Grid layout for displaying assets with empty state
+ * Grid layout for displaying assets with empty state.
+ *
+ * Lazy pagination: when hasMore is set, an IntersectionObserver on a
+ * full-width sentinel below the cards calls onLoadMore as it nears the
+ * viewport, so the next page is revealed before the user hits the bottom.
  */
 export default function AssetGrid({
   assets,
@@ -18,7 +22,25 @@ export default function AssetGrid({
   selectable = false,
   selectedIds = null,
   columns = 4,
+  hasMore = false,
+  onLoadMore = null,
 }) {
+  const sentinelRef = useRef(null)
+
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || !sentinelRef.current) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onLoadMore()
+        }
+      },
+      { rootMargin: '400px' }
+    )
+    observer.observe(sentinelRef.current)
+    return () => observer.disconnect()
+  }, [assets, hasMore, onLoadMore])
+
   if (loading) {
     return null
   }
@@ -57,6 +79,9 @@ export default function AssetGrid({
           selected={selectedIds?.has(asset.id) || false}
         />
       ))}
+      {hasMore && (
+        <div ref={sentinelRef} className="col-span-full h-px" aria-hidden="true" />
+      )}
     </div>
   )
 }
