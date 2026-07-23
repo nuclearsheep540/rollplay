@@ -301,8 +301,12 @@ export default function CharacterManager({
     const overlay = char.avatar_url ? `${COLORS.onyx}26` : `${COLORS.onyx}80`
 
     return (
-      <div
+      // A real button so the card is keyboard-reachable (tab stop +
+      // Enter/Space), matching the create-card next to it
+      <button
+        type="button"
         key={char.id}
+        aria-label={`View ${char.character_name || 'Unnamed'}`}
         className="relative flex-shrink-0 rounded-sm border-2 overflow-hidden cursor-pointer origin-top hover:shadow-lg hover:scale-[1.01]"
         style={{
           ...CARD_STYLE,
@@ -351,7 +355,7 @@ export default function CharacterManager({
             {characterMetaLine(char)}
           </p>
         </div>
-      </div>
+      </button>
     )
   }
 
