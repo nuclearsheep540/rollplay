@@ -52,6 +52,12 @@ class MapAssetModel(MediaAsset):
     # contract.
     fog_config = Column(JSONB, nullable=True)
 
+    # DM-authored npc token baseline (tokens v2, decision 22). NULL means
+    # no tokens authored. Shape: { version: 1, tokens: [MapToken, ...] }
+    # — npc-only, no user references (the v1 warning against people-state
+    # on the many-to-many asset stands; this is map authoring like fog).
+    token_config = Column(JSONB, nullable=True)
+
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MAP,  # Enum value, not string
     }

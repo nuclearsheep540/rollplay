@@ -31,7 +31,8 @@ from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import (
     ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, DisassociateFromCampaign, RenameMediaAsset,
     ChangeAssetType, UpdateAssetTags, SetAssetFavorite,
-    UpdateGridConfig, UpdateFogConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError,
+    UpdateGridConfig, UpdateFogConfig, UpdateTokenConfig, UpdateAudioConfig, UpdateImageConfig,
+    SetImageFocalArea, AssetInUseError, BoardInPlayError,
     CreatePreset, RenamePreset, UpdatePresetSlots, DeletePreset,
     PresetNameConflictError, PresetNotFoundError, InvalidPresetAssetError,
     CreateCollection, UpdateCollection, AddAssetToCollection,
@@ -57,6 +58,8 @@ from .schemas import (
     SetFavoriteRequest,
     UpdateGridConfigRequest,
     UpdateFogConfigRequest,
+    UpdateTokenConfigRequest,
+    SetFocalAreaRequest,
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
     MediaAssetListResponse,
@@ -117,6 +120,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             grid_line_color=asset.grid_line_color,
             grid_cell_size=asset.grid_cell_size,
             fog_config=asset.fog_config,
+            token_config=asset.token_config,
         )
     elif isinstance(asset, MusicAsset):
         fields.update(
@@ -152,6 +156,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             image_position_y=asset.image_position_y,
             visual_overlays=asset.visual_overlays,
             motion=asset.motion.to_dict() if asset.motion else None,
+            focal_areas=asset.focal_areas,
         )
 
     return MediaAssetResponse(**fields)
@@ -946,6 +951,92 @@ async def update_fog_config(
     except Exception as e:
         logger.error(f"Update fog config error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update fog configuration")
+
+
+@router.patch("/{asset_id}/tokens", response_model=MediaAssetResponse)
+async def update_token_config(
+    asset_id: UUID,
+    request: UpdateTokenConfigRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Replace the npc token baseline on a map asset (atomic full-replace,
+    tokens v2 decision 22). Two 409 shapes: a plain-string detail while a
+    campaign session is live (never overridable), and a coded detail
+    {"code": "board_in_play"} for a paused session's in-play board, which
+    the workshop retries with force=True after its warning dialog.
+    """
+    try:
+        command = UpdateTokenConfig(repo, session_repo)
+        asset = command.execute(
+            asset_id=asset_id,
+            user_id=current_user.id,
+            tokens=request.tokens,
+            force=request.force,
+        )
+
+        token_count = len(request.tokens) if request.tokens else 0
+        logger.info(f"Updated token baseline for map {asset_id}: {token_count} token(s)")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except AssetInUseError as e:
+        logger.warning(f"Update token config blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
+    except BoardInPlayError as e:
+        logger.warning(f"Update token config blocked (board in play): {e}")
+        raise HTTPException(status_code=409, detail={"code": "board_in_play", "message": str(e)})
+    except ValueError as e:
+        logger.warning(f"Update token config failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update token config error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update token baseline")
+
+
+@router.patch("/{asset_id}/focal-area", response_model=MediaAssetResponse)
+async def set_focal_area(
+    asset_id: UUID,
+    request: SetFocalAreaRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Set (or clear with area=null) one purpose-keyed focal square on an
+    image asset (tokens v2, decision 27). The crop belongs to the image —
+    every token using it shares the same "token" area.
+    """
+    try:
+        command = SetImageFocalArea(repo, session_repo)
+        asset = command.execute(
+            asset_id=asset_id,
+            user_id=current_user.id,
+            purpose=request.purpose,
+            area=request.area,
+        )
+
+        logger.info(f"Set focal area '{request.purpose}' for image {asset_id}: {request.area}")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except AssetInUseError as e:
+        logger.warning(f"Set focal area blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Set focal area failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Set focal area error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set focal area")
 
 
 @router.patch("/{asset_id}/audio-config", response_model=MediaAssetResponse)

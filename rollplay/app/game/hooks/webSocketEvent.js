@@ -91,6 +91,12 @@ export const handleInitialState = (data, handlers) => {
     handlers.setMapTokenState(data.map_token_state || {});
   }
 
+  // Token image refs (image_asset_id → signed URL + focal area) — fixed
+  // at session start, delivered alongside the boards (decision 27).
+  if (handlers.setTokenImages) {
+    handlers.setTokenImages(data.token_images || {});
+  }
+
   // Sync audio state for late-joiners (plays active tracks at correct position)
   if (audio_state && handlers.syncAudioState) {
     handlers.syncAudioState(audio_state);

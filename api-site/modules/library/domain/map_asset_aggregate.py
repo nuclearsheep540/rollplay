@@ -14,9 +14,14 @@ from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
 from shared_contracts.map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
+from shared_contracts.map_token import MapToken
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
+
+# Baseline cap — a sanity bound far above any real prepared encounter, not
+# a gameplay rule (fog's FOG_REGIONS_MAX precedent).
+TOKEN_BASELINE_MAX = 100
 
 
 @dataclass
@@ -39,6 +44,10 @@ class MapAsset(MediaAssetAggregate):
     # See FogConfig / FogRegion in shared_contracts.map for the field
     # schema. None means "no fog ever painted on this map".
     fog_config: Optional[Dict[str, Any]] = None
+    # DM-authored npc token baseline (tokens v2, decision 22):
+    # { "version": 1, "tokens": [MapToken dicts] } or None. npc-only —
+    # never people state; boards (which hold pc tokens) stay session-scoped.
+    token_config: Optional[Dict[str, Any]] = None
 
     @classmethod
     def create(
@@ -93,6 +102,7 @@ class MapAsset(MediaAssetAggregate):
         grid_line_color: Optional[str] = None,
         grid_cell_size: Optional[float] = None,
         fog_config: Optional[Dict[str, Any]] = None,
+        token_config: Optional[Dict[str, Any]] = None,
     ) -> "MapAsset":
         """
         Promote a base MediaAssetAggregate to MapAsset.
@@ -109,6 +119,7 @@ class MapAsset(MediaAssetAggregate):
             grid_line_color=grid_line_color,
             grid_cell_size=grid_cell_size,
             fog_config=fog_config,
+            token_config=token_config,
         )
 
     def update_grid_config(
@@ -354,6 +365,66 @@ class MapAsset(MediaAssetAggregate):
         self.update_fog_config(
             regions=[r.model_dump() for r in game_fog_config.regions]
         )
+
+    # ── Token baseline (tokens v2, decision 22) ─────────────────────────
+    #
+    # The DM-authored npc token layout for this map: prepared traps,
+    # monsters, markers. Authored ONLY in the workshop; the game runtime
+    # never writes it back (decision 23 — runtime state lives on the
+    # session row). Seeded into session boards at start by the ETL.
+
+    def update_token_config(self, tokens: Optional[List[Dict[str, Any]]]) -> None:
+        """Atomic full replace of the baseline token list.
+
+        Pass tokens=None or [] to clear. Every token validates against the
+        MapToken contract and must be npc-kind: pc tokens are people state
+        and never belong on the many-to-many asset (v1 §2 warning).
+        """
+        if not tokens:
+            self.token_config = None
+            self.updated_at = datetime.utcnow()
+            return
+
+        if len(tokens) > TOKEN_BASELINE_MAX:
+            raise ValueError(f"Cannot author more than {TOKEN_BASELINE_MAX} baseline tokens")
+
+        validated_tokens = []
+        seen_token_ids = set()
+        for token_dict in tokens:
+            validated = MapToken.model_validate(token_dict)
+            if validated.kind != "npc":
+                raise ValueError("Token baselines are npc-only — pc tokens are session state")
+            if validated.owner_user_id is not None:
+                raise ValueError(
+                    "Baseline tokens cannot reference users — assigning a "
+                    "party-controlled token to a player is a session act (v1 §2: "
+                    "assets are many-to-many with campaigns, people-state would leak)"
+                )
+            if validated.id in seen_token_ids:
+                raise ValueError(f"Duplicate baseline token id {validated.id}")
+            seen_token_ids.add(validated.id)
+            validated_tokens.append(validated.model_dump())
+
+        self.token_config = {"version": 1, "tokens": validated_tokens}
+        self.updated_at = datetime.utcnow()
+
+    def get_token_config(self) -> Optional[Dict[str, Any]]:
+        """Return the baseline dict (or None if never authored)."""
+        return self.token_config
+
+    def build_token_baseline(self) -> List[Dict[str, Any]]:
+        """Baseline tokens as fresh validated dicts for ETL seeding.
+        Empty list when nothing is authored; malformed entries are dropped
+        with the same salvage philosophy as the session restore."""
+        if not self.token_config:
+            return []
+        baseline_tokens = []
+        for token_dict in self.token_config.get("tokens", []):
+            try:
+                baseline_tokens.append(MapToken.model_validate(token_dict).model_dump())
+            except Exception:
+                continue  # stored across a contract change — drop, never block a start
+        return baseline_tokens
 
     # ── Contract projection (the single source of truth for ETL) ────────
 

@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import MapConfigTool from '@/app/workshop/components/MapConfigTool'
 import { useWorkshopToolNav } from '@/app/workshop/hooks/useWorkshopToolNav'
 
-const VALID_TOOLS = ['move', 'grid', 'paint', 'erase']
+const VALID_TOOLS = ['move', 'grid', 'tokens', 'paint', 'erase']
 
 // Site chrome (header, auth gate, WebSocket subscription, Suspense for
 // useSearchParams) is provided by the (authenticated) route group's

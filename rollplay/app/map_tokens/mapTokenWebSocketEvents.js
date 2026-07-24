@@ -18,7 +18,7 @@
  */
 
 /** Committed-state fragment: replace one map's token array wholesale. */
-export const handleMapTokenStateUpdate = (data, { applyTokenBoard, addToLog }) => {
+export const handleMapTokenStateUpdate = (data, { applyTokenBoard, addToLog, mergeTokenImages }) => {
   const assetId = data?.asset_id;
   if (!assetId || !applyTokenBoard) return;
 
@@ -27,6 +27,13 @@ export const handleMapTokenStateUpdate = (data, { applyTokenBoard, addToLog }) =
     tokenId: data.token_id,
     updatedBy: data.updated_by,
   });
+
+  // A place/reveal fragment can carry image refs for tokens entering the
+  // player's world (their initial_state only had refs for tokens visible
+  // at connect — decision 17 covers artwork identity too).
+  if (data.token_images && mergeTokenImages) {
+    mergeTokenImages(data.token_images);
+  }
 
   // Server writes the adventure-log line to Mongo; live clients mirror it
   // locally off the broadcast (same pattern as combat_state et al).
@@ -107,12 +114,13 @@ export const createMapTokenSendFunctions = (webSocket, isConnected) => {
  */
 export const registerMapTokenHandlers = ({ registerHandler, thisUserId,
                                            applyTokenBoard, applyRemoteDrag,
-                                           applyGrabDenial, addToLog }) => {
+                                           applyGrabDenial, addToLog,
+                                           mergeTokenImages }) => {
   if (!registerHandler) return () => {};
 
   const cleanups = [
     registerHandler('map_token_state_update', (data) =>
-      handleMapTokenStateUpdate(data, { applyTokenBoard, addToLog })),
+      handleMapTokenStateUpdate(data, { applyTokenBoard, addToLog, mergeTokenImages })),
     registerHandler('map_token_drag', (data) =>
       handleMapTokenDrag(data, { thisUserId, applyRemoteDrag })),
     registerHandler('map_token_drag_denied', (data) =>

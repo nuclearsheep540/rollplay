@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 from .connection_manager import manager, RoomManager
 from .websocket_events import WebsocketEvent
+from map_token_ops import filter_map_token_state_for_player
 from adventure_log_service import AdventureLogService
 from models.log_type import LogType
 
@@ -34,6 +35,26 @@ def register_websocket_routes(app: FastAPI):
         try:
             room = GameService.get_room(client_id)
             if room:
+                # Hidden tokens never reach player clients (decision 17) —
+                # this send is already per-socket, so filter right here.
+                # The same rule covers token_images: an image referenced
+                # only by hidden tokens would leak the monster's artwork,
+                # so players get refs for visible-board images only (a
+                # reveal fragment delivers the ref when it's needed).
+                map_token_state = room.get("map_token_state", {})
+                token_images = room.get("token_images", {})
+                if user_id != room.get("dungeon_master", {}).get("user_id"):
+                    map_token_state = filter_map_token_state_for_player(map_token_state)
+                    visible_image_ids = set()
+                    for visible_board in map_token_state.values():
+                        for visible_token in visible_board:
+                            if visible_token.get("image_asset_id"):
+                                visible_image_ids.add(visible_token["image_asset_id"])
+                    visible_token_images = {}
+                    for image_id, image_ref in token_images.items():
+                        if image_id in visible_image_ids:
+                            visible_token_images[image_id] = image_ref
+                    token_images = visible_token_images
                 initial_state = {
                     "event_type": "initial_state",
                     "data": {
@@ -45,7 +66,12 @@ def register_websocket_routes(app: FastAPI):
                         "player_metadata": room.get("player_metadata", {}),
                         "audio_state": room.get("audio_state", {}),
                         "spotify": room.get("spotify", {}),
-                        "map_token_state": room.get("map_token_state", {})
+                        "map_token_state": map_token_state,
+                        # Filtered for non-DM recipients above (decision 17:
+                        # refs for hidden-only images would leak the
+                        # monster's artwork; reveal fragments deliver the
+                        # ref when the token enters the player's view).
+                        "token_images": token_images
                     }
                 }
                 await websocket.send_json(initial_state)
@@ -351,7 +377,10 @@ def register_websocket_routes(app: FastAPI):
                         client_id=client_id,
                         manager=manager
                     )
-                    broadcast_message = result.broadcast_message
+                    if result.broadcast_message:
+                        broadcast_message = result.broadcast_message
+                    else:
+                        continue  # denied (answered to sender) or per-recipient hidden filtering already sent
 
                 elif event_type == "map_token_drag":
                     result = await WebsocketEvent.map_token_drag(

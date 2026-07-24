@@ -31,5 +31,7 @@ MESSAGE_TEMPLATES = {
     # Map tokens — cell_suffix is " at D7" on an addressable grid, else ""
     "map_token_placed": "{player} placed {token}{cell_suffix}",
     "map_token_removed": "{player} removed {token}",
-    "map_token_moved_by_other": "{player} moved {token}'s token"
+    "map_token_moved_by_other": "{player} moved {token}'s token",
+    "map_token_moved_party": "{player} moved {token}",
+    "map_token_revealed": "{player} revealed {token}{cell_suffix}"
 }

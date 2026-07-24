@@ -24,8 +24,32 @@ def is_valid_asset_key(asset_id: Any) -> bool:
     return "." not in asset_id and "\x00" not in asset_id and not asset_id.startswith("$")
 
 # Fields a "configure" op may change. Position changes are "move"; identity
-# fields (id, kind, owner_user_id, created_by) are immutable after place.
-CONFIGURABLE_TOKEN_FIELDS = ("label", "footprint")
+# fields (id, kind, created_by) are immutable after place.
+# hidden/locked are npc-only (contract invariant, decision 19) and the
+# handler additionally gates them on the DM (decision 16). owner_user_id
+# is handled below: on npc tokens it is the DM's assignment of a
+# minion/companion to a player.
+CONFIGURABLE_TOKEN_FIELDS = ("label", "footprint", "hidden", "locked")
+
+
+def filter_hidden_tokens(tokens: list) -> list:
+    """A player's view of a board: hidden tokens stripped (decision 17).
+    Hidden tokens must never reach player clients — filtering happens
+    server-side before send, never in the client renderer."""
+    visible_tokens = []
+    for board_token in tokens:
+        if not board_token.get("hidden"):
+            visible_tokens.append(board_token)
+    return visible_tokens
+
+
+def filter_map_token_state_for_player(map_token_state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Player's view of the whole map_token_state dict (initial_state
+    hydration): every board filtered through filter_hidden_tokens."""
+    filtered_state = {}
+    for asset_id, board_tokens in (map_token_state or {}).items():
+        filtered_state[asset_id] = filter_hidden_tokens(board_tokens or [])
+    return filtered_state
 
 
 def map_token_array_path(asset_id: str) -> str:
@@ -81,6 +105,12 @@ def build_map_token_update(
         for field_name in CONFIGURABLE_TOKEN_FIELDS:
             if token.get(field_name) is not None:
                 set_fields[f"{array_path}.$.{field_name}"] = token[field_name]
+        # Assignment (companion tokens): owner_user_id sets even when
+        # None — a configure payload is the full token, so None means
+        # "back to DM-only", unlike label's absent-means-keep. The handler
+        # denies owner changes on pc targets (ownership is identity there).
+        if "owner_user_id" in token:
+            set_fields[f"{array_path}.$.owner_user_id"] = token["owner_user_id"]
         return {f"{array_path}.id": token_id}, {"$set": set_fields}
 
     raise ValueError(f"Unknown map token op: {op}")

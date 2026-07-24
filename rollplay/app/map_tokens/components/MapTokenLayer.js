@@ -3,7 +3,10 @@
 
 'use client'
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faEyeSlash, faLock } from '@fortawesome/free-solid-svg-icons';
 
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import {
@@ -15,6 +18,7 @@ import {
   NPC_TOKEN_COLOR,
   tokenDiameterPx,
 } from '../config';
+import TokenAvatarDisc from './TokenAvatarDisc';
 
 /**
  * MapTokenLayer — the shared board's pieces (plan §3.4).
@@ -45,6 +49,10 @@ export default function MapTokenLayer({
   playerSeatMap = {},
   displayNameMap = {},
   thisUserId,
+  thisUserIsDm = false,
+  tokenImages = {},          // image_asset_id → { url, token_area } (decision 27)
+  mapViewScale = 1,          // camera zoom — annotations counter-scale so text/badges hold screen size
+  showTokenNames = true,     // per-user client-side label toggle (held-by nameplates always show)
   gridConfig = null,
   mapAssetId = null,
   attachTokenLayer,
@@ -61,6 +69,13 @@ export default function MapTokenLayer({
   const [naturalDims, setNaturalDims] = useState({ w: 0, h: 0 });
   // Re-render trigger for drag start/end only — pointer moves stay in refs.
   const [draggingTokenId, setDraggingTokenId] = useState(null);
+  // Stack cycling (decision 21): token_id → local z bump. A no-move click on
+  // a stack rotates its bottom token to the top so any buried token is
+  // reachable. Render-order override only — never sent, never persisted —
+  // and cleared whenever the board changes so the shared last-moved-on-top
+  // rule stays authoritative the moment anyone actually moves a piece.
+  const [stackOverrides, setStackOverrides] = useState({});
+  const stackSeqRef = useRef(1);
   // { tokenId, token, element, renderScale, startClientX/Y, startLeft/Top,
   //   currentLeft/Top, moved, lastFrameSentAtMs } — single source of truth
   // for the in-flight drag (survives re-renders).
@@ -99,6 +114,65 @@ export default function MapTokenLayer({
 
   const renderScale = naturalDims.w > 0 ? imgDims.w / naturalDims.w : 0;
 
+  // Discs scale with the map (they occupy grid cells); the annotations on
+  // them (names, nameplates, badges) hold constant SCREEN size by scaling
+  // 1/zoom — otherwise a zoomed-out board's labels shrink into noise.
+  const labelScale = mapViewScale > 0 ? 1 / mapViewScale : 1;
+
+  // Any committed board change resets cycling — the shared order (and the
+  // board itself) just changed under the local peek.
+  useEffect(() => {
+    setStackOverrides((previousOverrides) =>
+      Object.keys(previousOverrides).length > 0 ? {} : previousOverrides);
+  }, [tokens]);
+
+  // Wrapper stays mounted even with nothing to draw — chip drops need its
+  // rect. Discs render only once the image is laid out.
+  const canRenderTokens = renderScale > 0 && imgDims.w > 0;
+
+  // Last-moved renders on top (decision 13: stacking is allowed and always
+  // separable). DOM order is stacking order inside the wrapper; a stack
+  // cycle bump (decision 21) layers above the shared order until the next
+  // committed change clears it.
+  const orderedTokens = useMemo(() => {
+    if (!canRenderTokens) return [];
+    return [...tokens].sort((tokenA, tokenB) => {
+      const bumpA = stackOverrides[tokenA.id] || 0;
+      const bumpB = stackOverrides[tokenB.id] || 0;
+      if (bumpA !== bumpB) return bumpA - bumpB;
+      return String(tokenA.updated_at || '').localeCompare(String(tokenB.updated_at || ''));
+    });
+  }, [canRenderTokens, tokens, stackOverrides]);
+
+  // Stack membership for the count badge and the cycle gesture: tokens
+  // whose disc covers a given token's center count as one pile. Boards are
+  // a handful of tokens, so the quadratic scan is nothing.
+  const tokenStackMembers = useCallback((centerToken) => {
+    // Membership must be symmetric across mixed footprints (a wolf on a
+    // giant is the giant's stack too), so a pair counts when EITHER disc
+    // covers the other's center — max of the radii, not just the other's.
+    const centerDiameter = tokenDiameterPx(
+      centerToken.footprint, gridConfig, naturalDims.w, naturalDims.h);
+    return orderedTokens.filter((otherToken) => {
+      const otherDiameter = tokenDiameterPx(
+        otherToken.footprint, gridConfig, naturalDims.w, naturalDims.h);
+      const centerDistance = Math.hypot(
+        otherToken.x - centerToken.x, otherToken.y - centerToken.y);
+      return centerDistance <= Math.max(otherDiameter, centerDiameter) / 2;
+    });
+  }, [orderedTokens, gridConfig, naturalDims.w, naturalDims.h]);
+
+  // A no-move click on a stack rotates its bottom token to the top.
+  const cycleStackAt = useCallback((clickedToken) => {
+    const stackMembers = tokenStackMembers(clickedToken);
+    if (stackMembers.length < 2) return;
+    const bottomToken = stackMembers[0]; // orderedTokens order = bottom first
+    setStackOverrides((previousOverrides) => ({
+      ...previousOverrides,
+      [bottomToken.id]: stackSeqRef.current++,
+    }));
+  }, [tokenStackMembers]);
+
   /**
    * Finish the in-flight drag. Outcomes:
    *  - 'commit'  — pointerup: release the hold, then lane-1 commit (moved)
@@ -131,11 +205,12 @@ export default function MapTokenLayer({
       // Release first, then the lane-1 commit settles position (plan §3.2).
       releaseToken(drag.tokenId, nativeX, nativeY);
       commitTokenMove(drag.token, nativeX, nativeY);
-    } else if (outcome === 'commit' || outcome === 'putback') {
+    } else if ((outcome === 'commit' || outcome === 'putback') && drag.grabbed) {
       // Hold was granted but nothing (or nothing valid) to commit.
       releaseToken(drag.tokenId, drag.token.x, drag.token.y);
     }
     // 'denied': the server never granted the hold — nothing to release.
+    // !grabbed (locked token's cycle click): no hold was ever requested.
   }, [renderScale, releaseToken, commitTokenMove]);
 
   // Server denied our grab — first hand was someone else's. Snap home,
@@ -153,11 +228,21 @@ export default function MapTokenLayer({
     if (event.button !== 0) return;
     if (dragRef.current) return; // one drag at a time — a second pointer must not hijack the ref
     if (heldTokens[token.id]) return; // someone's hand is on it — server would deny anyway
+    // npc tokens are the DM's to command (decision 16): players get no drag
+    // affordance at all — return before preventDefault/stopPropagation so
+    // the gesture falls through to map panning. Assigned companions are
+    // player-side and open to everyone.
+    if (token.kind === 'npc' && !thisUserIsDm && !token.owner_user_id) return;
     event.preventDefault();
     event.stopPropagation(); // token drag, not map pan (coexistence contract)
 
     const wrapper = wrapperRef.current;
     if (!wrapper || renderScale <= 0) return;
+
+    // A locked token (decision 18) can't move — but its click still cycles
+    // a stack, so the gesture bookkeeping starts WITHOUT a grab and with
+    // movement disabled (grabbed: false).
+    const canMove = !token.locked;
 
     const startLeft = token.x * renderScale;
     const startTop = token.y * renderScale;
@@ -173,16 +258,20 @@ export default function MapTokenLayer({
       currentLeft: startLeft,
       currentTop: startTop,
       moved: false,
+      grabbed: canMove,
       lastFrameSentAtMs: 0,
     };
     setDraggingTokenId(token.id);
     event.currentTarget.setPointerCapture(event.pointerId);
-    grabToken(token.id); // optimistic — denial snaps back
-  }, [heldTokens, renderScale, grabToken]);
+    if (canMove) {
+      grabToken(token.id); // optimistic — denial snaps back
+    }
+  }, [heldTokens, renderScale, grabToken, thisUserIsDm]);
 
   const handleTokenPointerMove = useCallback((event) => {
     const drag = dragRef.current;
     if (!drag || drag.element !== event.currentTarget) return;
+    if (!drag.grabbed) return; // locked token: click-to-cycle only, never movement
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
@@ -221,8 +310,14 @@ export default function MapTokenLayer({
     const drag = dragRef.current;
     if (!drag || drag.element !== event.currentTarget) return;
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
+    // A click that never became a drag is the stack-cycle gesture
+    // (decision 21) — the gesture was previously semantically empty
+    // (grab + immediate put-back), so nothing else claims it.
+    if (!drag.moved) {
+      cycleStackAt(drag.token);
+    }
     endDrag('commit');
-  }, [endDrag]);
+  }, [endDrag, cycleStackAt]);
 
   const handleTokenPointerCancel = useCallback((event) => {
     const drag = dragRef.current;
@@ -304,16 +399,6 @@ export default function MapTokenLayer({
     };
   }, [heldTokens, tokens, renderScale, remoteDragFramesRef, mapAssetId]);
 
-  // Wrapper stays mounted even with nothing to draw — chip drops need its
-  // rect. Discs render only once the image is laid out.
-  const canRenderTokens = renderScale > 0 && imgDims.w > 0;
-
-  // Last-moved renders on top (decision 13: stacking is allowed and always
-  // separable). DOM order is stacking order inside the wrapper.
-  const orderedTokens = canRenderTokens
-    ? [...tokens].sort((tokenA, tokenB) =>
-        String(tokenA.updated_at || '').localeCompare(String(tokenB.updated_at || '')))
-    : [];
 
   return (
     <div
@@ -331,8 +416,13 @@ export default function MapTokenLayer({
     >
       {orderedTokens.map((token) => {
         const isPc = token.kind === 'pc';
-        const ownerMetadata = isPc ? playerMetadata[token.owner_user_id] : null;
-        const discColor = isPc
+        // An assigned npc token is a player's minion/companion — it is
+        // player-side (decision 2) and wears its assignee's character
+        // color through the same chain pc tokens use. Plain npc stays
+        // DM-rose.
+        const isCompanion = !isPc && !!token.owner_user_id;
+        const ownerMetadata = (isPc || isCompanion) ? playerMetadata[token.owner_user_id] : null;
+        const discColor = (isPc || isCompanion)
           ? (ownerMetadata?.color
               || playerSeatMap[token.owner_user_id]?.seatColor
               || FALLBACK_TOKEN_COLOR)
@@ -340,6 +430,14 @@ export default function MapTokenLayer({
         const tokenName = isPc
           ? (ownerMetadata?.character_name || token.label || 'Unknown Adventurer')
           : (token.label || 'NPC');
+
+        // Stack badge (decision 21): the pile's top token wears the count
+        // on hover, so buried tokens are visible before they're reachable.
+        // Members preserve orderedTokens' bottom→top order (cycleStackAt
+        // leans on the same invariant from the other end).
+        const stackMembers = tokenStackMembers(token);
+        const isStackTop = stackMembers.length > 1
+          && stackMembers[stackMembers.length - 1].id === token.id;
 
         const hold = heldTokens[token.id];
         const holderName = hold
@@ -351,6 +449,15 @@ export default function MapTokenLayer({
         const left = drag ? drag.currentLeft : token.x * renderScale;
         const top = drag ? drag.currentTop : token.y * renderScale;
         const lifted = !!hold || isDragging;
+        // npc tokens are inert for players (decision 16) — no grab cursor,
+        // and pointerdown falls through to panning — UNLESS assigned as a
+        // companion, which makes them player-side. Locked tokens keep the
+        // pointer for stack cycling but show they won't move (decision 18).
+        // Hidden tokens only ever render for the DM (server filters).
+        const interactive = token.kind !== 'npc' || thisUserIsDm || isCompanion;
+        const cursorClass = !interactive
+          ? 'cursor-default'
+          : (token.locked ? 'cursor-not-allowed' : 'cursor-grab');
 
         return (
           <div
@@ -362,7 +469,7 @@ export default function MapTokenLayer({
                 delete tokenElementsRef.current[token.id];
               }
             }}
-            className="absolute cursor-grab"
+            className={`absolute group ${cursorClass}`}
             style={{
               left: `${left}px`,
               top: `${top}px`,
@@ -374,37 +481,83 @@ export default function MapTokenLayer({
               // don't even reach for it).
               pointerEvents: hold ? 'none' : 'auto',
               touchAction: 'none',
+              opacity: token.hidden ? 0.45 : 1,
             }}
             onPointerDown={(event) => handleTokenPointerDown(event, token)}
             onPointerMove={handleTokenPointerMove}
             onPointerUp={handleTokenPointerUp}
             onPointerCancel={handleTokenPointerCancel}
           >
-            {/* Disc — dynamic color stays inline; decoration is Tailwind */}
+            {/* Disc — dynamic color stays inline; decoration is Tailwind.
+                An image face overlays the color disc once loaded (decision
+                28); a missing/slow URL degrades to the v1 color disc. */}
             <div
               className={`w-full h-full rounded-full border-2 border-black/55 opacity-90 ${
                 lifted ? 'shadow-xl shadow-black/50' : 'shadow-md shadow-black/40'
               }`}
               style={{ backgroundColor: discColor }}
             />
+            {token.image_asset_id && tokenImages[token.image_asset_id]?.url && (
+              <TokenAvatarDisc
+                url={tokenImages[token.image_asset_id].url}
+                area={tokenImages[token.image_asset_id].token_area}
+              />
+            )}
+
+            {/* DM-only state glyphs: ghost eye for hidden (players never
+                receive these tokens), padlock for locked */}
+            {(token.hidden || token.locked) && (
+              <div
+                className="absolute -top-1 -left-1 flex gap-0.5 text-xs leading-none pointer-events-none"
+                style={{ transform: `scale(${labelScale})`, transformOrigin: 'top left' }}
+                aria-hidden="true"
+              >
+                {token.hidden && (
+                  <span className="px-0.5 py-0.5 rounded bg-black/75 text-white" title="Hidden from players">
+                    <FontAwesomeIcon icon={faEyeSlash} />
+                  </span>
+                )}
+                {token.locked && (
+                  <span className="px-0.5 py-0.5 rounded bg-black/75 text-white" title="Locked in place">
+                    <FontAwesomeIcon icon={faLock} />
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Stack count badge — hover the pile's top token to see how
+                deep it goes; click cycles (decision 21) */}
+            {isStackTop && (
+              <div
+                className="absolute -top-1 -right-1 min-w-[18px] px-1 rounded-full bg-black/75 text-white text-xs leading-4 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                style={{ transform: `scale(${labelScale})`, transformOrigin: 'top right' }}
+                title={`${stackMembers.length} tokens stacked — click to cycle`}
+              >
+                {stackMembers.length}
+              </div>
+            )}
 
             {/* Held-by nameplate — the social-correction signal (plan §3.5) */}
             {hold && (
               <div
-                className="absolute bottom-full left-1/2 px-2 py-0.5 rounded bg-black/70 text-white text-xs whitespace-nowrap pointer-events-none"
-                style={{ transform: 'translate(-50%, -4px)' }}
+                className="absolute bottom-full left-1/2 px-2 py-0.5 rounded bg-black/70 text-white text-sm whitespace-nowrap pointer-events-none"
+                style={{ transform: `translate(-50%, -4px) scale(${labelScale})`, transformOrigin: 'bottom center' }}
               >
                 ✋ held by {holderName}
               </div>
             )}
 
-            {/* Name subtitle on a 50%-opacity backing (product decision 3) */}
-            <div
-              className="absolute top-full left-1/2 px-1.5 rounded bg-black/50 text-white text-xs whitespace-nowrap pointer-events-none"
-              style={{ transform: 'translate(-50%, 3px)' }}
-            >
-              {tokenName}
-            </div>
+            {/* Name subtitle on a 50%-opacity backing (product decision 3).
+                Client-side toggleable; the held-by nameplate above is a
+                social signal and always shows. */}
+            {showTokenNames && (
+              <div
+                className="absolute top-full left-1/2 px-1.5 rounded bg-black/50 text-white text-sm whitespace-nowrap pointer-events-none"
+                style={{ transform: `translate(-50%, 3px) scale(${labelScale})`, transformOrigin: 'top center' }}
+              >
+                {tokenName}
+              </div>
+            )}
           </div>
         );
       })}

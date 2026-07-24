@@ -73,9 +73,17 @@ export function useGatePreload({
         }
       }
 
-      // Fire all downloads simultaneously — AssetDownloadManager deduplicates by assetId
+      // Fire all downloads simultaneously — AssetDownloadManager deduplicates by assetId.
+      // A failed preload is survivable (useAssetDownload falls back to direct
+      // embedding, which CDN CORS can't block the way fetch() is blocked) —
+      // catch here so it degrades with a warning instead of an
+      // unhandled-rejection overlay in dev.
       for (const asset of manifest) {
-        assetManager.download(asset.url, asset.fileSize, asset.assetId)
+        assetManager.download(asset.url, asset.fileSize, asset.assetId).catch((error) => {
+          console.warn(
+            `🔄 Gate preload failed for ${asset.assetId || asset.url} (${error.message}) — falling back to direct embedding`
+          )
+        })
       }
 
       // Signal batch is queued — only now can downloadsComplete evaluate truthfully

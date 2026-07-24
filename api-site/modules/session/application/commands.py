@@ -19,7 +19,7 @@ from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUs
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
-from shared_contracts.map_token import MapToken
+from shared_contracts.map_token import MapToken, TokenImageRef
 from shared_contracts.session import (
     LogEntry,
     SessionEndResponse,
@@ -34,6 +34,7 @@ from modules.characters.repositories.character_repository import CharacterReposi
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.campaign.model.session_model import SessionJoinedUser
+from modules.session.domain.token_merge import merge_token_boards
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.library.domain.map_asset_aggregate import MapAsset
@@ -385,42 +386,110 @@ class StartSession:
         logger.info(f"Restoring audio track config stash: {len(track_config)} tracks")
         return track_config
 
-    @staticmethod
-    def _restore_map_token_state(session: SessionEntity, asset_lookup: dict) -> dict:
-        """Restore the per-map token boards (cold → hot).
+    def _build_token_images(self, merged_boards: dict, asset_lookup: dict, url_map: dict) -> dict:
+        """Resolve every image referenced by the merged boards into a
+        TokenImageRef (signed URL + "token" focal area) — decision 27.
 
-        Two protections before the boards reach SessionStartPayload:
-        - Orphan pruning: boards keyed by an asset_id that no longer resolves
-          in the campaign library (map deleted between sessions) are dropped
-          and logged, never restored.
-        - Per-token salvage: a malformed stored dict (e.g. cold data across a
-          contract change) is dropped with a warning instead of failing the
-          entire payload build and blocking the session start.
+        Baselines are per-asset and shared across campaigns, so a board may
+        reference an image outside this campaign's library: those resolve
+        by id and sign individually. An unresolvable image degrades to the
+        color disc client-side (log, never fail a start).
+        """
+        referenced_image_ids = set()
+        for board_tokens in merged_boards.values():
+            for board_token in board_tokens:
+                if board_token.get("image_asset_id"):
+                    referenced_image_ids.add(board_token["image_asset_id"])
+
+        token_image_refs = {}
+        for image_id in referenced_image_ids:
+            image_asset = asset_lookup.get(image_id)
+            if image_asset is None and self.asset_repo:
+                try:
+                    image_asset = self.asset_repo.get_by_id(UUID(image_id))
+                except (ValueError, TypeError):
+                    image_asset = None
+            if not isinstance(image_asset, ImageAsset):
+                logger.warning(f"Token image {image_id} unresolvable — tokens fall back to color discs")
+                continue
+
+            signed_url = url_map.get(image_asset.s3_key)
+            if not signed_url and self.s3_service:
+                try:
+                    signed_url = self.s3_service.generate_download_url(image_asset.s3_key)
+                except Exception as sign_error:
+                    logger.warning(f"Failed to sign token image {image_id}: {sign_error}")
+
+            token_area = image_asset.get_focal_area("token")
+            token_image_refs[image_id] = TokenImageRef(
+                url=signed_url,
+                token_area=token_area,
+            )
+
+        logger.info(f"Resolved {len(token_image_refs)} token image(s)")
+        return token_image_refs
+
+    @staticmethod
+    def _restore_map_token_state(session: SessionEntity, asset_lookup: dict) -> tuple:
+        """Restore the per-map token boards (cold → hot) via the three-way
+        start merge (tokens v2, decision 24), and build the NEXT seed.
+
+        Per map: merge(seed, paused board, current baseline), play wins —
+        see modules.session.domain.token_merge. A fresh session (empty seed
+        and board) degenerates to pure baseline seeding on the same path.
+
+        Returns (boards_for_payload, new_seed). The caller writes new_seed
+        onto the session row only after api-game accepts the start — the
+        seed must describe the boards a session actually began with.
+
+        Existing protections stay: orphan boards for deleted maps are
+        pruned and logged; malformed stored tokens are salvaged per-token
+        rather than failing the whole start.
         """
         stored_boards = session.map_token_state or {}
-        restored_boards = {}
+        seed_boards = session.map_token_seed or {}
+
         for board_asset_id, board_tokens in stored_boards.items():
             if board_asset_id not in asset_lookup:
                 logger.info(
                     f"Pruned orphan token board for deleted map asset {board_asset_id} "
-                    f"({len(board_tokens)} tokens)"
+                    f"({len(board_tokens or [])} tokens)"
                 )
+
+        merged_boards = {}
+        new_seed = {}
+        merged_board_count = 0
+        for lookup_asset_id, lookup_asset in asset_lookup.items():
+            if not isinstance(lookup_asset, MapAsset):
                 continue
 
             salvaged_tokens = []
-            for board_token in board_tokens or []:
+            for board_token in stored_boards.get(lookup_asset_id) or []:
                 try:
                     salvaged_tokens.append(MapToken(**board_token).model_dump())
                 except (ValidationError, TypeError) as token_error:
                     logger.warning(
-                        f"Dropped malformed stored map token on board {board_asset_id} "
+                        f"Dropped malformed stored map token on board {lookup_asset_id} "
                         f"at session start: {token_error}"
                     )
-            if salvaged_tokens:
-                restored_boards[board_asset_id] = salvaged_tokens
 
-        logger.info(f"Restoring map token state: {len(restored_boards)} board(s)")
-        return restored_boards
+            baseline_tokens = lookup_asset.build_token_baseline()
+            merged_tokens = merge_token_boards(
+                seed_boards.get(lookup_asset_id) or [],
+                salvaged_tokens,
+                baseline_tokens,
+            )
+            if merged_tokens:
+                merged_boards[lookup_asset_id] = merged_tokens
+                merged_board_count += 1
+            if baseline_tokens:
+                new_seed[lookup_asset_id] = baseline_tokens
+
+        logger.info(
+            f"Restoring map token state: {merged_board_count} board(s) merged "
+            f"(seed covers {len(new_seed)} baseline map(s))"
+        )
+        return merged_boards, new_seed
 
     @staticmethod
     def _restore_map_config(
@@ -575,6 +644,7 @@ class StartSession:
 
             # 8. Build typed payload for api-game — restore session state from domain aggregates
             audio_config_for_game = self._restore_audio_config(session, asset_lookup, url_map)
+            map_token_boards, map_token_seed = self._restore_map_token_state(session, asset_lookup)
             map_config_for_game = self._restore_map_config(session, asset_lookup, url_map)
             image_config_for_game = self._restore_image_config(session, asset_lookup, url_map)
             session_users_for_game = self._build_session_users(session, campaign)
@@ -610,7 +680,8 @@ class StartSession:
                 image_config=image_config_for_game,
                 active_display=ActiveDisplayType(session.active_display) if session.active_display else None,
                 adventure_log=session.adventure_log or [],
-                map_token_state=self._restore_map_token_state(session, asset_lookup),
+                map_token_state=map_token_boards,
+                token_images=self._build_token_images(map_token_boards, asset_lookup, url_map),
                 urls_expire_at=urls_expire_at.isoformat() if urls_expire_at else None,
             )
 
@@ -631,7 +702,10 @@ class StartSession:
             start_response = SessionStartResponse(**response.json())
             active_game_id = start_response.session_id
 
-            # 11. Mark ACTIVE with the MongoDB game ID
+            # 11. Mark ACTIVE with the MongoDB game ID; stamp the seed the
+            # boards actually started from (decision 24 — the merge's diff
+            # base for the next start and the in-play guard's reference)
+            session.map_token_seed = map_token_seed
             session.activate(active_game_id, urls_expire_at)
             self.session_repo.save(session)
 

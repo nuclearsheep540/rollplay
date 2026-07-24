@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faHandBackFist,
   faTableCells,
+  faMapPin,
   faCloud,
   faPaintbrush,
   faEraser,
@@ -18,6 +19,7 @@ import {
  * Tools (top → bottom):
  *  - move    (hand-back-fist)  — pan/zoom the map only, no editing
  *  - grid    (table-cells)     — opens grid configuration in the right panel
+ *  - tokens  (map-pin)         — npc token baseline authoring (tokens v2)
  *  - paint   (paintbrush)      — fog of war: paint
  *  - erase   (eraser)          — fog of war: reveal
  *
@@ -76,6 +78,13 @@ export default function MapConfigToolbar({ activeTool, onToolChange }) {
         active={activeTool === 'grid'}
         onClick={() => onToolChange('grid')}
         shortcut="G"
+      />
+      <ToolButton
+        icon={faMapPin}
+        label="Token baseline (prepared npc tokens)"
+        active={activeTool === 'tokens'}
+        onClick={() => onToolChange('tokens')}
+        shortcut="T"
       />
 
       {/* Fog group — cloud is the parent tool button, same visual weight

@@ -12,9 +12,15 @@ from shared_contracts.assets import AssetRef
 from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUser
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig
-from shared_contracts.image import ImageConfig
+from shared_contracts.grid_math import (
+    grid_geometry_changed,
+    grid_usable,
+    resnap_token_position,
+    snap_axis_nearest,
+)
+from shared_contracts.image import FocalArea, ImageConfig
 from shared_contracts.map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
-from shared_contracts.map_token import MapToken
+from shared_contracts.map_token import MapToken, TokenImageRef
 from shared_contracts.session import (
     LogEntry,
     PlayerState,
@@ -811,3 +817,184 @@ class TestMapTokenSessionEtl:
         board["asset-1"][0]["x"] = float("nan")
         with pytest.raises(ValidationError):
             SessionEndFinalState(map_token_state=board)
+
+
+# --- Tokens v2: DM flags, companions, images (decisions 16-28) ---
+
+
+class TestMapTokenV2Flags:
+    def _npc_token(self, **overrides):
+        token = {
+            "id": "npc-1",
+            "kind": "npc",
+            "x": 100.0,
+            "y": 200.0,
+            "created_by": "dm-1",
+        }
+        token.update(overrides)
+        return token
+
+    def test_v2_fields_round_trip(self):
+        token = MapToken.model_validate(self._npc_token(
+            hidden=True, locked=True, image_asset_id="img-1", label="Goblin"))
+        restored = MapToken.model_validate(token.model_dump())
+        assert restored == token
+        assert restored.hidden is True
+        assert restored.locked is True
+        assert restored.image_asset_id == "img-1"
+
+    def test_v2_fields_default_off(self):
+        token = MapToken.model_validate(self._npc_token())
+        assert token.hidden is False
+        assert token.locked is False
+        assert token.image_asset_id is None
+
+    def test_v1_stored_dicts_still_validate(self):
+        # Boards persisted before v2 carry none of the new keys — defaults
+        # must absorb them (the ETL revalidates per token at session start).
+        v1_token = {
+            "id": "old-1", "kind": "pc", "owner_user_id": "user-1",
+            "character_id": "char-1", "x": 1.0, "y": 2.0,
+            "footprint": 1, "created_by": "user-1",
+            "updated_at": "2026-07-20T12:00:00+00:00",
+        }
+        assert MapToken.model_validate(v1_token).hidden is False
+
+    def test_pc_cannot_hide_or_lock(self):
+        pc_token = {
+            "id": "pc-1", "kind": "pc", "owner_user_id": "user-1",
+            "x": 1.0, "y": 2.0, "created_by": "user-1",
+        }
+        with pytest.raises(ValidationError):
+            MapToken.model_validate({**pc_token, "hidden": True})
+        with pytest.raises(ValidationError):
+            MapToken.model_validate({**pc_token, "locked": True})
+
+    def test_npc_companion_assignment_validates(self):
+        # An assigned npc token is a player's minion/companion — the
+        # assignment (owner_user_id) is the player-side signal.
+        token = MapToken.model_validate(self._npc_token(owner_user_id="player-1"))
+        assert token.owner_user_id == "player-1"
+
+
+class TestFocalAreaConstraints:
+    def test_round_trip(self):
+        area = FocalArea(x=340.0, y=120.0, size=512.0)
+        assert FocalArea.model_validate(area.model_dump()) == area
+
+    def test_origin_square_is_valid(self):
+        area = FocalArea(x=0, y=0, size=1)
+        assert area.size == 1.0
+
+    def test_negative_position_rejected(self):
+        with pytest.raises(ValidationError):
+            FocalArea(x=-1.0, y=0.0, size=10.0)
+        with pytest.raises(ValidationError):
+            FocalArea(x=0.0, y=-1.0, size=10.0)
+
+    def test_zero_or_negative_size_rejected(self):
+        with pytest.raises(ValidationError):
+            FocalArea(x=0.0, y=0.0, size=0.0)
+        with pytest.raises(ValidationError):
+            FocalArea(x=0.0, y=0.0, size=-5.0)
+
+    def test_non_finite_rejected(self):
+        with pytest.raises(ValidationError):
+            FocalArea(x=float("inf"), y=0.0, size=10.0)
+        with pytest.raises(ValidationError):
+            FocalArea(x=0.0, y=0.0, size=float("nan"))
+
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            FocalArea.model_validate({"x": 0.0, "y": 0.0, "size": 1.0, "width": 2.0})
+
+
+class TestTokenImageRefRoundTrip:
+    def test_full_ref_round_trips(self):
+        ref = TokenImageRef(
+            url="https://cdn.example.com/goblin.png?sig=abc",
+            token_area=FocalArea(x=10.0, y=20.0, size=64.0),
+        )
+        assert TokenImageRef.model_validate(ref.model_dump()) == ref
+
+    def test_defaults_degrade_to_color_disc(self):
+        # None url / None area are the client's fall-back-to-color-disc and
+        # render-full-image signals respectively.
+        ref = TokenImageRef()
+        assert ref.url is None
+        assert ref.token_area is None
+
+
+class TestSessionTokenImages:
+    def test_start_payload_round_trips_token_images(self):
+        payload = SessionStartPayload(
+            session_id="s1", campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="dm-1", player_name="Matt"),
+            token_images={
+                "img-1": {"url": "https://cdn.example.com/a.png", "token_area": {"x": 1.0, "y": 2.0, "size": 3.0}},
+                "img-2": {"url": None, "token_area": None},
+            },
+        )
+        restored = SessionStartPayload.model_validate(payload.model_dump())
+        assert restored == payload
+        assert restored.token_images["img-1"].token_area.size == 3.0
+
+    def test_token_images_default_empty(self):
+        payload = SessionStartPayload(
+            session_id="s1", campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="dm-1", player_name="Matt"),
+        )
+        assert payload.token_images == {}
+
+    def test_start_payload_has_token_fields(self):
+        required_keys = {"map_token_state", "token_images"}
+        assert required_keys.issubset(set(SessionStartPayload.model_fields.keys()))
+
+
+class TestGridMath:
+    """Core behavioral cases so this package's CI exercises grid_math
+    standalone — the exhaustive suite lives in api-game/tests/test_grid_math.py."""
+
+    def _grid(self, **overrides):
+        grid_config = {
+            "enabled": True,
+            "grid_width": 20,
+            "grid_height": 10,
+            "offset_x": 0,
+            "offset_y": 0,
+            "grid_cell_size": 100.0,
+        }
+        grid_config.update(overrides)
+        return grid_config
+
+    def test_grid_usable_guard(self):
+        assert grid_usable(self._grid()) is True
+        assert grid_usable(None) is False
+        assert grid_usable(self._grid(enabled=False)) is False
+        assert grid_usable(self._grid(grid_cell_size=None)) is False
+
+    def test_cosmetic_change_is_not_geometry(self):
+        cosmetic = self._grid()
+        cosmetic["opacity"] = 0.4
+        assert grid_geometry_changed(self._grid(), cosmetic) is False
+        assert grid_geometry_changed(self._grid(), self._grid(grid_cell_size=80.0)) is True
+
+    def test_exact_cell_preserved_across_resize(self):
+        # Token centered in cell (3, 6) at 100px cells stays in (3, 6) at 80px.
+        new_x, new_y = resnap_token_position(350.0, 650.0, 1, self._grid(), self._grid(grid_cell_size=80.0))
+        assert (new_x, new_y) == (3 * 80.0 + 40.0, 6 * 80.0 + 40.0)
+
+    def test_removed_columns_clamp(self):
+        new_x, _new_y = resnap_token_position(1850.0, 250.0, 1, self._grid(), self._grid(grid_width=10))
+        assert new_x == 950.0
+
+    def test_gridless_history_snaps_nearest(self):
+        assert resnap_token_position(340.0, 620.0, 1, None, self._grid()) == (350.0, 650.0)
+
+    def test_unusable_new_grid_leaves_position(self):
+        assert resnap_token_position(123.4, 567.8, 1, self._grid(), None) == (123.4, 567.8)
+
+    def test_nearest_snap_rounds_half_up_like_js(self):
+        # Math.round(2.5) === 3 in JS; Python's round() is banker's — the
+        # shared math must match the client's snapTokenCenter.
+        assert snap_axis_nearest(250.0, 0, 100.0, 2) == 300.0

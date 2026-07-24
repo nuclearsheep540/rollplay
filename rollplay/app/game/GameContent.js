@@ -287,6 +287,8 @@ export default function GameContent() {
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [isMapLocked, setIsMapLocked] = useState(false);
+  // Client-side per-user render preference — never sent, never stored.
+  const [showTokenLabels, setShowTokenLabels] = useState(true);
   const [gridInspect, setGridInspect] = useState(false);
   const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
 
@@ -995,7 +997,10 @@ export default function GameContent() {
   // useWebSocket, but gameContext (which useWebSocket consumes) is built
   // first — so core WS events reach the hook through these stable
   // ref-backed functions (sendSeatChangeRef precedent).
-  const mapTokensBridgeRef = useRef({ setMapTokenState: null, clearHoldsForUser: null });
+  const mapTokensBridgeRef = useRef({ setMapTokenState: null, clearHoldsForUser: null, setTokenImages: null });
+  const setTokenImages = useCallback((imageRefs) => {
+    mapTokensBridgeRef.current.setTokenImages?.(imageRefs);
+  }, []);
   const setMapTokenState = useCallback((state) => {
     mapTokensBridgeRef.current.setMapTokenState?.(state);
   }, []);
@@ -1209,6 +1214,7 @@ export default function GameContent() {
     // Map tokens (initial_state board hydration + disconnect hold cleanup)
     setMapTokenState,
     clearMapTokenHoldsForUser,
+    setTokenImages,
 
     // Session ended modal
     setSessionEndedData
@@ -1224,7 +1230,7 @@ export default function GameContent() {
     setChannelMuted, setChannelSoloed, setBroadcastMasterVolume,
     startStateBatch, flushStateBatch,
     spotify.applySpotifySnapshot,
-    setMapTokenState, clearMapTokenHoldsForUser
+    setMapTokenState, clearMapTokenHoldsForUser, setTokenImages
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1268,8 +1274,9 @@ export default function GameContent() {
     mapTokensBridgeRef.current = {
       setMapTokenState: mapTokens.setMapTokenState,
       clearHoldsForUser: mapTokens.clearHoldsForUser,
+      setTokenImages: mapTokens.setTokenImages,
     };
-  }, [mapTokens.setMapTokenState, mapTokens.clearHoldsForUser]);
+  }, [mapTokens.setMapTokenState, mapTokens.clearHoldsForUser, mapTokens.setTokenImages]);
 
   // Stable callback bundle for MapTokenLayer — keeps MapDisplay's memo
   // effective (identity only changes if an underlying callback does).
@@ -2310,8 +2317,17 @@ export default function GameContent() {
                   npcDrafts={mapTokens.npcDrafts}
                   tokens={mapTokens.tokensForActiveMap}
                   createNpcDraft={mapTokens.createNpcDraft}
+                  duplicateNpcToken={mapTokens.duplicateNpcToken}
+                  toggleNpcDraftHidden={mapTokens.toggleNpcDraftHidden}
+                  assignNpcDraft={mapTokens.assignNpcDraft}
+                  seatedPlayers={Object.keys(playerSeatMap).map((seatedUserId) => ({
+                    userId: seatedUserId,
+                    name: characterNameMap[seatedUserId] || displayNameMap[seatedUserId] || 'Player',
+                    color: playerMetadata[seatedUserId]?.color || playerSeatMap[seatedUserId]?.seatColor || null,
+                  }))}
                   removeNpcDraft={mapTokens.removeNpcDraft}
                   recallNpcToken={mapTokens.recallNpcToken}
+                  configureToken={mapTokens.configureToken}
                   beginCarry={mapTokens.beginCarry}
                   cancelCarry={mapTokens.cancelCarry}
                   dropCarriedToken={mapTokens.dropCarriedToken}
@@ -2394,6 +2410,9 @@ export default function GameContent() {
               playerSeatMap={playerSeatMap}
               displayNameMap={displayNameMap}
               thisUserId={thisUserId}
+              thisUserIsDm={isDM === true}
+              tokenImages={mapTokens.tokenImages}
+              showTokenNames={showTokenLabels}
             />
           )}
 
@@ -2407,6 +2426,8 @@ export default function GameContent() {
               <MapOverlayPanel
                 isMapLocked={isMapLocked}
                 onToggleLock={() => setIsMapLocked(prev => !prev)}
+                showTokenLabels={showTokenLabels}
+                onToggleTokenLabels={() => setShowTokenLabels(prev => !prev)}
                 activeMap={activeMap}
                 gridInspect={gridInspect}
                 gridInspectMode={gridInspectMode}

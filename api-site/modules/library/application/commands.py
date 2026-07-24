@@ -23,6 +23,7 @@ from modules.library.domain.collection_aggregate import AssetCollectionAggregate
 from modules.library.domain.collection_kind import CollectionKind
 from modules.session.repositories.session_repository import SessionRepository
 from modules.session.domain.session_aggregate import SessionStatus
+from modules.session.domain.token_merge import board_in_play
 from shared.services.s3_service import S3Service
 
 
@@ -611,6 +612,113 @@ class UpdateFogConfig:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
         asset.update_fog_config(regions=regions)
+        self.repository.save(asset)
+        return asset
+
+
+class BoardInPlayError(Exception):
+    """Raised when a map's token baseline edit would conflict with a paused
+    session whose board for that map is in play. Overridable (force) — the
+    workshop warns and proceeds (facilitate-don't-enforce, decision 26),
+    unlike the hard AssetInUseError for live sessions."""
+    pass
+
+
+def check_map_boards_in_play(asset_id, campaign_ids, session_repository, force=False):
+    """Raise BoardInPlayError when a non-finished session's board for this
+    map is in play, unless the caller forces past the warning.
+
+    In-play is derived, never stored (decision 25): the board differs from
+    its seed snapshot (see modules.session.domain.token_merge). A board
+    that only ever watched play — a pc token placed then removed — equals
+    its seed again and stops counting. A pre-seed row's non-empty board
+    reads as in-play (preserve, never destroy).
+    """
+    if force:
+        return
+    asset_key = str(asset_id)
+    for campaign_id in (campaign_ids or []):
+        sessions = session_repository.get_by_campaign_id(campaign_id)
+        for session in sessions:
+            if session.status == SessionStatus.FINISHED:
+                continue
+            stored_board = (session.map_token_state or {}).get(asset_key) or []
+            seed_board = (session.map_token_seed or {}).get(asset_key) or []
+            if board_in_play(seed_board, stored_board):
+                raise BoardInPlayError(
+                    "This map's board is in play in a paused session. Changes "
+                    "might conflict with live token positions."
+                )
+
+
+class UpdateTokenConfig:
+    """
+    Replace the DM-authored npc token baseline on a map asset (atomic
+    full-replace, tokens v2 decision 22).
+
+    The baseline is workshop-authored only; the game runtime never writes
+    it (decision 23). Guards: hard 409 while a campaign session is live
+    (never overridable), soft 409 when a paused session's board for this
+    map is in play (overridable with force after the workshop's warning
+    dialog, decision 26).
+    """
+
+    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+        self.repository = repository
+        self.session_repository = session_repository
+
+    def execute(
+        self,
+        asset_id: UUID,
+        user_id: UUID,
+        tokens: Optional[List[Dict[str, Any]]] = None,
+        force: bool = False,
+    ) -> MapAsset:
+        asset = get_owned_asset(self.repository, asset_id, user_id)
+
+        if not isinstance(asset, MapAsset):
+            raise ValueError("Token baselines only apply to map assets")
+
+        if self.session_repository:
+            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+            check_map_boards_in_play(asset.id, asset.campaign_ids, self.session_repository, force=force)
+
+        # Attribution is server-stamped, never trusted from the wire (the
+        # same rule the WS place handler applies to created_by).
+        stamped_tokens = None
+        if tokens:
+            stamped_tokens = []
+            for token_dict in tokens:
+                stamped_tokens.append({**token_dict, "created_by": str(user_id)})
+
+        asset.update_token_config(stamped_tokens)
+        self.repository.save(asset)
+        return asset
+
+
+class SetImageFocalArea:
+    """
+    Set (or clear) one purpose-keyed focal square on an image asset
+    (tokens v2, decision 27). The area belongs to the IMAGE: every token
+    (and later, every character) using that image shares its crop.
+    Guarded like every asset-editing command: 409 while a campaign session
+    is live.
+    """
+
+    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+        self.repository = repository
+        self.session_repository = session_repository
+
+    def execute(self, asset_id: UUID, user_id: UUID, purpose: str, area=None) -> ImageAsset:
+        asset = get_owned_asset(self.repository, asset_id, user_id)
+
+        if not isinstance(asset, ImageAsset):
+            raise ValueError("Focal areas only apply to image assets")
+
+        if self.session_repository:
+            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+
+        asset.set_focal_area(purpose, area)
         self.repository.save(asset)
         return asset
 

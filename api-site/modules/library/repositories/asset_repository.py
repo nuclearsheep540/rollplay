@@ -170,6 +170,7 @@ class MediaAssetRepository:
                 existing.grid_line_color = aggregate.grid_line_color
                 existing.grid_cell_size = aggregate.grid_cell_size
                 existing.fog_config = aggregate.fog_config
+                existing.token_config = aggregate.token_config
 
             # Update music-specific fields if MusicAsset
             if isinstance(aggregate, MusicAsset) and isinstance(existing, MusicAssetModel):
@@ -205,6 +206,7 @@ class MediaAssetRepository:
                 existing.image_position_y = aggregate.image_position_y
                 existing.visual_overlays = [overlay if isinstance(overlay, dict) else overlay.model_dump() for overlay in aggregate.visual_overlays] if aggregate.visual_overlays else None
                 existing.motion = aggregate.motion.to_dict() if aggregate.motion else None
+                existing.focal_areas = aggregate.focal_areas
         else:
             # Create new - determine which model to use
             if isinstance(aggregate, MapAsset):
@@ -227,6 +229,7 @@ class MediaAssetRepository:
                     grid_line_color=aggregate.grid_line_color,
                     grid_cell_size=aggregate.grid_cell_size,
                     fog_config=aggregate.fog_config,
+                    token_config=aggregate.token_config,
                 )
             elif isinstance(aggregate, MusicAsset):
                 model = MusicAssetModel(
@@ -292,6 +295,7 @@ class MediaAssetRepository:
                     image_position_y=aggregate.image_position_y,
                     visual_overlays=[overlay if isinstance(overlay, dict) else overlay.model_dump() for overlay in aggregate.visual_overlays] if aggregate.visual_overlays else None,
                     motion=aggregate.motion.to_dict() if aggregate.motion else None,
+                    focal_areas=aggregate.focal_areas,
                 )
             else:
                 model = MediaAssetModel(
@@ -409,6 +413,7 @@ class MediaAssetRepository:
                 grid_line_color=model.grid_line_color,
                 grid_cell_size=model.grid_cell_size,
                 fog_config=model.fog_config,
+                token_config=model.token_config,
             )
 
         # If it's a MusicAssetModel, promote to MusicAsset with audio fields
@@ -459,6 +464,7 @@ class MediaAssetRepository:
                 image_position_y=model.image_position_y,
                 visual_overlays=model.visual_overlays,
                 motion=motion,
+                focal_areas=model.focal_areas,
             )
 
         return base
