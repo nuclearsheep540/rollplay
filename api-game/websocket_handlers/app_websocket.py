@@ -67,10 +67,10 @@ def register_websocket_routes(app: FastAPI):
                         "audio_state": room.get("audio_state", {}),
                         "spotify": room.get("spotify", {}),
                         "map_token_state": map_token_state,
-                        # Image URL + crop per image asset — not per-token
-                        # state, so no per-recipient filtering: a URL alone
-                        # reveals no placement (the ambush lives in the
-                        # boards, which ARE filtered above).
+                        # Filtered for non-DM recipients above (decision 17:
+                        # refs for hidden-only images would leak the
+                        # monster's artwork; reveal fragments deliver the
+                        # ref when the token enters the player's view).
                         "token_images": token_images
                     }
                 }

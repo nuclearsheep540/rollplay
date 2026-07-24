@@ -148,12 +148,17 @@ export default function MapTokenLayer({
   // whose disc covers a given token's center count as one pile. Boards are
   // a handful of tokens, so the quadratic scan is nothing.
   const tokenStackMembers = useCallback((centerToken) => {
+    // Membership must be symmetric across mixed footprints (a wolf on a
+    // giant is the giant's stack too), so a pair counts when EITHER disc
+    // covers the other's center — max of the radii, not just the other's.
+    const centerDiameter = tokenDiameterPx(
+      centerToken.footprint, gridConfig, naturalDims.w, naturalDims.h);
     return orderedTokens.filter((otherToken) => {
       const otherDiameter = tokenDiameterPx(
         otherToken.footprint, gridConfig, naturalDims.w, naturalDims.h);
       const centerDistance = Math.hypot(
         otherToken.x - centerToken.x, otherToken.y - centerToken.y);
-      return centerDistance <= otherDiameter / 2;
+      return centerDistance <= Math.max(otherDiameter, centerDiameter) / 2;
     });
   }, [orderedTokens, gridConfig, naturalDims.w, naturalDims.h]);
 
