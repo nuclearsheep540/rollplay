@@ -27,11 +27,11 @@ export function useGridConfig() {
   // --- Actions with clamping ---
 
   const setCellSize = useCallback((value) => {
-    setCellSizeRaw(Math.max(8, Math.min(100, value)));
+    setCellSizeRaw(Math.max(8, Math.min(250, value)));
   }, []);
 
   const adjustCellSize = useCallback((delta) => {
-    setCellSizeRaw(prev => Math.max(8, Math.min(100, parseFloat((prev + delta).toFixed(1)))));
+    setCellSizeRaw(prev => Math.max(8, Math.min(250, parseFloat((prev + delta).toFixed(1)))));
   }, []);
 
   const setGridCols = useCallback((value) => {

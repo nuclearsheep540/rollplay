@@ -297,7 +297,7 @@ export default function MapControlsPanel({
               <input
                 type="range"
                 min="8"
-                max="100"
+                max="250"
                 step="0.5"
                 value={grid.cellSize}
                 onChange={(e) => grid.setCellSize(parseFloat(e.target.value))}
@@ -306,7 +306,7 @@ export default function MapControlsPanel({
               <div className="flex justify-between text-xs text-gray-500 mt-1">
                 <span>Small (8px)</span>
                 <span>Medium</span>
-                <span>Large (100px)</span>
+                <span>Large (250px)</span>
               </div>
             </div>
 

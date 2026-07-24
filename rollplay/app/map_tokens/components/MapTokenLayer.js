@@ -52,7 +52,7 @@ export default function MapTokenLayer({
   thisUserIsDm = false,
   tokenImages = {},          // image_asset_id → { url, token_area } (decision 27)
   mapViewScale = 1,          // camera zoom — annotations counter-scale so text/badges hold screen size
-  showTokenNames = true,     // per-user client-side label toggle (held-by nameplates always show)
+  showTokenNames = true,     // per-user client-side label toggle: names + hidden/locked glyphs (held-by nameplates always show)
   gridConfig = null,
   mapAssetId = null,
   attachTokenLayer,
@@ -505,8 +505,9 @@ export default function MapTokenLayer({
             )}
 
             {/* DM-only state glyphs: ghost eye for hidden (players never
-                receive these tokens), padlock for locked */}
-            {(token.hidden || token.locked) && (
+                receive these tokens), padlock for locked. Hidden alongside
+                the name labels by the per-user labels toggle. */}
+            {showTokenNames && (token.hidden || token.locked) && (
               <div
                 className="absolute -top-1 -left-1 flex gap-0.5 text-xs leading-none pointer-events-none"
                 style={{ transform: `scale(${labelScale})`, transformOrigin: 'top left' }}
