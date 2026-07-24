@@ -95,7 +95,7 @@ const MapOverlayPanel = ({
       <button
         onClick={onToggleTokenLabels}
         disabled={disabled}
-        title={showTokenLabels ? 'Hide token names' : 'Show token names'}
+        title={showTokenLabels ? 'Hide token labels' : 'Show token labels'}
         style={{
           ...buttonBase,
           background: disabled

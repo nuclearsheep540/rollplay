@@ -84,7 +84,7 @@ export default function WorkshopGridControls({ grid, onSave, isSaving, saveSucce
         <input
           type="range"
           min="8"
-          max="100"
+          max="250"
           step="0.5"
           value={grid.cellSize}
           onChange={(e) => grid.setCellSize(parseFloat(e.target.value))}
@@ -93,7 +93,7 @@ export default function WorkshopGridControls({ grid, onSave, isSaving, saveSucce
         <div className="flex justify-between text-xs text-content-secondary mt-1">
           <span>Small (8px)</span>
           <span>Medium</span>
-          <span>Large (100px)</span>
+          <span>Large (250px)</span>
         </div>
       </div>
 
