@@ -147,8 +147,16 @@ hydrate `config` from JSONB. Add `find_assets_for_source`, `count_refs(source_id
 ### Step 6 — Data migration (Alembic, autogenerate + hand-authored data step)
 - Create `media_sources`; for each existing `media_assets` row, insert one `MediaSource` (file fields).
 - Rewrite `media_assets`: add new columns; fold subclass config → `config` JSONB.
+  - Tokens v2 ([tokens/02](tokens/02-dm-tokens-workshop-images.md), 2026-07-23) adds two more folds:
+    `map_assets.token_config` (NPC baseline) and `image_assets.focal_areas` (purpose-keyed crops).
+    Both become per-instance under this split — which *dissolves* tokens-v2 decision 22's
+    shared-baseline caveat and simplifies its in-play guard to a single `campaign_id` check.
 - **Explode** `campaign_ids`: one row with `[c1,c2,c3]` → 3 `MediaAsset` rows (one per campaign,
   `config` copied); empty array → 1 library alias (`campaign_id = null`).
+- **Remap session JSONB asset refs** for exploded rows: `sessions.map_config` `{"asset_id"}`,
+  the `map_token_state` board keys (tokens v1), `map_token_seed` keys (tokens v2 PR 9), and
+  `image_asset_id` fields inside stored tokens (tokens v2 PR 10) must point at the campaign's
+  own alias id.
 - Drop `campaign_ids`, the file columns, and the subclass tables.
 - Run in Docker per repo convention.
 

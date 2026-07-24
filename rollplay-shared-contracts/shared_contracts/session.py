@@ -12,7 +12,7 @@ from .character import DungeonMaster, PlayerCharacter, SessionUser
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import MapConfig
-from .map_token import MapToken
+from .map_token import MapToken, TokenImageRef
 from .spotify import SpotifyState
 
 
@@ -69,6 +69,11 @@ class SessionStartPayload(ContractModel):
     # its own pieces across pause/resume. Orphan boards (deleted maps) are
     # pruned by StartSession before this payload is built.
     map_token_state: Dict[str, List[MapToken]] = {}
+    # Token image delivery (decision 27): image_asset_id -> signed URL +
+    # "token" focal area, for every image referenced by the merged boards
+    # (resolved regardless of campaign association — a shared map's
+    # baseline may reference images outside this campaign).
+    token_images: Dict[str, TokenImageRef] = {}
     # ISO-8601 with explicit UTC offset (never naive — JS parses offset-less strings as
     # local time). Kept a string end-to-end so no hop re-serializes it naively.
     urls_expire_at: Optional[str] = None

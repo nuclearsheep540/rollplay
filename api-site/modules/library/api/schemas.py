@@ -89,6 +89,7 @@ class MediaAssetResponse(BaseModel):
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
     fog_config: Optional[dict] = None  # FogConfig v2 - { version: 2, regions: [...] }. See shared_contracts.map.FogConfig.
+    token_config: Optional[dict] = None  # npc token baseline - { version: 1, tokens: [MapToken, ...] } (tokens v2 decision 22)
 
     # Audio fields (music + sfx)
     duration_seconds: Optional[float] = None
@@ -120,6 +121,7 @@ class MediaAssetResponse(BaseModel):
     image_position_y: Optional[float] = None
     visual_overlays: Optional[list] = None
     motion: Optional[dict] = None
+    focal_areas: Optional[dict] = None  # purpose -> {x, y, size} native-px squares (tokens v2 decision 27)
 
     class Config:
         from_attributes = True
@@ -159,6 +161,18 @@ class UpdateGridConfigRequest(BaseModel):
     grid_cell_size: Optional[float] = Field(None, ge=8, le=500, description="Cell size in native image pixels")
 
 
+class UpdateTokenConfigRequest(BaseModel):
+    """Replace the DM-authored npc token baseline on a map (tokens v2).
+
+    Atomic full-replace: the entire token list is provided on every save.
+    Pass tokens=None or [] to clear. force=True proceeds past the
+    board-in-play warning for paused sessions (decision 26); it never
+    overrides the hard active-session lock.
+    """
+    tokens: Optional[List[dict]] = None  # MapToken dicts, npc-only (validated in the domain)
+    force: bool = False
+
+
 class UpdateFogConfigRequest(BaseModel):
     """Request to update map fog-of-war regions list.
 
@@ -184,6 +198,13 @@ class UpdateImageConfigRequest(BaseModel):
     image_position_y: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position Y within frame (0-100%)")
     visual_overlays: Optional[List[VisualOverlay]] = Field(None, description="Visual overlay stack")
     motion: Optional[MotionConfig] = Field(None, description="Motion effects config")
+
+
+class SetFocalAreaRequest(BaseModel):
+    """Set (or clear) one purpose-keyed focal square on an image asset
+    (tokens v2, decision 27). area=None clears the purpose's entry."""
+    purpose: str = Field(..., min_length=1, description="What selected the area, e.g. 'token'")
+    area: Optional[dict] = Field(None, description="{x, y, size} in source-image native px (FocalArea contract)")
 
 
 class UpdateAudioConfigRequest(BaseModel):

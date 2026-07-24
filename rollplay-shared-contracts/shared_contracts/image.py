@@ -5,10 +5,22 @@
 
 from typing import List, Optional
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from .base import ContractModel
 from .cine import MotionConfig, VisualOverlay
+
+
+class FocalArea(ContractModel):
+    """A square sub-region of a source image, native pixels, top-left anchor
+    (tokens v2, decision 27). Purpose-keyed on the image asset
+    (image_assets.focal_areas: {"token": FocalArea, ...}) so later purposes
+    (character portraits) slot in with zero migrations. Square by contract:
+    one side length, no width/height pair."""
+
+    x: float = Field(..., ge=0, allow_inf_nan=False)
+    y: float = Field(..., ge=0, allow_inf_nan=False)
+    size: float = Field(..., gt=0, allow_inf_nan=False)
 
 
 class ImageConfig(ContractModel):

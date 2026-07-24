@@ -26,6 +26,7 @@ class GameSettings(BaseModel):
     audio_track_config: dict = {}  # Per-track config stash (survives channel swaps within a session)
     spotify: dict = {}  # DM-controlled Spotify BGM anchor snapshot for late-joiner sync
     map_token_state: dict = {}  # asset_id -> list[MapToken] — each map keeps its own board (see shared_contracts.map_token)
+    token_images: dict = {}  # image_asset_id -> TokenImageRef dict (signed URL + token focal area) — fixed at session start (decision 27)
     urls_expire_at: str = ""  # ISO-8601 UTC lease deadline for signed asset URLs — countdown display only; api-site enforces
 
 class GameService:
@@ -250,6 +251,37 @@ class GameService:
         if not room:
             return False
         return room.get("dungeon_master", {}).get("user_id") == user_id
+
+    @staticmethod
+    def get_dm_user_id(room_id: str):
+        """The DM's user_id, or None. Projection read — token ACL and
+        per-recipient hidden filtering consult this on every committed op."""
+        collection = GameService._get_active_session()
+        room = collection.find_one(GameService.room_filter(room_id), {"dungeon_master": 1})
+        if not room:
+            return None
+        return room.get("dungeon_master", {}).get("user_id")
+
+    @staticmethod
+    def get_room_token_context(room_id: str, asset_id: str):
+        """Everything one committed token op needs, in ONE projection read:
+        the DM's user_id (ACL + per-recipient filtering), the map's board
+        (target lookup, denial reconciliation), and the token image refs
+        (reveal/place fragments carry the ref so players can render a newly
+        visible face). _get_active_session opens a fresh MongoClient per
+        call, so collapsing the three reads matters on the commit path.
+
+        Returns (dm_user_id, board_tokens, token_images)."""
+        collection = GameService._get_active_session()
+        room = collection.find_one(
+            GameService.room_filter(room_id),
+            {"dungeon_master": 1, map_token_array_path(asset_id): 1, "token_images": 1},
+        )
+        if not room:
+            return None, [], {}
+        dm_user_id = room.get("dungeon_master", {}).get("user_id")
+        board_tokens = room.get("map_token_state", {}).get(asset_id, [])
+        return dm_user_id, board_tokens, room.get("token_images", {})
 
     @staticmethod
     def player_has_selected_character(room_id: str, user_id: str) -> bool:
@@ -489,6 +521,21 @@ class GameService:
             raise ValueError(f"Token {token_id} not found on map {asset_id}")
 
         return GameService.get_map_tokens(room_id, asset_id)
+
+    @staticmethod
+    def replace_map_token_board(room_id: str, asset_id: str, tokens: list) -> bool:
+        """Atomic whole-board $set for server-initiated rewrites (grid
+        re-snap, tokens v2 decision 20). Unlike apply_map_token_op this
+        never stamps updated_at: a re-snap keeps pieces in their cells
+        rather than moving them, so z-order (last-moved-on-top) must not
+        scramble."""
+        collection = GameService._get_active_session()
+
+        result = collection.update_one(
+            GameService.room_filter(room_id),
+            {"$set": {map_token_array_path(asset_id): tokens}}
+        )
+        return result.matched_count > 0
 
     @staticmethod
     def set_active_display(room_id: str, display_type):

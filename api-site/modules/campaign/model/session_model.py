@@ -65,6 +65,7 @@ class Session(Base):
     active_display = Column(String(10), nullable=True)  # Which display was active: "map", "image", or null
     adventure_log = Column(JSONB, nullable=True, server_default='[]')  # Persisted adventure log from ETL (LogEntry-shaped, ≤200 entries)
     map_token_state = Column(JSONB, nullable=True, server_default='{}')  # Persisted token boards from ETL (asset_id -> list[MapToken])
+    map_token_seed = Column(JSONB, nullable=True, server_default='{}')  # Board-as-seeded snapshot per map (merge base for the three-way start merge, tokens v2 decision 24)
 
     # Relationships
     campaign = relationship("Campaign", back_populates="sessions")

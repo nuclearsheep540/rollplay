@@ -9,9 +9,10 @@ from .base import ContractModel
 from .character import DungeonMaster, PlayerCharacter, SessionUser
 from .cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig, VisualOverlay
 from .display import ActiveDisplayType
-from .image import ImageConfig
+from .grid_math import grid_geometry_changed, grid_usable, resnap_token_position, snap_axis_nearest
+from .image import FocalArea, ImageConfig
 from .map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
-from .map_token import MapToken
+from .map_token import MapToken, TokenImageRef
 from .session import (
     PlayerState,
     SessionEndFinalState,
@@ -38,9 +39,15 @@ __all__ = [
     "FogRegion",
     "GridColorMode",
     "GridConfig",
+    "grid_geometry_changed",
+    "grid_usable",
+    "resnap_token_position",
+    "snap_axis_nearest",
     "ImageConfig",
     "MapConfig",
     "MapToken",
+    "TokenImageRef",
+    "FocalArea",
     "FilmGrainOverlay",
     "VisualOverlay",
     "PlayerState",

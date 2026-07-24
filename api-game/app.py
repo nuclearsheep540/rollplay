@@ -283,6 +283,12 @@ def gameservice_get(room_id):
         # The server component uses these for <link rel="preload"> hints.
         active_map = map_service.get_active_map(room_id)
         active_image = image_service.get_active_image(room_id)
+        # Token boards and image refs are stripped: this endpoint has no
+        # requesting-user context to filter hidden tokens for (decision
+        # 17 — the refs would leak hidden monsters' artwork), and clients
+        # hydrate both from the per-socket initial_state anyway.
+        check_room.pop("map_token_state", None)
+        check_room.pop("token_images", None)
         return {
             **check_room,
             "current_seat_layout": seat_layout,
@@ -545,6 +551,7 @@ async def create_session(request: SessionStartPayload):
             audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {},
             spotify=spotify_restore,
             map_token_state=restored_map_token_state,
+            token_images={image_id: image_ref.model_dump() for image_id, image_ref in request.token_images.items()},
             urls_expire_at=request.urls_expire_at or ""
         )
 

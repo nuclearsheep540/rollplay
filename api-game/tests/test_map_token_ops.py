@@ -99,6 +99,10 @@ class TestBuildConfigure:
             f"{ARRAY_PATH}.$.updated_at": "stamp",
             f"{ARRAY_PATH}.$.label": "Ogre",
             f"{ARRAY_PATH}.$.footprint": 2,
+            # owner_user_id rides every configure (assignment semantics for
+            # party-controlled tokens); the handler denies changes on pc
+            # targets, and a same-value $set is a no-op.
+            f"{ARRAY_PATH}.$.owner_user_id": "user-1",
         }
 
     def test_absent_label_is_not_cleared(self):
@@ -110,12 +114,22 @@ class TestBuildConfigure:
     def test_identity_fields_never_configurable(self):
         _extra_filter, update_doc = build_map_token_update(
             ASSET_ID, "configure",
-            token=make_token(kind="npc", owner_user_id="someone-else", label="Ogre"),
+            token=make_token(kind="npc", label="Ogre"),
             token_id="token-1"
         )
         set_paths = update_doc["$set"].keys()
         assert not any(path.endswith(".kind") for path in set_paths)
-        assert not any(path.endswith(".owner_user_id") for path in set_paths)
+        assert not any(path.endswith(".created_by") for path in set_paths)
+
+    def test_owner_assignment_sets_even_none(self):
+        # Unassigning a party-controlled token: None is meaningful in a
+        # full-token configure payload (unlike label's absent-means-keep).
+        _extra_filter, update_doc = build_map_token_update(
+            ASSET_ID, "configure",
+            token=make_token(owner_user_id=None, label="Mule"),
+            token_id="token-1"
+        )
+        assert update_doc["$set"][f"{ARRAY_PATH}.$.owner_user_id"] is None
 
 
 class TestOpValidation:

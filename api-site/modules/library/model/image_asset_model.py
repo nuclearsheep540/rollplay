@@ -47,6 +47,12 @@ class ImageAssetModel(MediaAsset):
     visual_overlays = Column(JSONB, nullable=True)
     motion = Column(JSONB, nullable=True)
 
+    # Purpose-keyed focal areas (tokens v2, decision 27). NULL means none
+    # selected. Shape: { "token": {x, y, size}, ... } — native px squares
+    # (see shared_contracts.image.FocalArea). "character" arrives in a
+    # later PR with zero migrations.
+    focal_areas = Column(JSONB, nullable=True)
+
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.IMAGE,
     }

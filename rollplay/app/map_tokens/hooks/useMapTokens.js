@@ -37,6 +37,10 @@ export const useMapTokens = ({
 }) => {
   // asset_id → [MapToken] — every map in the session keeps its own board.
   const [mapTokenState, setMapTokenState] = useState({});
+  // image_asset_id → { url, token_area } — hydrated from initial_state
+  // (server-filtered to this user's visible tokens) and extended by
+  // place/reveal fragments (decision 27).
+  const [tokenImages, setTokenImages] = useState({});
   // asset_id → { token_id → { holderUserId, heldAtMs } } — remote hands
   // only (own drags live in MapTokenLayer's refs; the server echo is
   // filtered out). Scoped per map: token ids are only unique per board and
@@ -110,6 +114,10 @@ export const useMapTokens = ({
         return { ...previousHolds, [assetId]: nextBoardHolds };
       });
     }
+  }, []);
+
+  const mergeTokenImages = useCallback((imageRefs) => {
+    setTokenImages((previousImages) => ({ ...previousImages, ...imageRefs }));
   }, []);
 
   const applyGrabDenial = useCallback(({ tokenId, heldBy }) => {
@@ -246,6 +254,28 @@ export const useMapTokens = ({
     return true;
   }, [activeAssetId, gridConfig, clampToImage, sendFunctions]);
 
+  /**
+   * Commit a configure op (label/footprint/hidden/locked). DM-only for npc
+   * tokens server-side; the UI only offers the toggles to the DM. Sends the
+   * full token with the changes folded in (the server whitelists what a
+   * configure may actually touch).
+   */
+  const configureToken = useCallback((token, changes) => {
+    if (!activeAssetId) return false;
+    const configuredToken = { ...token, ...changes, updated_at: new Date().toISOString() };
+    if (!sendFunctions.sendMapTokenConfigure(activeAssetId, configuredToken)) return false;
+    setMapTokenState((previousState) => {
+      const board = previousState[activeAssetId] || [];
+      return {
+        ...previousState,
+        [activeAssetId]: board.map((existingToken) =>
+          existingToken.id === configuredToken.id ? configuredToken : existingToken
+        ),
+      };
+    });
+    return true;
+  }, [activeAssetId, sendFunctions]);
+
   const removeToken = useCallback((tokenId) => {
     if (!activeAssetId) return false;
     if (!sendFunctions.sendMapTokenRemove(activeAssetId, tokenId)) return false;
@@ -285,20 +315,37 @@ export const useMapTokens = ({
    * Drop the carried token at a screen point. Places it when the point is
    * over the map image; anywhere else is a no-op snap-back. Returns whether
    * a placement happened.
+   *
+   * Every refusal names its gate on console.debug — a silently eaten
+   * release is undiagnosable from the outside (the 2026-07-23 gridless
+   * placement report), and the chip needs the boolean to animate the
+   * ghost home instead of vanishing it.
    */
   const dropCarriedToken = useCallback((clientX, clientY) => {
+    const refuse = (reason) => {
+      console.debug(`🪙 [map-tokens] drop refused: ${reason}`);
+      return false;
+    };
+
     const carried = carriedTokenRef.current;
     carriedTokenRef.current = null;
-    if (!carried || !activeAssetId) return false;
+    if (!carried) return refuse('no-carry (pointerup without a beginCarry)');
+    if (!activeAssetId) return refuse('no-active-map');
 
     const { element, naturalWidth, naturalHeight } = layerMetricsRef.current;
+    if (!element || !naturalWidth || !naturalHeight) {
+      return refuse('no-layer-metrics (map image not laid out yet — still loading?)');
+    }
     const point = screenPointToSpace(element, clientX, clientY, naturalWidth, naturalHeight);
-    if (!point || !point.insideElement) return false;
+    if (!point) return refuse('layer-rect-unresolvable');
+    if (!point.insideElement) return refuse('outside-image');
 
     // Drafts are NOT consumed at placement — the chip persists as the
     // token's home (per-map stamp, like a pc chip) and carries the
     // "return token" CTA that takes it back off the board.
-    return commitTokenPlace({ ...carried, x: point.x, y: point.y });
+    const placed = commitTokenPlace({ ...carried, x: point.x, y: point.y });
+    if (!placed) return refuse('send-failed (WebSocket not connected?)');
+    return true;
   }, [activeAssetId, commitTokenPlace]);
 
   // ── DM NPC drafts ──────────────────────────────────────────────────────────
@@ -311,9 +358,56 @@ export const useMapTokens = ({
       character_id: null,
       label: (label || '').trim().slice(0, 64) || 'NPC',
       footprint: footprint || 1,
+      // DM tokens start hidden (decision 17): the ambush is the default,
+      // revealing is the deliberate act. Toggleable on the draft row before
+      // placement; lock is placed-tokens-only (decision 18 invariant).
+      hidden: true,
+      image_asset_id: null,
+      owner_user_id: null,
     };
     setNpcDrafts((previousDrafts) => [...previousDrafts, draft]);
     return draft;
+  }, []);
+
+  /**
+   * Assign a draft to a player before placement — the companion arrives
+   * on the board already theirs (the owner rides the place op).
+   */
+  const assignNpcDraft = useCallback((draftId, ownerUserId) => {
+    setNpcDrafts((previousDrafts) =>
+      previousDrafts.map((draft) =>
+        draft.id === draftId ? { ...draft, owner_user_id: ownerUserId || null } : draft
+      ));
+  }, []);
+
+  /**
+   * Stamp a copy of an npc token (board token or draft) into the draft
+   * list — never onto the board: placement stays a deliberate drag
+   * (decision 14). Copies label/size/hidden/avatar; lock is placed-only
+   * (decision 18), so the copy starts unlocked.
+   */
+  const duplicateNpcToken = useCallback((sourceToken) => {
+    const duplicatedDraft = {
+      id: mintTokenId(),
+      kind: 'npc',
+      owner_user_id: null,
+      character_id: null,
+      label: sourceToken.label || 'NPC',
+      footprint: sourceToken.footprint || 1,
+      hidden: sourceToken.hidden === true,
+      image_asset_id: sourceToken.image_asset_id || null,
+      // An assigned companion duplicates to the same player's hand.
+      owner_user_id: sourceToken.owner_user_id || null,
+    };
+    setNpcDrafts((previousDrafts) => [...previousDrafts, duplicatedDraft]);
+    return duplicatedDraft;
+  }, []);
+
+  const toggleNpcDraftHidden = useCallback((draftId) => {
+    setNpcDrafts((previousDrafts) =>
+      previousDrafts.map((draft) =>
+        draft.id === draftId ? { ...draft, hidden: !draft.hidden } : draft
+      ));
   }, []);
 
   const removeNpcDraft = useCallback((draftId) => {
@@ -339,6 +433,9 @@ export const useMapTokens = ({
         character_id: null,
         label: token.label || 'NPC',
         footprint: token.footprint || 1,
+        hidden: token.hidden === true, // a recalled ambusher stays an ambusher
+        image_asset_id: token.image_asset_id || null, // the face survives the recall
+        owner_user_id: token.owner_user_id || null, // a companion stays its player's
       };
       return [...previousDrafts, rebuiltDraft];
     });
@@ -356,8 +453,9 @@ export const useMapTokens = ({
       applyRemoteDrag,
       applyGrabDenial,
       addToLog,
+      mergeTokenImages,
     });
-  }, [registerHandler, thisUserId, applyTokenBoard, applyRemoteDrag, applyGrabDenial, addToLog]);
+  }, [registerHandler, thisUserId, applyTokenBoard, applyRemoteDrag, applyGrabDenial, addToLog, mergeTokenImages]);
 
   const tokensForActiveMap = useMemo(
     () => (activeAssetId ? mapTokenState[activeAssetId] || [] : []),
@@ -375,6 +473,8 @@ export const useMapTokens = ({
     // state
     mapTokenState,
     setMapTokenState, // initial_state hydration
+    tokenImages,
+    setTokenImages, // initial_state hydration
     tokensForActiveMap,
     heldTokensForActiveMap,
     lastDenial,
@@ -386,6 +486,7 @@ export const useMapTokens = ({
     // committed ops
     commitTokenPlace,
     commitTokenMove,
+    configureToken,
     removeToken,
     // presence
     grabToken,
@@ -398,6 +499,9 @@ export const useMapTokens = ({
     dropCarriedToken,
     // DM drafts
     createNpcDraft,
+    duplicateNpcToken,
+    toggleNpcDraftHidden,
+    assignNpcDraft,
     removeNpcDraft,
     recallNpcToken,
   };

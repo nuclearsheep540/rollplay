@@ -16,10 +16,11 @@ from models.log_type import LogType
 from mapservice import MapService, MapSettings
 from imageservice import ImageService, ImageSettings
 from gameservice import GameService
-from map_token_ops import VALID_MAP_TOKEN_OPS, grid_cell_label, is_valid_asset_key
+from map_token_ops import VALID_MAP_TOKEN_OPS, filter_hidden_tokens, grid_cell_label, is_valid_asset_key
 from map_token_holds import MapTokenHolds
 from site_client import fetch_character_summary
 from shared_contracts.image import ImageConfig
+from shared_contracts.grid_math import grid_geometry_changed, grid_usable, resnap_token_position
 from shared_contracts.map import MapConfig
 from shared_contracts.map_token import MapToken
 from shared_contracts.audio import AudioChannelState, AudioTrackConfig, AudioEffects
@@ -30,6 +31,16 @@ adventure_log = AdventureLogService()
 map_service = MapService()
 image_service = ImageService()
 map_token_holds = MapTokenHolds()
+
+# Hidden tokens whose hold is (or was recently) active, keyed
+# (room_id, asset_id, token_id). Move frames arrive at ~20 Hz — far too hot
+# for a per-frame board read — so the grab's board lookup caches the hidden
+# flag here and frames/releases consult the set instead (decision 17: drag
+# presence for hidden tokens must not reach player clients either).
+# Presence-adjacent and in-memory like MapTokenHolds itself; a stale entry
+# (lost release) is overwritten by the next grab and only ever suppresses
+# relays for a token players cannot see anyway.
+_hidden_held_tokens = set()
 
 
 def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any]:
@@ -57,6 +68,84 @@ def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any
             value = existing.get(field)  # preserve existing when chaperone is silent
         out[field] = value
     return out
+
+
+def _grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str,
+                          old_grid_config: Optional[Dict[str, Any]],
+                          new_grid_config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Rewrite a map's token board for a grid geometry change and build the
+    map_token_state_update fragment for it (tokens v2 decision 20: exact-cell
+    re-snap, superseding v1 decision 7's no-auto-resnap).
+
+    Returns None when there is nothing to do: no asset, new grid unusable
+    (disabled grids leave positions alone), cosmetic-only change, empty
+    board, or every token already on its lattice point. updated_at is
+    deliberately preserved so z-order doesn't scramble (see
+    GameService.replace_map_token_board).
+    """
+    if not asset_id:
+        return None
+    if not grid_usable(new_grid_config):
+        return None
+    if not grid_geometry_changed(old_grid_config, new_grid_config):
+        return None
+
+    board_tokens = GameService.get_map_tokens(room_id, asset_id)
+    if not board_tokens:
+        return None
+
+    resnapped_tokens = []
+    any_token_moved = False
+    for board_token in board_tokens:
+        new_x, new_y = resnap_token_position(
+            board_token.get("x"), board_token.get("y"),
+            board_token.get("footprint", 1),
+            old_grid_config, new_grid_config,
+        )
+        if new_x != board_token.get("x") or new_y != board_token.get("y"):
+            any_token_moved = True
+            resnapped_tokens.append({**board_token, "x": new_x, "y": new_y})
+        else:
+            resnapped_tokens.append(board_token)
+
+    if not any_token_moved:
+        return None
+
+    if not GameService.replace_map_token_board(room_id, asset_id, resnapped_tokens):
+        logger.error(f"Grid re-snap board write failed for room {room_id}, map {asset_id}")
+        return None
+
+    return {
+        "event_type": "map_token_state_update",
+        "data": {
+            "asset_id": asset_id,
+            "tokens": resnapped_tokens,
+            "op": "resnap",
+            "token_id": None,
+            "updated_by": updated_by,
+        },
+    }
+
+
+async def _send_map_token_fragment(manager, room_id: str, fragment: Dict[str, Any]) -> None:
+    """Deliver a map_token_state_update with per-recipient hidden filtering
+    (decision 17) — the shared rail for server-initiated board rewrites
+    like the grid re-snap. Hidden tokens must never reach player clients,
+    whichever path emits the board. Fast path: nothing hidden → one room
+    broadcast, exactly as v1 behaved."""
+    fragment_tokens = fragment["data"]["tokens"]
+    if not any(board_token.get("hidden") for board_token in fragment_tokens):
+        await manager.update_room_data(room_id, fragment)
+        return
+
+    dm_user_id = GameService.get_dm_user_id(room_id)
+    player_fragment = {
+        **fragment,
+        "data": {**fragment["data"], "tokens": filter_hidden_tokens(fragment_tokens)},
+    }
+    for recipient_user_id in list(manager.room_users.get(room_id, {}).keys()):
+        recipient_fragment = fragment if recipient_user_id == dm_user_id else player_fragment
+        await manager.send_to_player(room_id, recipient_user_id, recipient_fragment)
 
 
 class WebsocketEventResult:
@@ -684,7 +773,9 @@ class WebsocketEvent():
 
         # Drop any map-token holds the leaver had — remote clients clear their
         # lift affordances off this handler's player_disconnected broadcast.
-        map_token_holds.release_all_for_user(client_id, user_id)
+        released_hold_keys = map_token_holds.release_all_for_user(client_id, user_id)
+        for released_asset_id, released_token_id in released_hold_keys:
+            _hidden_held_tokens.discard((client_id, released_asset_id, released_token_id))
 
         # Log player disconnection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=display_name)
@@ -1439,18 +1530,29 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": "Invalid map config update request"})
         
         try:
+            # Capture the pre-update grid + the map's asset_id: token boards
+            # are keyed by asset_id and the exact-cell re-snap (decision 20)
+            # needs the old lattice to know which cell each token was in.
+            active_map = map_service.get_active_map(room_id)
+            active_map_config = (active_map or {}).get("map_config", {})
+            old_grid_config = None
+            map_asset_id = None
+            if active_map_config.get("filename") == filename:
+                old_grid_config = active_map_config.get("grid_config")
+                map_asset_id = active_map_config.get("asset_id")
+
             # Update in database
             print(f"🗺️ Updating map config in database for room {room_id}, filename {filename}")
             print(f"   Grid config: {grid_config}")
             print(f"   Map image config: {map_image_config}")
-            
+
             success = map_service.update_map_config(
-                room_id, 
-                filename, 
+                room_id,
+                filename,
                 grid_config=grid_config,
                 map_image_config=map_image_config
             )
-            
+
             if success:
                 # Broadcast configuration update to all clients
                 config_update_message = {
@@ -1462,7 +1564,22 @@ class WebsocketEvent():
                         "updated_by": user_id
                     }
                 }
-                
+
+                # Exact-cell re-snap: rewrite the board for the new lattice
+                # and reconcile every client wholesale. Sent from here (the
+                # dispatcher broadcasts config_update_message after we
+                # return); both messages are self-contained so the one-tick
+                # ordering gap is cosmetic only.
+                resnap_fragment = _grid_resnap_fragment(
+                    room_id, map_asset_id, user_id, old_grid_config, grid_config
+                )
+                if resnap_fragment:
+                    # Per-recipient delivery — a raw room broadcast here
+                    # would hand players every hidden token's position
+                    # (decision 17).
+                    await _send_map_token_fragment(manager, room_id, resnap_fragment)
+                    print(f"🗺️ Re-snapped {len(resnap_fragment['data']['tokens'])} tokens for room {room_id}")
+
                 print(f"🗺️ Map config updated for room {room_id}")
                 return WebsocketEventResult(broadcast_message=config_update_message)
             else:
@@ -1600,16 +1717,68 @@ class WebsocketEvent():
             token_id = token.id
             token_payload = token.model_dump()
 
-        # Pre-op snapshot only for remove — the name of what's vanishing is
-        # gone from the post-op array. move reads its attribution fields from
-        # the post-op array instead (a move never changes them), so the
-        # dominant commit path costs no extra read.
+        # One projection read serves the whole op: DM identity (ACL +
+        # filtering), the pre-op board (target lookup, denial answer), and
+        # the image refs (place/reveal fragments carry them).
+        dm_user_id, pre_op_board, room_token_images = GameService.get_room_token_context(room_id, asset_id)
+        sender_is_dm = dm_user_id is not None and user_id == dm_user_id
+
+        # Pre-op snapshot for every non-place op: the ACL/lock checks need
+        # the board's version of the target (the wire payload is never
+        # trusted for kind/locked/hidden), and remove's log needs the name
+        # of what's vanishing before it goes.
         pre_op_token = None
-        if op == "remove":
-            for existing_token in GameService.get_map_tokens(room_id, asset_id):
+        if op != "place":
+            for existing_token in pre_op_board:
                 if existing_token.get("id") == token_id:
                     pre_op_token = existing_token
                     break
+
+        target_kind = token_payload.get("kind") if op == "place" else (pre_op_token or {}).get("kind")
+
+        # ACL (decisions 16/18/19). The client UI never offers these ops —
+        # the deny is the backstop against tampered clients, answered to the
+        # sender only with the authoritative board so their optimistic
+        # commit reconciles away.
+        denial_reason = None
+        if target_kind == "npc" and not sender_is_dm:
+            # An ASSIGNED npc token — a player's minion/companion — is
+            # player-side: anyone may move it, exactly the decision-2
+            # table-feel pc tokens have. Move (plus its grab) is the only
+            # op that opens; place, remove, and configure stay the DM's.
+            companion_move_allowed = (
+                op == "move"
+                and pre_op_token is not None
+                and bool(pre_op_token.get("owner_user_id"))
+            )
+            if not companion_move_allowed:
+                denial_reason = "npc tokens are the DM's to command"
+        if denial_reason is None and op in ("move", "remove") and pre_op_token and pre_op_token.get("locked"):
+            denial_reason = "token is locked"
+        if (denial_reason is None and op == "configure" and pre_op_token
+                and pre_op_token.get("kind") == "pc"):
+            if token_payload.get("hidden") or token_payload.get("locked"):
+                denial_reason = "hidden/locked are npc-only flags"
+            elif token_payload.get("owner_user_id") != pre_op_token.get("owner_user_id"):
+                denial_reason = "pc token ownership is identity"
+
+        if denial_reason:
+            sender_tokens = pre_op_board if sender_is_dm else filter_hidden_tokens(pre_op_board)
+            await websocket.send_json({
+                "event_type": "map_token_state_update",
+                "data": {
+                    "asset_id": asset_id,
+                    "tokens": sender_tokens,
+                    "op": "denied",
+                    "token_id": token_id,
+                    "updated_by": user_id,
+                    "log_message": None,
+                    "denied_reason": denial_reason,
+                },
+            })
+            logger.warning(
+                f"Map token op denied ({denial_reason}): {op} on {token_id} by {user_id} in {room_id}")
+            return WebsocketEventResult(broadcast_message=None)
 
         try:
             tokens = GameService.apply_map_token_op(
@@ -1618,13 +1787,19 @@ class WebsocketEvent():
         except ValueError as op_error:
             return WebsocketEventResult.error(str(op_error))
 
+        was_hidden = bool(pre_op_token.get("hidden")) if pre_op_token else False
+        now_hidden = bool(token_payload.get("hidden")) if token_payload else was_hidden
+
+        # Adventure-log rules (inform, don't enforce) — with one carve-out:
+        # ops on hidden tokens log NOTHING ("placed Goblin at D7" would be
+        # the ambush on a plate, decision 17). The reveal is the log moment.
         log_message = None
-        if op == "place":
+        if op == "place" and not token_payload.get("hidden"):
             cell_suffix = WebsocketEvent._map_token_place_cell_suffix(room_id, asset_id, token_payload)
             log_message = WebsocketEvent._write_map_token_log(
                 room_id, user_id, "map_token_placed", token_payload, cell_suffix
             )
-        elif op == "remove" and pre_op_token:
+        elif op == "remove" and pre_op_token and not was_hidden:
             log_message = WebsocketEvent._write_map_token_log(
                 room_id, user_id, "map_token_removed", pre_op_token
             )
@@ -1634,28 +1809,97 @@ class WebsocketEvent():
                 if candidate_token.get("id") == token_id:
                     moved_token = candidate_token
                     break
-            # The social-correction signal: log only a pc token moved by
-            # someone other than its stored owner. Routine own-token and npc
-            # moves stay unlogged (log-flood informs nobody).
-            if moved_token and moved_token.get("kind") == "pc":
+            # The social-correction signal: log a pc token — or an assigned
+            # companion — moved by someone other than its owner. Routine
+            # own-token and plain-npc moves stay unlogged (log-flood
+            # informs nobody).
+            if moved_token and (moved_token.get("kind") == "pc"
+                                or moved_token.get("owner_user_id")):
                 owner_user_id = moved_token.get("owner_user_id")
                 if owner_user_id and owner_user_id != user_id:
+                    move_template = ("map_token_moved_by_other"
+                                     if moved_token.get("kind") == "pc"
+                                     else "map_token_moved_party")
                     log_message = WebsocketEvent._write_map_token_log(
-                        room_id, user_id, "map_token_moved_by_other", moved_token
+                        room_id, user_id, move_template, moved_token
                     )
+        elif op == "configure" and was_hidden and not now_hidden:
+            revealed_token = None
+            for candidate_token in tokens:
+                if candidate_token.get("id") == token_id:
+                    revealed_token = candidate_token
+                    break
+            if revealed_token:
+                cell_suffix = WebsocketEvent._map_token_place_cell_suffix(room_id, asset_id, revealed_token)
+                log_message = WebsocketEvent._write_map_token_log(
+                    room_id, user_id, "map_token_revealed", revealed_token, cell_suffix
+                )
+                # Reveal mid-hold: stop suppressing its drag relays.
+                _hidden_held_tokens.discard((room_id, asset_id, token_id))
+        elif op == "configure" and not was_hidden and now_hidden:
+            # Hide mid-hold: start suppressing its drag relays (the
+            # symmetric case of the reveal discard above).
+            if map_token_holds.holder(room_id, asset_id, token_id) is not None:
+                _hidden_held_tokens.add((room_id, asset_id, token_id))
 
-        broadcast = {
-            "event_type": "map_token_state_update",
-            "data": {
-                "asset_id": asset_id,
-                "tokens": tokens,
-                "op": op,
-                "token_id": token_id,
-                "updated_by": user_id,
-                "log_message": log_message,
-            },
+        if op == "place":
+            player_view_changed = not token_payload.get("hidden")
+        elif op in ("move", "remove"):
+            player_view_changed = not was_hidden
+        else:  # configure — visible at either end reaches players
+            player_view_changed = (not was_hidden) or (not now_hidden)
+
+        fragment_data = {
+            "asset_id": asset_id,
+            "tokens": tokens,
+            "op": op,
+            "token_id": token_id,
+            "updated_by": user_id,
+            "log_message": log_message,
         }
-        return WebsocketEventResult(broadcast_message=broadcast)
+
+        # A token entering the players' world (placed visible, or revealed)
+        # may carry an image ref they never received — initial_state only
+        # delivers refs for tokens visible at connect (decision 17 covers
+        # artwork identity too). Piggyback the ref on this fragment.
+        token_enters_view = (
+            (op == "place" and player_view_changed)
+            or (op == "configure" and was_hidden and not now_hidden)
+        )
+        if token_enters_view:
+            post_op_target = None
+            for candidate_token in tokens:
+                if candidate_token.get("id") == token_id:
+                    post_op_target = candidate_token
+                    break
+            target_image_id = (post_op_target or {}).get("image_asset_id")
+            if target_image_id and room_token_images.get(target_image_id):
+                fragment_data["token_images"] = {target_image_id: room_token_images[target_image_id]}
+
+        # Per-recipient hidden filtering (decision 17). Fast path: a board
+        # with nothing hidden broadcasts identically to everyone, exactly as
+        # v1 did. Otherwise the DM gets the full board and players get the
+        # filtered one — and an op that lives entirely in the hidden layer
+        # (placing/moving/removing a hidden token) sends players nothing at
+        # all: even op metadata would tip the ambush.
+        board_has_hidden = any(board_token.get("hidden") for board_token in tokens)
+        if not board_has_hidden and not was_hidden:
+            return WebsocketEventResult(
+                broadcast_message={"event_type": "map_token_state_update", "data": fragment_data})
+
+        player_tokens = filter_hidden_tokens(tokens)
+        for recipient_user_id in list(manager.room_users.get(room_id, {}).keys()):
+            if recipient_user_id == dm_user_id:
+                recipient_tokens = tokens
+            elif player_view_changed:
+                recipient_tokens = player_tokens
+            else:
+                continue
+            await manager.send_to_player(room_id, recipient_user_id, {
+                "event_type": "map_token_state_update",
+                "data": {**fragment_data, "tokens": recipient_tokens},
+            })
+        return WebsocketEventResult(broadcast_message=None)
 
     @staticmethod
     async def map_token_drag(websocket, data, event_data, user_id, client_id, manager):
@@ -1691,11 +1935,34 @@ class WebsocketEvent():
                     return WebsocketEventResult.error("Invalid map token drag: x/y must be finite numbers")
 
         if phase == "grab":
-            blocking_holder = map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
-            if blocking_holder is not None:
+            # ACL before the hold (decisions 16/18): a non-DM grabbing an
+            # npc token, or anyone grabbing a locked token, is denied on the
+            # same rail as a concurrency loss — the optimistic drag snaps
+            # back. One projection read at human hand frequency serves both
+            # the target lookup and the DM check.
+            grab_dm_user_id, grab_board, _grab_token_images = GameService.get_room_token_context(room_id, asset_id)
+            target_token = None
+            for existing_token in grab_board:
+                if existing_token.get("id") == token_id:
+                    target_token = existing_token
+                    break
+
+            grab_denied = False
+            if target_token and target_token.get("kind") == "npc":
+                # Assigned companions are player-side (decision 2): open grab.
+                if grab_dm_user_id != user_id and not target_token.get("owner_user_id"):
+                    grab_denied = True
+            if target_token and target_token.get("locked"):
+                grab_denied = True
+
+            blocking_holder = None
+            if not grab_denied:
+                blocking_holder = map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
+
+            if grab_denied or blocking_holder is not None:
                 # Answered to the requester only — their optimistic drag snaps
-                # back. held_by is a user_id; the client resolves the nameplate
-                # from the player_metadata it already holds.
+                # back. held_by is a user_id (nameplate resolves client-side)
+                # or None for an ACL/lock denial.
                 deny_message = {
                     "event_type": "map_token_drag_denied",
                     "data": {
@@ -1706,6 +1973,12 @@ class WebsocketEvent():
                 }
                 await websocket.send_json(deny_message)
                 return WebsocketEventResult(broadcast_message=None)
+
+            # Cache the hidden flag for this hold: move frames are too hot
+            # for a board read, and a hidden token's drag presence must not
+            # reach player clients (decision 17).
+            if target_token and target_token.get("hidden"):
+                _hidden_held_tokens.add((room_id, asset_id, token_id))
         elif phase == "move":
             if map_token_holds.holder(room_id, asset_id, token_id) != user_id:
                 # Stale frame after an expired/denied hold — drop silently,
@@ -1724,6 +1997,15 @@ class WebsocketEvent():
                 return WebsocketEventResult(broadcast_message=None)
             # released, or unheld (expired hold): relay so remote lift
             # affordances clear; the lane-1 commit settles actual position.
+
+        # Hidden token's hand: no relay at all (decision 17). Players don't
+        # have the token; grab/frame/release presence would leak the ambush
+        # (token id AND coordinates) to a websocket inspector. The DM is the
+        # only client that could render it and filters its own echo anyway.
+        if (room_id, asset_id, token_id) in _hidden_held_tokens:
+            if phase == "release":
+                _hidden_held_tokens.discard((room_id, asset_id, token_id))
+            return WebsocketEventResult(broadcast_message=None)
 
         drag_message = {
             "event_type": "map_token_drag",

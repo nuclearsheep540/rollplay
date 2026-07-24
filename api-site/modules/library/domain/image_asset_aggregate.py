@@ -14,6 +14,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from shared_contracts.image import ImageConfig
+from shared_contracts.image import FocalArea
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.cine_config import MotionConfig
@@ -40,6 +41,7 @@ class ImageAsset(MediaAssetAggregate):
     image_position_y: Optional[float] = None  # 0–100%
     visual_overlays: Optional[list] = None    # list of Overlay dicts
     motion: Optional[MotionConfig] = None
+    focal_areas: Optional[dict] = None        # purpose -> FocalArea dict (decision 27)
 
     @classmethod
     def create(
@@ -86,6 +88,7 @@ class ImageAsset(MediaAssetAggregate):
         image_position_y: Optional[float] = None,
         visual_overlays: Optional[list] = None,
         motion: Optional[MotionConfig] = None,
+        focal_areas: Optional[dict] = None,
     ) -> "ImageAsset":
         """
         Promote a base MediaAssetAggregate to ImageAsset.
@@ -101,6 +104,7 @@ class ImageAsset(MediaAssetAggregate):
             image_position_y=image_position_y,
             visual_overlays=visual_overlays,
             motion=motion,
+            focal_areas=focal_areas,
         )
 
     def update_image_config(
@@ -150,6 +154,29 @@ class ImageAsset(MediaAssetAggregate):
     def has_image_config(self) -> bool:
         """Check if image configuration has been set."""
         return self.image_fit is not None
+
+    def set_focal_area(self, purpose: str, area: Optional[dict]) -> None:
+        """Set (or clear with area=None) one purpose's focal square
+        (tokens v2, decision 27). The area is the image's attribute —
+        every consumer of the purpose shares it. Validation against the
+        FocalArea contract happens here; bounds against the actual pixels
+        are the client's job (the server never reads image dimensions).
+        """
+        purpose_key = (purpose or "").strip()
+        if not purpose_key:
+            raise ValueError("focal area purpose is required")
+
+        current_areas = dict(self.focal_areas or {})
+        if area is None:
+            current_areas.pop(purpose_key, None)
+        else:
+            current_areas[purpose_key] = FocalArea.model_validate(area).model_dump()
+        self.focal_areas = current_areas or None
+        self.updated_at = datetime.utcnow()
+
+    def get_focal_area(self, purpose: str) -> Optional[dict]:
+        """One purpose's focal square, or None."""
+        return (self.focal_areas or {}).get(purpose)
 
     def build_image_config_for_game(
         self, asset_id: str, filename: str, file_path: str

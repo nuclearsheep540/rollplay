@@ -18,4 +18,5 @@ export {
   cellPxForMap,
   tokenDiameterPx,
   snapTokenCenter,
+  mintTokenId,
 } from './config';

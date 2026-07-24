@@ -12,11 +12,17 @@ import AssetPicker from './AssetPicker';
 import MapConfigToolbar from './MapConfigToolbar';
 import MapConfigUndoRedo, { UNDO_HINT, REDO_HINT } from './MapConfigUndoRedo';
 import WorkshopGridControls from './WorkshopGridControls';
+import WorkshopTokenControls from './WorkshopTokenControls';
 import FileMenuBar from './FileMenuBar';
 import { MapDisplay } from '@/app/map_management';
 import { useGridConfig } from '@/app/map_management/hooks/useGridConfig';
 import { useUpdateGridConfig } from '../hooks/useUpdateGridConfig';
 import { useUpdateFogConfig } from '../hooks/useUpdateFogConfig';
+import { useUpdateTokenConfig } from '../hooks/useUpdateTokenConfig';
+import { useSetFocalArea } from '../hooks/useSetFocalArea';
+import { mintTokenId, snapTokenCenter } from '@/app/map_tokens';
+import Modal from '@/app/shared/components/Modal';
+import FocalAreaModal from '@/app/shared/components/FocalAreaModal';
 import {
   useFogRegions,
   FogPaintControls,
@@ -25,7 +31,7 @@ import {
 } from '@/app/fog_management';
 import { useActionHistory } from '@/app/shared/hooks/useActionHistory';
 
-const VALID_TOOLS = ['move', 'grid', 'paint', 'erase'];
+const VALID_TOOLS = ['move', 'grid', 'tokens', 'paint', 'erase'];
 
 async function fetchAssetById(assetId) {
   const response = await authFetch(`/api/library/${assetId}`, { method: 'GET' });
@@ -85,6 +91,19 @@ export default function MapConfigTool({
   const [naturalDimensions, setNaturalDimensions] = useState(null);
   const [gridSaveSuccess, setGridSaveSuccess] = useState(false);
   const [fogSaveSuccess, setFogSaveSuccess] = useState(false);
+  // Token baseline authoring (tokens v2): the working copy of the map's
+  // npc token list. Explicit Save like grid (fog auto-saves; a half-built
+  // ambush should never publish itself).
+  const [baselineTokens, setBaselineTokens] = useState([]);
+  const [tokensDirty, setTokensDirty] = useState(false);
+  const [tokenSaveSuccess, setTokenSaveSuccess] = useState(false);
+  const [tokenInPlayWarning, setTokenInPlayWarning] = useState(null);
+  // Avatar flow (decision 27): pick an image (library/upload) → choose its
+  // "token" focal square → the token references the image by id. The crop
+  // is the IMAGE's attribute; every token using it shares the result.
+  const [avatarPickingTokenId, setAvatarPickingTokenId] = useState(null);
+  const [avatarCropState, setAvatarCropState] = useState(null); // { tokenId, imageAssetId, imageUrl, initialArea }
+  const [workshopTokenImages, setWorkshopTokenImages] = useState({}); // image_asset_id -> { url, token_area }
   // Workshop "peek through fog" toggle — when on, the fog wrapper drops
   // to 50% opacity so the DM can see the map underneath while
   // configuring regions. Replaces the previous hardcoded knockback that
@@ -95,6 +114,8 @@ export default function MapConfigTool({
   const fog = useFogRegions();
   const gridUpdateMutation = useUpdateGridConfig();
   const fogUpdateMutation = useUpdateFogConfig();
+  const tokenUpdateMutation = useUpdateTokenConfig();
+  const focalAreaMutation = useSetFocalArea();
 
   const tool = VALID_TOOLS.includes(activeTool) ? activeTool : 'move';
 
@@ -254,8 +275,13 @@ export default function MapConfigTool({
       setNaturalDimensions(null);
       setGridSaveSuccess(false);
       setFogSaveSuccess(false);
+      setBaselineTokens([]);
+      setTokensDirty(false);
+      setTokenSaveSuccess(false);
+      setTokenInPlayWarning(null);
       gridUpdateMutation.reset();
       fogUpdateMutation.reset();
+      tokenUpdateMutation.reset();
       history.clear();
       return;
     }
@@ -267,8 +293,12 @@ export default function MapConfigTool({
       setNaturalDimensions(null);
       setGridSaveSuccess(false);
       setFogSaveSuccess(false);
+      setTokensDirty(false);
+      setTokenSaveSuccess(false);
+      setTokenInPlayWarning(null);
       gridUpdateMutation.reset();
       fogUpdateMutation.reset();
+      tokenUpdateMutation.reset();
       history.clear(); // a different asset means a different history
 
       const assetData = await fetchAssetById(selectedAssetId);
@@ -278,6 +308,9 @@ export default function MapConfigTool({
         return;
       }
       setSelectedAsset(assetData);
+
+      // Hydrate the token baseline working copy from the persisted config
+      setBaselineTokens(assetData.token_config?.tokens || []);
 
       // Hydrate grid hook from the flat asset shape
       grid.initFromConfig({
@@ -407,6 +440,227 @@ export default function MapConfigTool({
   const isFogTool = tool === 'paint' || tool === 'erase';
   const isGridTool = tool === 'grid';
   const isMoveTool = tool === 'move';
+  const isTokenTool = tool === 'tokens';
+
+  // The asset's SAVED grid drives token snapping and sizing (matching what
+  // a session would seed) — not the grid tool's unsaved preview.
+  const savedGridConfig = useMemo(() => {
+    if (!selectedAsset?.grid_cell_size) return null;
+    return {
+      enabled: true,
+      grid_cell_size: selectedAsset.grid_cell_size,
+      offset_x: selectedAsset.grid_offset_x || 0,
+      offset_y: selectedAsset.grid_offset_y || 0,
+      grid_width: selectedAsset.grid_width || 0,
+      grid_height: selectedAsset.grid_height || 0,
+    };
+  }, [selectedAsset?.grid_cell_size, selectedAsset?.grid_offset_x, selectedAsset?.grid_offset_y,
+      selectedAsset?.grid_width, selectedAsset?.grid_height]);
+
+  // Local adapter in place of useMapTokens' WS-backed api: the layer's
+  // drag mechanics work unchanged, commits just mutate the working copy.
+  const workshopTokensApi = useMemo(() => ({
+    attachTokenLayer: () => {},
+    grabToken: () => true,
+    streamTokenDrag: () => true,
+    releaseToken: () => true,
+    clearDenial: () => {},
+    remoteDragFramesRef: null,
+    commitTokenMove: (token, nativeX, nativeY) => {
+      let targetX = nativeX;
+      let targetY = nativeY;
+      if (naturalDimensions) {
+        targetX = Math.max(0, Math.min(naturalDimensions.naturalWidth, targetX));
+        targetY = Math.max(0, Math.min(naturalDimensions.naturalHeight, targetY));
+      }
+      const snapped = snapTokenCenter(targetX, targetY, savedGridConfig, token.footprint);
+      setBaselineTokens((previousTokens) => previousTokens.map((existingToken) =>
+        existingToken.id === token.id
+          ? { ...existingToken, x: snapped.x, y: snapped.y, updated_at: new Date().toISOString() }
+          : existingToken
+      ));
+      setTokensDirty(true);
+      return true;
+    },
+  }), [savedGridConfig, naturalDimensions]);
+
+  // Resolve image refs for any baseline token whose image we haven't
+  // fetched yet — the preview needs a URL + the shared "token" area.
+  useEffect(() => {
+    const unresolvedImageIds = [];
+    for (const baselineToken of baselineTokens) {
+      const imageId = baselineToken.image_asset_id;
+      if (imageId && !(imageId in workshopTokenImages) && !unresolvedImageIds.includes(imageId)) {
+        unresolvedImageIds.push(imageId);
+      }
+    }
+    if (!unresolvedImageIds.length) return;
+
+    let cancelled = false;
+    async function resolveImages() {
+      const fetchedAssets = await Promise.all(unresolvedImageIds.map(fetchAssetById));
+      const resolvedEntries = {};
+      unresolvedImageIds.forEach((imageId, imageIndex) => {
+        const imageAsset = fetchedAssets[imageIndex];
+        resolvedEntries[imageId] = imageAsset
+          ? { url: imageAsset.s3_url, token_area: imageAsset.focal_areas?.token || null }
+          : { url: null, token_area: null };
+      });
+      if (!cancelled) {
+        setWorkshopTokenImages((previousImages) => ({ ...previousImages, ...resolvedEntries }));
+      }
+    }
+    resolveImages();
+    return () => { cancelled = true; };
+  }, [baselineTokens, workshopTokenImages]);
+
+  const handlePickAvatar = useCallback((tokenId) => {
+    setAvatarPickingTokenId(tokenId);
+  }, []);
+
+  const handleAvatarImageSelected = useCallback(async (imageAssetId) => {
+    const pickedForTokenId = avatarPickingTokenId;
+    setAvatarPickingTokenId(null);
+    const imageAsset = await fetchAssetById(imageAssetId);
+    if (!imageAsset || !pickedForTokenId) return;
+    // Always prompt the area select on selection — pre-filled when the
+    // image already has a "token" area (decision 27; adjusting it moves
+    // every token sharing this image).
+    setAvatarCropState({
+      tokenId: pickedForTokenId,
+      imageAssetId,
+      imageUrl: imageAsset.s3_url,
+      initialArea: imageAsset.focal_areas?.token || null,
+    });
+  }, [avatarPickingTokenId]);
+
+  const handleRemoveAvatar = useCallback(() => {
+    const pickedForTokenId = avatarPickingTokenId;
+    setAvatarPickingTokenId(null);
+    if (!pickedForTokenId) return;
+    setBaselineTokens((previousTokens) => previousTokens.map((existingToken) =>
+      existingToken.id === pickedForTokenId
+        ? { ...existingToken, image_asset_id: null }
+        : existingToken
+    ));
+    setTokensDirty(true);
+  }, [avatarPickingTokenId]);
+
+  const handleFocalAreaConfirm = useCallback(async (area) => {
+    const cropState = avatarCropState;
+    if (!cropState) return;
+    try {
+      await focalAreaMutation.mutateAsync({
+        assetId: cropState.imageAssetId,
+        purpose: 'token',
+        area,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[mapconfig] focal area save failed:', err);
+      return; // keep the modal open; the user can retry or cancel
+    }
+    setWorkshopTokenImages((previousImages) => ({
+      ...previousImages,
+      [cropState.imageAssetId]: { url: cropState.imageUrl, token_area: area },
+    }));
+    setBaselineTokens((previousTokens) => previousTokens.map((existingToken) =>
+      existingToken.id === cropState.tokenId
+        ? { ...existingToken, image_asset_id: cropState.imageAssetId }
+        : existingToken
+    ));
+    setTokensDirty(true);
+    setAvatarCropState(null);
+  }, [avatarCropState, focalAreaMutation]);
+
+  const handleAddToken = useCallback((label, footprint) => {
+    if (!naturalDimensions) return;
+    const snapped = snapTokenCenter(
+      naturalDimensions.naturalWidth / 2,
+      naturalDimensions.naturalHeight / 2,
+      savedGridConfig,
+      footprint
+    );
+    const newToken = {
+      id: mintTokenId(),
+      kind: 'npc',
+      owner_user_id: null,
+      character_id: null,
+      label: (label || '').trim().slice(0, 64) || 'NPC',
+      x: snapped.x,
+      y: snapped.y,
+      footprint: footprint || 1,
+      created_by: 'workshop', // server re-stamps attribution on save
+      updated_at: new Date().toISOString(),
+      hidden: true, // DM tokens start hidden (decision 17)
+      locked: false,
+    };
+    setBaselineTokens((previousTokens) => [...previousTokens, newToken]);
+    setTokensDirty(true);
+  }, [naturalDimensions, savedGridConfig]);
+
+  const handleUpdateToken = useCallback((tokenId, changes) => {
+    setBaselineTokens((previousTokens) => previousTokens.map((existingToken) =>
+      existingToken.id === tokenId ? { ...existingToken, ...changes } : existingToken
+    ));
+    setTokensDirty(true);
+  }, []);
+
+  const handleDeleteToken = useCallback((tokenId) => {
+    setBaselineTokens((previousTokens) =>
+      previousTokens.filter((existingToken) => existingToken.id !== tokenId));
+    setTokensDirty(true);
+  }, []);
+
+  // Duplicate: baseline tokens are placements by definition, so the copy
+  // lands at the snapped map center (like + Add token) rather than
+  // stacking invisibly on its source. Everything else copies, lock
+  // included — a duplicated locked trap stays authored-locked.
+  const handleDuplicateToken = useCallback((tokenId) => {
+    const sourceToken = baselineTokens.find((existingToken) => existingToken.id === tokenId);
+    if (!sourceToken || !naturalDimensions) return;
+    const snapped = snapTokenCenter(
+      naturalDimensions.naturalWidth / 2,
+      naturalDimensions.naturalHeight / 2,
+      savedGridConfig,
+      sourceToken.footprint || 1
+    );
+    const duplicatedToken = {
+      ...sourceToken,
+      id: mintTokenId(),
+      x: snapped.x,
+      y: snapped.y,
+      updated_at: new Date().toISOString(),
+    };
+    setBaselineTokens((previousTokens) => [...previousTokens, duplicatedToken]);
+    setTokensDirty(true);
+  }, [baselineTokens, naturalDimensions, savedGridConfig]);
+
+  const handleTokenSave = useCallback(async (force = false) => {
+    if (!selectedAsset) return;
+    setTokenSaveSuccess(false);
+    try {
+      const updatedAsset = await tokenUpdateMutation.mutateAsync({
+        assetId: selectedAsset.id,
+        tokens: baselineTokens.length ? baselineTokens : null,
+        force,
+      });
+      setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
+      setBaselineTokens(updatedAsset.token_config?.tokens || []);
+      setTokensDirty(false);
+      setTokenInPlayWarning(null);
+      setTokenSaveSuccess(true);
+      setTimeout(() => setTokenSaveSuccess(false), 3000);
+    } catch (err) {
+      if (err.code === 'board_in_play') {
+        setTokenInPlayWarning(err.message);
+      } else {
+        setTokenInPlayWarning(null);
+        // eslint-disable-next-line no-console
+        console.error('[mapconfig] token save failed:', err);
+      }
+    }
+  }, [selectedAsset, baselineTokens, tokenUpdateMutation]);
 
   const activeMapForDisplay = useMemo(() => {
     if (!selectedAsset) return null;
@@ -417,9 +671,12 @@ export default function MapConfigTool({
         file_size: selectedAsset.file_size,
         asset_id: selectedAsset.id,
         filename: selectedAsset.filename,
+        // The token layer reads grid config off the active map (runtime
+        // shape) for disc sizing — feed it the asset's saved grid.
+        grid_config: savedGridConfig,
       },
     };
-  }, [selectedAsset?.s3_url, selectedAsset?.file_size, selectedAsset?.id, selectedAsset?.filename]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedAsset?.s3_url, selectedAsset?.file_size, selectedAsset?.id, selectedAsset?.filename, savedGridConfig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Top menu items ─────────────────────────────────────────────────
 
@@ -432,9 +689,11 @@ export default function MapConfigTool({
     if (!selectedAsset) return;
     await handleGridSave();
     if (fog.isDirty) await handleFogSave();
+    if (tokensDirty) await handleTokenSave();
   };
 
-  const anySavePending = gridUpdateMutation.isPending || fogUpdateMutation.isPending;
+  const anySavePending = gridUpdateMutation.isPending || fogUpdateMutation.isPending
+    || tokenUpdateMutation.isPending;
 
   const fileMenuItems = [
     { label: 'Open Asset', icon: faFileImport, onClick: () => onAssetSelect(null) },
@@ -455,6 +714,12 @@ export default function MapConfigTool({
       icon: faFloppyDisk,
       onClick: handleFogSave,
       disabled: !isFogTool || !selectedAsset || !fog.isDirty || fogUpdateMutation.isPending,
+    },
+    {
+      label: 'Save Tokens',
+      icon: faFloppyDisk,
+      onClick: () => handleTokenSave(false),
+      disabled: !isTokenTool || !selectedAsset || !tokensDirty || tokenUpdateMutation.isPending,
     },
   ];
 
@@ -528,6 +793,10 @@ export default function MapConfigTool({
             // so the DM can see which painted area is which.
             fogShowRegionLabels={isFogTool}
             showGrid={isGridTool || isMoveTool}
+            mapTokens={isTokenTool ? baselineTokens : []}
+            mapTokensApi={isTokenTool ? workshopTokensApi : null}
+            thisUserIsDm={true}
+            tokenImages={workshopTokenImages}
           />
         </div>
 
@@ -551,6 +820,24 @@ export default function MapConfigTool({
                 error={gridUpdateMutation.error?.message}
               />
             </div>
+          )}
+
+          {isTokenTool && (
+            <WorkshopTokenControls
+              tokens={baselineTokens}
+              dirty={tokensDirty}
+              onAddToken={handleAddToken}
+              onUpdateToken={handleUpdateToken}
+              onDeleteToken={handleDeleteToken}
+              onDuplicateToken={handleDuplicateToken}
+              onPickAvatar={handlePickAvatar}
+              onSave={handleTokenSave}
+              isSaving={tokenUpdateMutation.isPending}
+              saveSuccess={tokenSaveSuccess}
+              error={tokenUpdateMutation.error?.code === 'board_in_play' ? null : tokenUpdateMutation.error?.message}
+              inPlayWarning={tokenInPlayWarning}
+              onDismissInPlayWarning={() => setTokenInPlayWarning(null)}
+            />
           )}
 
           {isFogTool && (
@@ -622,6 +909,35 @@ export default function MapConfigTool({
           )}
         </div>
       </div>
+
+      {/* Avatar image picker (library or upload) — decision 27 */}
+      <Modal open={avatarPickingTokenId !== null} onClose={() => setAvatarPickingTokenId(null)} size="2xl">
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-content-on-dark">Choose an avatar image</p>
+          <AssetPicker assetType="image" onSelect={handleAvatarImageSelected} allowUpload={true} />
+          {baselineTokens.find((baselineToken) => baselineToken.id === avatarPickingTokenId)?.image_asset_id && (
+            <button
+              onClick={handleRemoveAvatar}
+              className="text-xs text-rose-300 hover:text-rose-200 underline"
+            >
+              Remove current avatar (back to color disc)
+            </button>
+          )}
+        </div>
+      </Modal>
+
+      {/* Focal square select — always prompted on selection (decision 27) */}
+      {avatarCropState && (
+        <FocalAreaModal
+          open={true}
+          imageUrl={avatarCropState.imageUrl}
+          initialArea={avatarCropState.initialArea}
+          title="Frame the token's face"
+          saving={focalAreaMutation.isPending}
+          onConfirm={handleFocalAreaConfirm}
+          onCancel={() => setAvatarCropState(null)}
+        />
+      )}
     </div>
   );
 }
