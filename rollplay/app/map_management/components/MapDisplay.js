@@ -52,6 +52,7 @@ const MapDisplay = ({
   thisUserId = null,
   thisUserIsDm = false,      // npc tokens are DM-only to move (decision 16); DM sees hidden ghosts (17)
   tokenImages = {},          // image_asset_id → { url, token_area } for image-faced discs (decision 27)
+  showTokenNames = true,     // per-user client-side toggle for token name labels
 }) => {
   useRenderTracker('MapDisplay');
   const mapImageRef = useRef(null);
@@ -401,6 +402,7 @@ const MapDisplay = ({
             thisUserId={thisUserId}
             thisUserIsDm={thisUserIsDm}
             tokenImages={tokenImages}
+            showTokenNames={showTokenNames}
             mapViewScale={viewTransform.scale}
             gridConfig={activeMap?.map_config?.grid_config || null}
             mapAssetId={activeMap?.map_config?.asset_id || null}

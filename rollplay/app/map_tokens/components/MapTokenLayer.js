@@ -52,6 +52,7 @@ export default function MapTokenLayer({
   thisUserIsDm = false,
   tokenImages = {},          // image_asset_id → { url, token_area } (decision 27)
   mapViewScale = 1,          // camera zoom — annotations counter-scale so text/badges hold screen size
+  showTokenNames = true,     // per-user client-side label toggle (held-by nameplates always show)
   gridConfig = null,
   mapAssetId = null,
   attachTokenLayer,
@@ -541,13 +542,17 @@ export default function MapTokenLayer({
               </div>
             )}
 
-            {/* Name subtitle on a 50%-opacity backing (product decision 3) */}
-            <div
-              className="absolute top-full left-1/2 px-1.5 rounded bg-black/50 text-white text-sm whitespace-nowrap pointer-events-none"
-              style={{ transform: `translate(-50%, 3px) scale(${labelScale})`, transformOrigin: 'top center' }}
-            >
-              {tokenName}
-            </div>
+            {/* Name subtitle on a 50%-opacity backing (product decision 3).
+                Client-side toggleable; the held-by nameplate above is a
+                social signal and always shows. */}
+            {showTokenNames && (
+              <div
+                className="absolute top-full left-1/2 px-1.5 rounded bg-black/50 text-white text-sm whitespace-nowrap pointer-events-none"
+                style={{ transform: `translate(-50%, 3px) scale(${labelScale})`, transformOrigin: 'top center' }}
+              >
+                {tokenName}
+              </div>
+            )}
           </div>
         );
       })}

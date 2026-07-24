@@ -5,12 +5,13 @@
 
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faLock, faLockOpen, faCrosshairs, faKeyboard } from '@fortawesome/free-solid-svg-icons';
+import { faLock, faLockOpen, faCrosshairs, faKeyboard, faTag } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Map overlay controls (Lock, Grid Inspect). Rendered inside MapSafeArea
- * for drawer-aware right inset. Positioned at top: 0 (viewport origin) —
- * the nav sits above with higher z-index, so buttons appear flush below it.
+ * Map overlay controls (Grid Inspect, Token Labels, Lock). Rendered inside
+ * MapSafeArea for drawer-aware right inset. Positioned at top: 0 (viewport
+ * origin) — the nav sits above with higher z-index, so buttons appear
+ * flush below it.
  */
 const MapOverlayPanel = ({
   isMapLocked = false,
@@ -19,6 +20,8 @@ const MapOverlayPanel = ({
   gridInspect = false,
   gridInspectMode = 'hold',
   onToggleInspectMode = null,
+  showTokenLabels = true,   // client-side only, never persisted (per-user render preference)
+  onToggleTokenLabels = null,
 }) => {
   const disabled = !activeMap;
   const isMobile = typeof window !== 'undefined' &&
@@ -86,6 +89,33 @@ const MapOverlayPanel = ({
           </div>
         </div>
       )}
+
+      {/* Token Labels toggle — highlighted (amber) when labels are hidden,
+          matching Lock Map's "deviated from default" signal */}
+      <button
+        onClick={onToggleTokenLabels}
+        disabled={disabled}
+        title={showTokenLabels ? 'Hide token names' : 'Show token names'}
+        style={{
+          ...buttonBase,
+          background: disabled
+            ? 'rgba(0, 0, 0, 0.7)'
+            : showTokenLabels
+              ? 'rgba(0, 0, 0, 0.7)'
+              : 'rgba(180, 83, 9, 0.85)',
+          color: disabled
+            ? 'rgba(255, 255, 255, 0.2)'
+            : showTokenLabels
+              ? 'rgba(255, 255, 255, 0.5)'
+              : '#fde68a',
+          borderRadius: `0 0 ${6 * scale}px ${6 * scale}px`,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.4 : 1,
+        }}
+      >
+        <FontAwesomeIcon icon={faTag} style={{ fontSize: `${12 * scale}px` }} />
+        {showTokenLabels ? 'LABELS' : 'LABELS OFF'}
+      </button>
 
       {/* Lock Map button */}
       <button

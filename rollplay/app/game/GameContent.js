@@ -287,6 +287,8 @@ export default function GameContent() {
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [isMapLocked, setIsMapLocked] = useState(false);
+  // Client-side per-user render preference — never sent, never stored.
+  const [showTokenLabels, setShowTokenLabels] = useState(true);
   const [gridInspect, setGridInspect] = useState(false);
   const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
 
@@ -2410,6 +2412,7 @@ export default function GameContent() {
               thisUserId={thisUserId}
               thisUserIsDm={isDM === true}
               tokenImages={mapTokens.tokenImages}
+              showTokenNames={showTokenLabels}
             />
           )}
 
@@ -2423,6 +2426,8 @@ export default function GameContent() {
               <MapOverlayPanel
                 isMapLocked={isMapLocked}
                 onToggleLock={() => setIsMapLocked(prev => !prev)}
+                showTokenLabels={showTokenLabels}
+                onToggleTokenLabels={() => setShowTokenLabels(prev => !prev)}
                 activeMap={activeMap}
                 gridInspect={gridInspect}
                 gridInspectMode={gridInspectMode}
