@@ -8,7 +8,7 @@ from datetime import datetime
 
 from modules.events.websocket_manager import event_connection_manager
 from shared.jwt_helper import JWTHelper
-from shared.dependencies.db import get_db
+from shared.dependencies.db import SessionLocal
 from modules.user.repositories.user_repository import UserRepository
 from modules.user.application.queries import GetUserByEmail
 
@@ -58,10 +58,13 @@ async def websocket_events_endpoint(websocket: WebSocket):
             logger.warning("WebSocket connection rejected: Invalid JWT token")
             return
 
-        db = next(get_db())
-        user_repo = UserRepository(db)
-        query = GetUserByEmail(user_repo)
-        user = query.execute(email)
+        # Scoped tightly to the auth lookup: this socket stays open for hours, so it
+        # must not pin a pooled connection for its lifetime. GetUserByEmail returns a
+        # detached UserAggregate, so `user` is still usable once the session closes.
+        with SessionLocal() as db:
+            user_repo = UserRepository(db)
+            query = GetUserByEmail(user_repo)
+            user = query.execute(email)
 
         if not user:
             await websocket.close(code=1008, reason="User not initialized")
