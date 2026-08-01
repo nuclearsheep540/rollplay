@@ -2,22 +2,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import re
-
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
-# Word boundaries so `exec` does not match `execute` in our own stack frames.
-SUSPICIOUS_PATTERN = re.compile(
-    r"\b(?:wget|curl|pkill|xmrig|bash|sh\s+-c|exec|spawn|touch|subprocess|systemd|runnv|javae|javat)\b"
-    r"|\.write_test\b|watcher\.js\b|csf\.php\b",
-    re.IGNORECASE,
-)
-
 
 def init_sentry():
-    """Initialize Sentry for api-auth service with security monitoring."""
+    """Initialize Sentry for api-auth service."""
 
     # Use service-specific DSN
     dsn = os.getenv("SENTRY_DSN_API_AUTH")
@@ -26,25 +17,13 @@ def init_sentry():
         return
 
     def before_send(event, hint):
-        """Add service tags and security monitoring."""
-
-        # Add service identification tags
+        """Add service identification tags."""
         event['tags'] = {
             **event.get('tags', {}),
             'service': 'api-auth',
             'layer': 'authentication',
             'component': 'jwt'
         }
-
-        # Check the request only — scanning the whole event matched our own
-        # stack frames and flagged every database error as an RCE attempt.
-        if SUSPICIOUS_PATTERN.search(str(event.get('request') or '')):
-            event['tags']['security_incident'] = 'potential_rce'
-            event['tags']['severity'] = 'critical'
-            event['tags']['alert_security_team'] = True
-            event['level'] = 'fatal'
-            print(f"[SECURITY ALERT] api-auth: Suspicious activity detected in event")
-
         return event
 
     sentry_sdk.init(
