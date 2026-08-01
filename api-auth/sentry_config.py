@@ -2,9 +2,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import re
+
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
+
+# Word boundaries so `exec` does not match `execute` in our own stack frames.
+SUSPICIOUS_PATTERN = re.compile(
+    r"\b(?:wget|curl|pkill|xmrig|bash|sh\s+-c|exec|spawn|touch|subprocess|systemd|runnv|javae|javat)\b"
+    r"|\.write_test\b|watcher\.js\b|csf\.php\b",
+    re.IGNORECASE,
+)
 
 
 def init_sentry():
@@ -15,13 +24,6 @@ def init_sentry():
     if not dsn:
         print("Sentry DSN not configured for api-auth, skipping initialization")
         return
-
-    # Suspicious patterns for security monitoring
-    SUSPICIOUS_PATTERNS = [
-        'wget', 'curl', 'pkill', 'xmrig', 'bash', 'sh -c',
-        'exec', 'spawn', 'touch', '.write_test', 'javae', 'javat',
-        'sYsTeMd', 'runnv', 'watcher.js', 'csf.php', 'subprocess'
-    ]
 
     def before_send(event, hint):
         """Add service tags and security monitoring."""
@@ -34,14 +36,13 @@ def init_sentry():
             'component': 'jwt'
         }
 
-        # Check for security incidents
-        event_str = str(event).lower()
-        if any(pattern in event_str for pattern in SUSPICIOUS_PATTERNS):
+        # Check the request only — scanning the whole event matched our own
+        # stack frames and flagged every database error as an RCE attempt.
+        if SUSPICIOUS_PATTERN.search(str(event.get('request') or '')):
             event['tags']['security_incident'] = 'potential_rce'
             event['tags']['severity'] = 'critical'
             event['tags']['alert_security_team'] = True
             event['level'] = 'fatal'
-            event['fingerprint'] = ['security-rce-attempt']
             print(f"[SECURITY ALERT] api-auth: Suspicious activity detected in event")
 
         return event
@@ -53,7 +54,7 @@ def init_sentry():
             FastApiIntegration(transaction_style="endpoint"),
             RedisIntegration(),
         ],
-        traces_sample_rate=1.0,
+        traces_sample_rate=0.1,
         before_send=before_send,
 
         # Optional: Release tracking

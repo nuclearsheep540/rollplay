@@ -78,7 +78,6 @@ services:
     image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app}
     environment:
       - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
-      - NEXT_PUBLIC_ENVIRONMENT=${ENVIRONMENT}
     ports:
       - "3000:3000"
     restart: unless-stopped

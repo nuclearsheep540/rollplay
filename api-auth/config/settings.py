@@ -15,6 +15,13 @@ class Environment(str, Enum):
     development = "development"
     dev = "development"
 
+    @classmethod
+    def _missing_(cls, value):
+        """Accept the short aliases and any casing — ENVIRONMENT=prod used to crash at boot."""
+        if not isinstance(value, str):
+            return None
+        return cls.__members__.get(value.strip().lower())
+
 
 class Settings(BaseSettings):
     """
@@ -57,3 +64,8 @@ class Settings(BaseSettings):
 
     # Internal API URLs for service-to-service communication
     API_SITE_INTERNAL_URL: str = "http://api-site:8082"
+
+    @property
+    def is_production(self) -> bool:
+        """True when running as production."""
+        return self.ENVIRONMENT is Environment.production

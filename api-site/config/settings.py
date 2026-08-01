@@ -17,6 +17,13 @@ class Environment(str, Enum):
     development = "development"
     dev = "development"
 
+    @classmethod
+    def _missing_(cls, value):
+        """Accept the short aliases and any casing — ENVIRONMENT=prod used to crash at boot."""
+        if not isinstance(value, str):
+            return None
+        return cls.__members__.get(value.strip().lower())
+
 
 class Settings(BaseSettings):
     """
@@ -71,6 +78,11 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_ID: Optional[str] = Field(default=None, description="Spotify app client ID")
     SPOTIFY_CLIENT_SECRET: Optional[str] = Field(default=None, description="Spotify app client secret")
     SPOTIFY_REDIRECT_URI: Optional[str] = Field(default=None, description="Registered Spotify redirect URI — must match the dashboard exactly")
+
+    @property
+    def is_production(self) -> bool:
+        """True when running as production."""
+        return self.ENVIRONMENT is Environment.production
 
     @property
     def cfd_private_key_path(self) -> Optional[str]:

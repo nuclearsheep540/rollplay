@@ -22,7 +22,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
-from config.settings import Settings, Environment
+from config.settings import Settings
 from shared.dependencies.auth import get_current_user_id
 from integrations.spotify.client import SpotifyClient, get_spotify_client
 from integrations.spotify.dependencies import spotify_account_repository
@@ -49,7 +49,7 @@ FRONTEND_ACCOUNT = "/account"
 
 def _cookie_secure() -> bool:
     """Secure cookies in production (https); off in dev so http://127.0.0.1 works."""
-    return Settings().ENVIRONMENT == Environment.production
+    return Settings().is_production
 
 
 def _map_profile(me: dict) -> SpotifyProfile:
