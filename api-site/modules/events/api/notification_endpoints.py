@@ -79,7 +79,7 @@ async def send_test_notification(
     """Send test notification (development only)"""
     settings = Settings()
     logger.info(f"Test notification endpoint - environment: {settings.ENVIRONMENT}")
-    if settings.ENVIRONMENT != "development":
+    if settings.is_production:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Only available in development (current: {settings.ENVIRONMENT})"

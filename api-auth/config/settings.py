@@ -10,10 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Environment(str, Enum):
     """The environment options in which the application can be configured as"""
     production = "production"
-    prod = "production"
-    staging = "staging"
     development = "development"
-    dev = "development"
 
 
 class Settings(BaseSettings):
@@ -57,3 +54,8 @@ class Settings(BaseSettings):
 
     # Internal API URLs for service-to-service communication
     API_SITE_INTERNAL_URL: str = "http://api-site:8082"
+
+    @property
+    def is_production(self) -> bool:
+        """True when running as production."""
+        return self.ENVIRONMENT is Environment.production

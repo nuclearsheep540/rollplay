@@ -11,10 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Environment(str, Enum):
     """The environment options in which the application can be configured as"""
     production = "production"
-    prod = "production"
-    staging = "staging"
     development = "development"
-    dev = "development"
 
 
 class Settings(BaseSettings):
@@ -59,6 +56,11 @@ class Settings(BaseSettings):
     logging_email_from: Optional[str] = None
     logging_email_to: Optional[str] = None
     logging_email_subject: Optional[str] = None
+
+    @property
+    def is_production(self) -> bool:
+        """True when running as production."""
+        return self.ENVIRONMENT is Environment.production
 
     @property
     def APP_DATABASE_URL(self) -> str:

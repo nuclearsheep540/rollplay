@@ -12,10 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Environment(str, Enum):
     """The environment options in which the application can be configured as"""
     production = "production"
-    prod = "production"
-    staging = "staging"
     development = "development"
-    dev = "development"
 
 
 class Settings(BaseSettings):
@@ -71,6 +68,11 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_ID: Optional[str] = Field(default=None, description="Spotify app client ID")
     SPOTIFY_CLIENT_SECRET: Optional[str] = Field(default=None, description="Spotify app client secret")
     SPOTIFY_REDIRECT_URI: Optional[str] = Field(default=None, description="Registered Spotify redirect URI — must match the dashboard exactly")
+
+    @property
+    def is_production(self) -> bool:
+        """True when running as production."""
+        return self.ENVIRONMENT is Environment.production
 
     @property
     def cfd_private_key_path(self) -> Optional[str]:
