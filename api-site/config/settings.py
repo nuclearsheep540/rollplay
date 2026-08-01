@@ -12,17 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Environment(str, Enum):
     """The environment options in which the application can be configured as"""
     production = "production"
-    prod = "production"
-    staging = "staging"
     development = "development"
-    dev = "development"
-
-    @classmethod
-    def _missing_(cls, value):
-        """Accept the short aliases and any casing — ENVIRONMENT=prod used to crash at boot."""
-        if not isinstance(value, str):
-            return None
-        return cls.__members__.get(value.strip().lower())
 
 
 class Settings(BaseSettings):
