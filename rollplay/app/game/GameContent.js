@@ -1099,8 +1099,14 @@ export default function GameContent() {
   // an independent multiplier on top of the local + broadcast masters. Defaults to -12 dB
   // until a synced level arrives (persisted session config or a DM fader move).
   const [spotifyChannelLevel, setSpotifyChannelLevel] = useState(SPOTIFY_DEFAULT_LEVEL);
+  // Spotify boots as the gate's LAST loading phase (after downloads + audio sync): the CTA
+  // then waits on spotify.gestureReady so the Enter click always finds an SDK player to
+  // activate (see .claude/plans/spotify/03-gate-gesture-race.md). State (not a direct prop)
+  // because the spotify hook is declared before useGatePreload — an effect below flips this
+  // when the gate reports coreReady.
+  const [spotifyBootEnabled, setSpotifyBootEnabled] = useState(false);
   const spotify = useSpotifyPlayback({
-    enabled: true,
+    enabled: spotifyBootEnabled,
     isLeader: !!isDM,
     onLeaderState: handleSpotifyLeaderState,
     onChannelLevel: setSpotifyChannelLevel,
@@ -1109,8 +1115,14 @@ export default function GameContent() {
     broadcastMasterVolume,
   });
 
-  // Gate preload — aggregates readiness from REST, WebSocket, and asset downloads
-  const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState, audioSyncComplete });
+  // Gate preload — aggregates readiness from REST, WebSocket, asset downloads, and Spotify boot
+  const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState, audioSyncComplete, spotifyGestureReady: spotify.gestureReady });
+
+  // Start the Spotify boot chain once the core gate phases (downloads + audio sync) are done —
+  // sequenced last so S3 downloads get uncontested bandwidth and the bar reads honestly.
+  useEffect(() => {
+    if (gatePreload.coreReady) setSpotifyBootEnabled(true);
+  }, [gatePreload.coreReady]);
 
   // Loading gate — rotating flavor text
   const [flavorIndex, setFlavorIndex] = useState(0);
