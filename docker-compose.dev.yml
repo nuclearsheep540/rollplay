@@ -45,11 +45,13 @@ services:
             dockerfile: docker/dev/api-site/Dockerfile
         ports:
             - 8082:8082
+        environment:
+            - CFD_PRIVATE_KEY_PATH=${CFD_PRIVATE_KEY_PATH:?missing from .env}
         volumes:
             - ./api-site:/api
             - ./rollplay-shared-contracts:/rollplay-shared-contracts
-            # CloudFront signing key, read-only single file. Host ${HOME}/.ssh (per-box home) -> container /root/.ssh (container runs as root).
-            - ${HOME}/.ssh/${CFD_PEM_FILENAME}:/root/.ssh/${CFD_PEM_FILENAME}:ro
+            # CloudFront signing key (path single-sourced from .env)
+            - ${HOME}/.ssh/cf_private_key.pem:${CFD_PRIVATE_KEY_PATH:?missing from .env}:ro
         depends_on:
             postgres:
                 condition: service_healthy
@@ -93,10 +95,7 @@ services:
             - rollplay_node_modules:/app/node_modules
         environment:
             - NODE_ENV=development
-            - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
             - NEXT_PUBLIC_ENVIRONMENT=development
-            - SENTRY_ORG=${SENTRY_ORG}
-            - SENTRY_PROJECT=${SENTRY_PROJECT_NEXTJS}
 
     mongo:
         stdin_open: true
@@ -143,10 +142,6 @@ services:
                 APP_DB_PASSWORD: ${APP_DB_PASSWORD}
         env_file:
             - dev.env
-        environment:
-            POSTGRES_DB: rollplay
-            POSTGRES_USER: ${POSTGRES_USER}
-            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
         ports:
         - "5432:5432"
         volumes:

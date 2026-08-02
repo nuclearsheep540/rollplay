@@ -60,7 +60,7 @@ class Settings(BaseSettings):
 
     # CloudFront signed-URL delivery (optional — when unset, downloads fall back to presigned S3)
     AWS_CFD_S3_URL: Optional[str] = Field(default=None, description="CloudFront distribution domain, no scheme (e.g. d123.cloudfront.net)")
-    CFD_PEM_FILENAME: Optional[str] = Field(default=None, description="Filename of the CloudFront signing private key, mounted at ~/.ssh/<file>")
+    CFD_PRIVATE_KEY_PATH: Optional[str] = Field(default=None, description="Absolute path to the CloudFront signing private key (mounted and supplied by compose)")
     CFD_KEY_PAIR_ID: Optional[str] = Field(default=None, description="CloudFront public key ID (the K… value) used as Key-Pair-Id in signed URLs")
 
     # Spotify integration (OAuth Authorization Code flow). Optional so the app boots
@@ -77,9 +77,9 @@ class Settings(BaseSettings):
     @property
     def cfd_private_key_path(self) -> Optional[str]:
         """Absolute path to the mounted CloudFront signing key, or None if not configured."""
-        if not self.CFD_PEM_FILENAME:
+        if not self.CFD_PRIVATE_KEY_PATH:
             return None
-        return os.path.expanduser(f"~/.ssh/{self.CFD_PEM_FILENAME}")
+        return os.path.expanduser(self.CFD_PRIVATE_KEY_PATH)
 
     @property
     def database_url(self) -> str:
