@@ -52,9 +52,11 @@ services:
         condition: service_healthy
     networks:
       - default
+    environment:
+      - CFD_PRIVATE_KEY_PATH=${CFD_PRIVATE_KEY_PATH:?missing from .env}
     volumes:
-      # CloudFront signing key, read-only single file. Host ${HOME}/.ssh (per-box home) -> container /root/.ssh (container runs as root).
-      - ${HOME}/.ssh/${CFD_PEM_FILENAME}:/root/.ssh/${CFD_PEM_FILENAME}:ro
+      # CloudFront signing key (path single-sourced from .env)
+      - ${HOME}/.ssh/cf_private_key.pem:${CFD_PRIVATE_KEY_PATH:?missing from .env}:ro
 
   api-auth:
     hostname: api-auth
@@ -76,8 +78,6 @@ services:
       - prod.env
     container_name: "rollplay"
     image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app}
-    environment:
-      - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -123,17 +123,14 @@ services:
     image: ghcr.io/nuclearsheep540/rollplay/postgres:${postgres}
     env_file:
       - prod.env
-    environment:
-      POSTGRES_DB: rollplay
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d rollplay"]
+      # $$ = expanded at runtime from the container env
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d rollplay"]
       interval: 5s
       timeout: 5s
       retries: 5

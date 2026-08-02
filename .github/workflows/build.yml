@@ -79,7 +79,7 @@ jobs:
         if: steps.changed.outputs.changed != ''
         env:
           DOCKER_DEFAULT_PLATFORM: linux/amd64
-          SENTRY_DSN_NEXTJS: ${{ secrets.SENTRY_DSN_NEXTJS }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT_NEXTJS: ${{ secrets.SENTRY_PROJECT_NEXTJS }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

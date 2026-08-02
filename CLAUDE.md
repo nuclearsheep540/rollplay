@@ -438,9 +438,11 @@ docker-compose build && docker-compose up -d
 
 Per-environment runtime env files (see `env.example` for the full template): **`dev.env`** on the
 dev box (used by `docker-compose.dev.yml`), **`prod.env`** on the prod box (used by
-`docker-compose.yml`). Both are gitignored. A separate root **`.env`** holds only the
-RELEASE/service version pins (written by `scripts/set-release.sh`) and feeds compose `${...}`
-interpolation — never put runtime config there.
+`docker-compose.yml`). Both are gitignored. A separate root **`.env`** holds compose
+**parse-time** values only: the RELEASE/service version pins (written by
+`scripts/set-release.sh`), `CFD_PRIVATE_KEY_PATH` (the signing-key rendezvous — single-sources
+the compose mount target AND the app's env var so they can never drift), and build args for
+locally-built dev images. Never put runtime config in `.env` — it belongs in the per-env files.
 
 Runtime env file contents:
 ```env

@@ -58,7 +58,7 @@ class S3Service:
         if not (self.cf_domain and self.cf_key_pair_id and key_path):
             logger.error(
                 "CloudFront signing is not configured (need AWS_CFD_S3_URL, CFD_KEY_PAIR_ID, "
-                "CFD_PEM_FILENAME) — media downloads will fail until this is fixed."
+                "CFD_PRIVATE_KEY_PATH) — media downloads will fail until this is fixed."
             )
             return None
         try:
@@ -135,7 +135,7 @@ class S3Service:
         if not self.cf_signer:
             raise RuntimeError(
                 f"CloudFront signing unavailable — cannot generate download URL for '{key}'. "
-                "Check AWS_CFD_S3_URL, CFD_KEY_PAIR_ID, and the key mounted at ~/.ssh/<CFD_PEM_FILENAME>."
+                "Check AWS_CFD_S3_URL, CFD_KEY_PAIR_ID, and the key mounted at CFD_PRIVATE_KEY_PATH."
             )
 
         ttl = expiry or self.expiry
