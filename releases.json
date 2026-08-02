@@ -1,5 +1,5 @@
 {
-  "latest": "0.60.2",
+  "latest": "0.60.3",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -787,6 +787,21 @@
       "description": "fixed issues around db connections, sentry and some housecleaning on used vars/config throwing confusion",
       "services": {
         "app": "0.43.2",
+        "api_site": "0.39.1",
+        "api_game": "0.28.1",
+        "api_auth": "0.3.1",
+        "nginx": "0.9.1",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.60.3": {
+      "date": "2026-08-02",
+      "commit": "c62fd6b",
+      "description": "Spotify SDK Player fixes around the auto gate and gesture release plus housekeeping on env",
+      "services": {
+        "app": "0.43.3",
         "api_site": "0.39.1",
         "api_game": "0.28.1",
         "api_auth": "0.3.1",
