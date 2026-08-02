@@ -29,7 +29,13 @@ function loadSpotifySDK() {
     const s = document.createElement('script');
     s.src = SDK_SRC;
     s.async = true;
-    s.onerror = () => reject(new Error('Failed to load Spotify Web Playback SDK'));
+    s.onerror = () => {
+      // Reset the module cache so a later mount (SPA re-entry) can retry the load —
+      // otherwise a transient CDN failure is fatal until a hard refresh.
+      sdkPromise = null;
+      s.remove();
+      reject(new Error('Failed to load Spotify Web Playback SDK'));
+    };
     document.body.appendChild(s);
   });
   return sdkPromise;
@@ -79,6 +85,13 @@ function dbg(...args) {
  * still blocked (`autoplay_failed`), status becomes 'blocked' and the next pointerdown
  * anywhere recovers (re-activate + re-apply the last snapshot).
  *
+ * Gate sequencing: the boot chain (profile → SDK script → player construction) is driven by
+ * `enabled` — GameContent flips it on as the gate's LAST loading phase, and the gate CTA waits
+ * on the exported `gestureReady` so the Enter click always finds a player to activate. If the
+ * gate's liveness fallback opens the CTA before the player exists, the late-created player
+ * connects with `activationMissingRef` set and surfaces as 'blocked' (recoverable) instead of
+ * pretending the spent gesture covered it. See .claude/plans/spotify/03-gate-gesture-race.md.
+ *
  * @param {object}   opts
  * @param {boolean}  opts.enabled              master switch (e.g. only in an active game)
  * @param {boolean}  opts.isLeader             true for the DM (drives + reports); false = follow
@@ -100,10 +113,14 @@ export function useSpotifyPlayback({
   const [nowPlaying, setNowPlaying] = useState(null); // last broadcast snapshot (UI)
   const [playbackState, setPlaybackState] = useState(null); // leader's live SDK state (for the seek bar)
   const [shouldInit, setShouldInit] = useState(false);
+  // Spotify.Player object constructed (NOT yet connected — connect is gesture-deferred).
+  // "sdkPlayer", never "player", outside this hook: in Rollplay "player" means a human.
+  const [sdkPlayerCreated, setSdkPlayerCreated] = useState(false);
 
   const playerRef = useRef(null);
   const creatingRef = useRef(false);        // guards against creating a 2nd player (StrictMode double-invoke)
   const gestureSeenRef = useRef(false);     // the gate (or another gesture) has fired unlock()
+  const activationMissingRef = useRef(false); // connect() ran without a live gesture — 'ready' must land as 'blocked'
   const connectStartedRef = useRef(false);  // connect() dispatched — never connect twice per player
   const disconnectTimerRef = useRef(null);  // deferred teardown so StrictMode's transient unmount doesn't kill the device
   const deviceIdRef = useRef(null);
@@ -156,7 +173,8 @@ export function useSpotifyPlayback({
 
   // Unlock the SDK's audio element — MUST run from a user gesture (browser autoplay).
   const activate = useCallback(async () => {
-    dbg('activateElement CALLED, player=', !!playerRef.current);
+    dbg('activateElement CALLED, player=', !!playerRef.current,
+      'activation=', typeof navigator !== 'undefined' && navigator.userActivation?.isActive);
     try { await playerRef.current?.activateElement(); dbg('activateElement OK'); } catch (e) { dbg('activateElement THREW', String(e)); }
   }, []);
 
@@ -168,7 +186,7 @@ export function useSpotifyPlayback({
     connectStartedRef.current = true;
     try {
       const ok = await player.connect();
-      dbg('connect ->', ok);
+      dbg('connect ->', ok, 'activation=', typeof navigator !== 'undefined' && navigator.userActivation?.isActive);
       if (!ok) {
         // connect() resolves false instead of throwing (auth/network/token failures) —
         // release the guard so a later gesture can retry, and surface the failure
@@ -193,8 +211,16 @@ export function useSpotifyPlayback({
   const unlock = useCallback(() => {
     gestureSeenRef.current = true;
     const player = playerRef.current;
-    dbg('unlock CALLED, player=', !!player, 'connectStarted=', connectStartedRef.current);
-    if (!player) return;
+    dbg('unlock CALLED, player=', !!player, 'connectStarted=', connectStartedRef.current,
+      'activation=', typeof navigator !== 'undefined' && navigator.userActivation?.isActive);
+    if (!player) {
+      // The gate CTA waits for player creation (gestureReady), so this branch should be
+      // unreachable. If it ever logs in the wild, the gate/boot sequencing has regressed
+      // (see .claude/plans/spotify/03-gate-gesture-race.md) — the gesture was spent on nothing.
+      console.warn('🎵 Spotify unlock: gesture fired with no SDK player — gate sequencing regression');
+      return;
+    }
+    activationMissingRef.current = false;
     try { player.activateElement()?.catch?.(() => {}); } catch { /* pre-connect activation is best-effort */ }
     connectNow();
   }, [connectNow]);
@@ -210,6 +236,7 @@ export function useSpotifyPlayback({
     recoveringRef.current = true;
     setTimeout(() => { recoveringRef.current = false; }, 500);
     try { await player.activateElement(); } catch { /* noop */ }
+    activationMissingRef.current = false; // this ran from a real gesture — activation is live again
     setStatus(readyRef.current ? 'ready' : 'connecting');
     if (isLeaderRef.current) { player.resume().catch(() => {}); return; }
     lastPlaybackSigRef.current = null;
@@ -459,6 +486,8 @@ export function useSpotifyPlayback({
         readyRef.current = false;
         deviceIdRef.current = null;
         currentTrackRef.current = null;
+        activationMissingRef.current = false;
+        setSdkPlayerCreated(false);
       }, 2000);
     };
 
@@ -477,10 +506,14 @@ export function useSpotifyPlayback({
         });
 
         player.addListener('ready', ({ device_id }) => {
-          dbg('READY device=', device_id?.slice(0, 8), 'isLeader=', isLeaderRef.current, 'pending=', !!pendingSnapshotRef.current);
+          dbg('READY device=', device_id?.slice(0, 8), 'isLeader=', isLeaderRef.current, 'pending=', !!pendingSnapshotRef.current, 'activationMissing=', activationMissingRef.current);
           deviceIdRef.current = device_id;
           readyRef.current = true;
-          setStatus('ready');
+          // 'ready' means the DEVICE registered — it says nothing about audio activation. If
+          // connect() ran outside a gesture (fallback-timeout path), land as 'blocked' so the
+          // pointerdown/pill recovery re-activates in a real gesture, instead of sitting
+          // silently un-activated until the first play attempt fails minutes later.
+          setStatus(activationMissingRef.current ? 'blocked' : 'ready');
           // DM: 'ready' means Spotify has registered this device, so make it the ACTIVE Connect
           // device now — otherwise the first play/resume 404s "Device not found" (= not active).
           if (isLeaderRef.current) {
@@ -522,11 +555,19 @@ export function useSpotifyPlayback({
 
         playerRef.current = player;
         creatingRef.current = false;
+        setSdkPlayerCreated(true);
         // connect() is gesture-deferred: Safari only unblocks SDK audio when the connect
-        // originates from a user gesture, and Chrome wants playback to start post-gesture
-        // anyway. If the gate was already clicked (unlock() before the player existed —
-        // slow SDK load), connect immediately; the gate click still counts as engagement.
-        if (gestureSeenRef.current) connectNow();
+        // originates from a user gesture. Normally the gate CTA waits for this player to exist
+        // (gestureReady), so unlock() drives the connect from inside the click. This branch is
+        // the fallback-timeout path: the gate opened without us, the gesture is already spent.
+        // connect() itself is fine outside a gesture (network handshake) — but audio activation
+        // is not, so record whether a gesture is live; 'ready' then lands as 'blocked' and the
+        // pointerdown/pill recovery re-activates in a real gesture. No silent hoping.
+        if (gestureSeenRef.current) {
+          activationMissingRef.current = !(typeof navigator !== 'undefined' && navigator.userActivation?.isActive);
+          dbg('late create with gesture seen — activationMissing=', activationMissingRef.current);
+          connectNow();
+        }
       } catch (e) {
         creatingRef.current = false;
         console.error('Spotify SDK setup failed:', e);
@@ -553,11 +594,23 @@ export function useSpotifyPlayback({
     return () => document.removeEventListener('pointerdown', onPointerDown, true);
   }, [status, recoverPlayback]);
 
+  // The gate's final loading phase resolves on this: either the SDK player object exists (one
+  // gate click can now activate + connect it) or Spotify is never going to boot for this user
+  // (terminal statuses) so the gate must not wait. Deliberately NOT 'ready'/'connected' — those
+  // can only happen AFTER the gate click (connect is gesture-deferred); waiting on them would
+  // deadlock the gate against the click it's blocking.
+  const gestureReady = sdkPlayerCreated
+    || status === 'not_connected'
+    || status === 'not_premium'
+    || status === 'unsupported_browser'
+    || status === 'error';
+
   return {
     status,
     profile,
     nowPlaying,
     playbackState,
+    gestureReady,
     applySpotifySnapshot,
     activate,
     unlock,

@@ -175,3 +175,7 @@ cython_debug/
 # used as a local db mount dir
 /data*
 .env
+
+# per-environment runtime env files (secrets — never commit)
+dev.env
+prod.env

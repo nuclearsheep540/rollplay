@@ -22,7 +22,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
+            - dev.env
         container_name: "api-game-dev"
         build:
             context: .
@@ -38,7 +38,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
+            - dev.env
         container_name: "api-site-dev"
         build:
             context: .
@@ -59,7 +59,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
+            - dev.env
         container_name: "api-auth-dev"
         build:
             context: ./api-auth
@@ -76,7 +76,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
+            - dev.env
         container_name: "rollplay-dev"
         build:
             context: ./rollplay
@@ -103,7 +103,7 @@ services:
         tty: true
         restart: always
         env_file:
-            - .env
+            - dev.env
         container_name: "mongo-dev"
         hostname: mongo
         build:
@@ -142,7 +142,7 @@ services:
                 APP_DB_USER: ${APP_DB_USER}
                 APP_DB_PASSWORD: ${APP_DB_PASSWORD}
         env_file:
-            - .env
+            - dev.env
         environment:
             POSTGRES_DB: rollplay
             POSTGRES_USER: ${POSTGRES_USER}

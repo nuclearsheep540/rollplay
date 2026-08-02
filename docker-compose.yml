@@ -4,7 +4,7 @@ services:
   nginx:
     hostname: nginx
     env_file:
-      - .env
+      - prod.env
     image: ghcr.io/nuclearsheep540/rollplay/nginx:${nginx}
     container_name: nginx
     ports:
@@ -26,7 +26,7 @@ services:
   api-game:
     hostname: api-game
     env_file:
-      - .env
+      - prod.env
     container_name: "api-game"
     image: ghcr.io/nuclearsheep540/rollplay/api-game:${api_game}
     ports:
@@ -41,7 +41,7 @@ services:
   api-site:
     hostname: api-site
     env_file:
-      - .env
+      - prod.env
     container_name: "api-site"
     image: ghcr.io/nuclearsheep540/rollplay/api-site:${api_site}
     ports:
@@ -59,7 +59,7 @@ services:
   api-auth:
     hostname: api-auth
     env_file:
-      - .env
+      - prod.env
     container_name: "api-auth"
     image: ghcr.io/nuclearsheep540/rollplay/api-auth:${api_auth}
     ports:
@@ -73,7 +73,7 @@ services:
   app:
     hostname: app
     env_file:
-      - .env
+      - prod.env
     container_name: "rollplay"
     image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app}
     environment:
@@ -87,7 +87,7 @@ services:
   mongo:
     restart: always
     env_file:
-      - .env
+      - prod.env
     container_name: "mongo"
     hostname: mongo
     image: ghcr.io/nuclearsheep540/rollplay/db:${mongo}
@@ -122,7 +122,7 @@ services:
     hostname: postgres
     image: ghcr.io/nuclearsheep540/rollplay/postgres:${postgres}
     env_file:
-      - .env
+      - prod.env
     environment:
       POSTGRES_DB: rollplay
       POSTGRES_USER: ${POSTGRES_USER}
