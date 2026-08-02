@@ -22,7 +22,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
+            - dev.env
         container_name: "api-game-dev"
         build:
             context: .
@@ -38,19 +38,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
-        # Dev AWS wiring: map the .env DEV_* block onto the canonical names the app reads
-        # (settings.py knows nothing about environments; `environment:` overrides env_file).
-        # Prod compose keeps the unprefixed values — the compose file IS the env switch.
-        environment:
-            - AWS_CFD_S3_URL=${DEV_AWS_CFD_S3_URL}
-            - CFD_PEM_FILENAME=${DEV_CFD_PEM_FILENAME}
-            - CFD_KEY_PAIR_ID=${DEV_CFD_KEY_PAIR_ID}
-            - S3_BUCKET_NAME=${DEV_S3_BUCKET_NAME}
-            - AWS_REGION=${DEV_AWS_REGION}
-            - AWS_ACCESS_KEY_ID=${DEV_AWS_ACCESS_KEY_ID}
-            - AWS_SECRET_ACCESS_KEY=${DEV_AWS_SECRET_ACCESS_KEY}
-            - PRESIGNED_URL_EXPIRY=${DEV_PRESIGNED_URL_EXPIRY}
+            - dev.env
         container_name: "api-site-dev"
         build:
             context: .
@@ -71,7 +59,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
+            - dev.env
         container_name: "api-auth-dev"
         build:
             context: ./api-auth
@@ -88,7 +76,7 @@ services:
         stdin_open: true
         tty: true
         env_file:
-            - .env
+            - dev.env
         container_name: "rollplay-dev"
         build:
             context: ./rollplay
@@ -115,7 +103,7 @@ services:
         tty: true
         restart: always
         env_file:
-            - .env
+            - dev.env
         container_name: "mongo-dev"
         hostname: mongo
         build:
@@ -154,7 +142,7 @@ services:
                 APP_DB_USER: ${APP_DB_USER}
                 APP_DB_PASSWORD: ${APP_DB_PASSWORD}
         env_file:
-            - .env
+            - dev.env
         environment:
             POSTGRES_DB: rollplay
             POSTGRES_USER: ${POSTGRES_USER}

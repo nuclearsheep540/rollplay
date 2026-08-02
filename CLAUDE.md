@@ -436,9 +436,15 @@ docker-compose build && docker-compose up -d
 
 ## Environment Configuration
 
-Required `.env` file in project root:
+Per-environment runtime env files (see `env.example` for the full template): **`dev.env`** on the
+dev box (used by `docker-compose.dev.yml`), **`prod.env`** on the prod box (used by
+`docker-compose.yml`). Both are gitignored. A separate root **`.env`** holds only the
+RELEASE/service version pins (written by `scripts/set-release.sh`) and feeds compose `${...}`
+interpolation — never put runtime config there.
+
+Runtime env file contents:
 ```env
-environment=<dev|prod>
+ENVIRONMENT=<development|production>
 NEXT_PUBLIC_API_URL=<your-api-url>
 
 # PostgreSQL
@@ -455,12 +461,9 @@ MONGO_INITDB_DATABASE=<database>
 JWT_SECRET=<secret>
 JWT_ALGORITHM=<algorithm>
 
-# SMTP
-SMTP_HOST=<host>
-SMTP_PORT=<port>
-SMTP_USERNAME=<username>
-SMTP_PASSWORD=<password>
-SMTP_FROM_EMAIL=<email>
+# Email (Mailtrap Sending API — no SMTP; api-auth uses MailtrapClient)
+MAIL_TRAP_API_TOKEN=<token>
+FROM_EMAIL=<email>
 
 # Redis & External
 REDIS_URL=<url>
