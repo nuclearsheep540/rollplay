@@ -16,6 +16,7 @@ import {
   faPersonWalkingDashedLineArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 import { authFetch } from '@/app/shared/utils/authFetch';
+import { fetchAssetById } from '@/app/shared/utils/fetchAssetById';
 import AssetPicker from './AssetPicker';
 import AudioWorkstationControls from './AudioWorkstationControls';
 import WaveformViewer from './WaveformViewer';
@@ -92,12 +93,6 @@ const MIN_WAVE_HEIGHT = 80;
 const MAX_WAVE_HEIGHT = 320;
 const DEFAULT_WAVE_HEIGHT = 160;
 const V_ZOOM_STEP = 40;
-
-async function fetchAssetById(assetId) {
-  const response = await authFetch(`/api/library/${assetId}`, { method: 'GET' });
-  if (!response.ok) return null;
-  return response.json();
-}
 
 function resolveLoopMode(asset) {
   if (asset?.loop_mode) return asset.loop_mode;

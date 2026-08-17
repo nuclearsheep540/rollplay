@@ -186,6 +186,7 @@ export default function WizardChrome({
   avatarIsBusy,
   avatarError,
   onOpenAvatarPicker,
+  onAdjustAvatarCrop,
   children,
 }) {
   const currentIdx = steps.findIndex((s) => s.id === currentStep)
@@ -210,6 +211,7 @@ export default function WizardChrome({
           isBusy={avatarIsBusy}
           error={avatarError}
           onOpenPicker={onOpenAvatarPicker}
+          onAdjustCrop={onAdjustAvatarCrop}
         />
       </div>
 

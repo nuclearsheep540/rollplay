@@ -699,24 +699,24 @@ class UpdateTokenConfig:
 class SetImageFocalArea:
     """
     Set (or clear) one purpose-keyed focal square on an image asset
-    (tokens v2, decision 27). The area belongs to the IMAGE: every token
-    (and later, every character) using that image shares its crop.
-    Guarded like every asset-editing command: 409 while a campaign session
-    is live.
+    (tokens v2, decision 27; v3, decision 34). The area belongs to the
+    IMAGE: every token (and every character avatar) using that image
+    shares its crop.
+
+    Deliberately NOT session-guarded (v3, decision 34): live sessions
+    snapshot crops into token_images at start, so a mid-session edit
+    cannot desync play — it applies next session, exactly like changing
+    the character avatar itself.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository):
         self.repository = repository
-        self.session_repository = session_repository
 
     def execute(self, asset_id: UUID, user_id: UUID, purpose: str, area=None) -> ImageAsset:
         asset = get_owned_asset(self.repository, asset_id, user_id)
 
         if not isinstance(asset, ImageAsset):
             raise ValueError("Focal areas only apply to image assets")
-
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
         asset.set_focal_area(purpose, area)
         self.repository.save(asset)

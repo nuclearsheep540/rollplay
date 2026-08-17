@@ -6,17 +6,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExpand } from '@fortawesome/free-solid-svg-icons';
-import { authFetch } from '@/app/shared/utils/authFetch';
+import { fetchAssetById } from '@/app/shared/utils/fetchAssetById';
 import AssetPicker from './AssetPicker';
 import ImageDisplayControls from './ImageDisplayControls';
 import { ImageDisplay } from '@/app/map_management';
 import { useUpdateImageConfig } from '../hooks/useUpdateImageConfig';
-
-async function fetchAssetById(assetId) {
-  const response = await authFetch(`/api/library/${assetId}`, { method: 'GET' });
-  if (!response.ok) return null;
-  return response.json();
-}
 
 export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
   const [selectedAsset, setSelectedAsset] = useState(null);

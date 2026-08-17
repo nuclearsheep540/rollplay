@@ -17,6 +17,8 @@ import {
 import { useEditions, useEditionClasses } from '../hooks/useReferenceData'
 import { useSetCharacterAvatar } from '../hooks/useSetCharacterAvatar'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
+import FocalAreaModal from '@/app/shared/components/FocalAreaModal'
+import { useFocalAreaFlow } from '@/app/shared/hooks/useFocalAreaFlow'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { titleize } from '@/app/shared/utils/titleize'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
@@ -263,8 +265,7 @@ export default function CharacterWizard() {
     return head || bg
   }, [draft?.species_code, draft?.class_entries, draft?.background_code, draft?.level])
 
-  const handleAvatarAssetChosen = async (assetId) => {
-    setAvatarError(null)
+  const linkAvatarAsset = async (assetId) => {
     // Read the current character id off either the cache-backed draft or the
     // URL — they converge within a tick of createDraft resolving.
     const characterId = draft?.id ?? draftIdFromUrl
@@ -298,6 +299,44 @@ export default function CharacterWizard() {
     } finally {
       setAvatarSaving(false)
     }
+  }
+
+  /**
+   * Crop-first chain (tokens v3, §3.2): picking an image always prompts the
+   * focal-area select. Confirming saves the crop on the image asset, then —
+   * for a fresh pick — links it as the avatar. Cancelling at the crop step
+   * leaves the avatar unchanged. Adjust-crop re-runs the select on the
+   * current avatar without re-linking.
+   */
+  const handleCropSaved = async ({ imageAssetId, context }) => {
+    if (context?.linkAvatar) {
+      await linkAvatarAsset(imageAssetId)
+      return
+    }
+    showToast?.({
+      type: 'success',
+      message: 'Token crop saved - applies from your next game session',
+    })
+  }
+
+  const cropFlow = useFocalAreaFlow({ onCropSaved: handleCropSaved })
+
+  const handleAvatarAssetChosen = async (assetId) => {
+    setAvatarError(null)
+    const characterId = draft?.id ?? draftIdFromUrl
+    if (!characterId) {
+      setAvatarError('Character not yet ready — try again in a moment')
+      return
+    }
+    const opened = await cropFlow.begin(assetId, { linkAvatar: true })
+    if (!opened) setAvatarError('Could not load that image — try again')
+  }
+
+  const handleAdjustAvatarCrop = async () => {
+    setAvatarError(null)
+    if (!draft?.avatar_asset_id) return
+    const opened = await cropFlow.begin(draft.avatar_asset_id, { linkAvatar: false })
+    if (!opened) setAvatarError('Could not load the avatar image — try again')
   }
 
   const handleNext = () => {
@@ -397,6 +436,7 @@ export default function CharacterWizard() {
       avatarIsBusy={createDraft.isPending || setAvatarMutation.isPending || avatarSaving}
       avatarError={avatarError}
       onOpenAvatarPicker={handleOpenAvatarPicker}
+      onAdjustAvatarCrop={draft?.avatar_asset_id ? handleAdjustAvatarCrop : null}
     >
       {currentStep === 'species' && draft && (
         <SpeciesStep
@@ -485,6 +525,12 @@ export default function CharacterWizard() {
       onClose={() => setAvatarPickerOpen(false)}
       onSelect={handleAvatarAssetChosen}
     />
+
+    {/* Focal square select — always prompted on selection (decision 32).
+        Mounted only while open so the cropper starts clean per image. */}
+    {cropFlow.isOpen && (
+      <FocalAreaModal {...cropFlow.modalProps} title="Frame your token's face" />
+    )}
     </>
   )
 }

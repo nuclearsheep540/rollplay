@@ -207,6 +207,9 @@ class CharacterResponse(BaseModel):
     # Presigned GET URL for the uploaded avatar — short-lived. ``None`` ⇒
     # frontend renders the /heroes.png default.
     avatar_url: Optional[str] = None
+    # The library asset behind avatar_url — the crop flow needs the id to
+    # read/write the image's focal area (tokens v3, §3.2).
+    avatar_asset_id: Optional[UUID] = None
 
     created_at: datetime
     updated_at: datetime

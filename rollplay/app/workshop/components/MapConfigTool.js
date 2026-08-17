@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faHouse, faFileImport, faFloppyDisk, faCheckDouble, faRotateLeft, faRotateRight } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
-import { authFetch } from '@/app/shared/utils/authFetch';
+import { fetchAssetById } from '@/app/shared/utils/fetchAssetById';
 import AssetPicker from './AssetPicker';
 import MapConfigToolbar from './MapConfigToolbar';
 import MapConfigUndoRedo, { UNDO_HINT, REDO_HINT } from './MapConfigUndoRedo';
@@ -19,7 +19,7 @@ import { useGridConfig } from '@/app/map_management/hooks/useGridConfig';
 import { useUpdateGridConfig } from '../hooks/useUpdateGridConfig';
 import { useUpdateFogConfig } from '../hooks/useUpdateFogConfig';
 import { useUpdateTokenConfig } from '../hooks/useUpdateTokenConfig';
-import { useSetFocalArea } from '../hooks/useSetFocalArea';
+import { useFocalAreaFlow } from '@/app/shared/hooks/useFocalAreaFlow';
 import { mintTokenId, snapTokenCenter } from '@/app/map_tokens';
 import Modal from '@/app/shared/components/Modal';
 import FocalAreaModal from '@/app/shared/components/FocalAreaModal';
@@ -32,12 +32,6 @@ import {
 import { useActionHistory } from '@/app/shared/hooks/useActionHistory';
 
 const VALID_TOOLS = ['move', 'grid', 'tokens', 'paint', 'erase'];
-
-async function fetchAssetById(assetId) {
-  const response = await authFetch(`/api/library/${assetId}`, { method: 'GET' });
-  if (!response.ok) return null;
-  return response.json();
-}
 
 // Pull the same flat grid shape that grid.toFlatConfig() produces and
 // the /grid PATCH endpoint accepts. Symmetric before/after for undo.
@@ -102,7 +96,6 @@ export default function MapConfigTool({
   // "token" focal square → the token references the image by id. The crop
   // is the IMAGE's attribute; every token using it shares the result.
   const [avatarPickingTokenId, setAvatarPickingTokenId] = useState(null);
-  const [avatarCropState, setAvatarCropState] = useState(null); // { tokenId, imageAssetId, imageUrl, initialArea }
   const [workshopTokenImages, setWorkshopTokenImages] = useState({}); // image_asset_id -> { url, token_area }
   // Workshop "peek through fog" toggle — when on, the fog wrapper drops
   // to 50% opacity so the DM can see the map underneath while
@@ -115,7 +108,6 @@ export default function MapConfigTool({
   const gridUpdateMutation = useUpdateGridConfig();
   const fogUpdateMutation = useUpdateFogConfig();
   const tokenUpdateMutation = useUpdateTokenConfig();
-  const focalAreaMutation = useSetFocalArea();
 
   const tool = VALID_TOOLS.includes(activeTool) ? activeTool : 'move';
 
@@ -518,21 +510,32 @@ export default function MapConfigTool({
     setAvatarPickingTokenId(tokenId);
   }, []);
 
+  // Confirmed crop lands on the image (shared PATCH inside the flow); the
+  // picked token then references it in the local draft config.
+  const handleCropSaved = useCallback(({ imageAssetId, imageUrl, area, context: tokenId }) => {
+    setWorkshopTokenImages((previousImages) => ({
+      ...previousImages,
+      [imageAssetId]: { url: imageUrl, token_area: area },
+    }));
+    setBaselineTokens((previousTokens) => previousTokens.map((existingToken) =>
+      existingToken.id === tokenId
+        ? { ...existingToken, image_asset_id: imageAssetId }
+        : existingToken
+    ));
+    setTokensDirty(true);
+  }, []);
+
+  const cropFlow = useFocalAreaFlow({ onCropSaved: handleCropSaved });
+
   const handleAvatarImageSelected = useCallback(async (imageAssetId) => {
     const pickedForTokenId = avatarPickingTokenId;
     setAvatarPickingTokenId(null);
-    const imageAsset = await fetchAssetById(imageAssetId);
-    if (!imageAsset || !pickedForTokenId) return;
+    if (!pickedForTokenId) return;
     // Always prompt the area select on selection — pre-filled when the
     // image already has a "token" area (decision 27; adjusting it moves
     // every token sharing this image).
-    setAvatarCropState({
-      tokenId: pickedForTokenId,
-      imageAssetId,
-      imageUrl: imageAsset.s3_url,
-      initialArea: imageAsset.focal_areas?.token || null,
-    });
-  }, [avatarPickingTokenId]);
+    await cropFlow.begin(imageAssetId, pickedForTokenId);
+  }, [avatarPickingTokenId, cropFlow]);
 
   const handleRemoveAvatar = useCallback(() => {
     const pickedForTokenId = avatarPickingTokenId;
@@ -545,33 +548,6 @@ export default function MapConfigTool({
     ));
     setTokensDirty(true);
   }, [avatarPickingTokenId]);
-
-  const handleFocalAreaConfirm = useCallback(async (area) => {
-    const cropState = avatarCropState;
-    if (!cropState) return;
-    try {
-      await focalAreaMutation.mutateAsync({
-        assetId: cropState.imageAssetId,
-        purpose: 'token',
-        area,
-      });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[mapconfig] focal area save failed:', err);
-      return; // keep the modal open; the user can retry or cancel
-    }
-    setWorkshopTokenImages((previousImages) => ({
-      ...previousImages,
-      [cropState.imageAssetId]: { url: cropState.imageUrl, token_area: area },
-    }));
-    setBaselineTokens((previousTokens) => previousTokens.map((existingToken) =>
-      existingToken.id === cropState.tokenId
-        ? { ...existingToken, image_asset_id: cropState.imageAssetId }
-        : existingToken
-    ));
-    setTokensDirty(true);
-    setAvatarCropState(null);
-  }, [avatarCropState, focalAreaMutation]);
 
   const handleAddToken = useCallback((label, footprint) => {
     if (!naturalDimensions) return;
@@ -926,17 +902,10 @@ export default function MapConfigTool({
         </div>
       </Modal>
 
-      {/* Focal square select — always prompted on selection (decision 27) */}
-      {avatarCropState && (
-        <FocalAreaModal
-          open={true}
-          imageUrl={avatarCropState.imageUrl}
-          initialArea={avatarCropState.initialArea}
-          title="Frame the token's face"
-          saving={focalAreaMutation.isPending}
-          onConfirm={handleFocalAreaConfirm}
-          onCancel={() => setAvatarCropState(null)}
-        />
+      {/* Focal square select — always prompted on selection (decision 27).
+          Mounted only while open so the cropper starts clean per image. */}
+      {cropFlow.isOpen && (
+        <FocalAreaModal {...cropFlow.modalProps} title="Frame the token's face" />
       )}
     </div>
   );
