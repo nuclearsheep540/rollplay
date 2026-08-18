@@ -1,5 +1,5 @@
 {
-  "latest": "0.60.4",
+  "latest": "0.61.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -818,6 +818,21 @@
       "services": {
         "app": "0.43.3",
         "api_site": "0.39.2",
+        "api_game": "0.28.1",
+        "api_auth": "0.3.1",
+        "nginx": "0.9.1",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.61.0": {
+      "date": "2026-08-18",
+      "commit": "3e205a0",
+      "description": "Character Token Avatars + Character Index UI Update",
+      "services": {
+        "app": "0.44.0",
+        "api_site": "0.40.0",
         "api_game": "0.28.1",
         "api_auth": "0.3.1",
         "nginx": "0.9.1",
