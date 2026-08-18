@@ -16,8 +16,13 @@ import React, { useEffect, useState } from 'react';
  *
  * Renders nothing until the image loads; the parent's color disc stays
  * underneath, so a slow or failed URL degrades gracefully to v1 visuals.
+ *
+ * ringColor (tokens v3, decision 35): the image fully covers the color
+ * disc, so the ring is where identity lives — character color for
+ * pc/companion tokens, DM-rose for plain npc. Defaults to the old black
+ * when a caller doesn't pass one.
  */
-export default function TokenAvatarDisc({ url, area = null }) {
+export default function TokenAvatarDisc({ url, area = null, ringColor = null }) {
   const [naturalWidth, setNaturalWidth] = useState(0);
 
   useEffect(() => {
@@ -60,7 +65,10 @@ export default function TokenAvatarDisc({ url, area = null }) {
   }
 
   return (
-    <div className="absolute inset-0 rounded-full overflow-hidden border-2 border-black/55 pointer-events-none">
+    <div
+      className="absolute inset-0 rounded-full overflow-hidden border-2 pointer-events-none"
+      style={{ borderColor: ringColor || 'rgba(0, 0, 0, 0.55)' }}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={url} alt="" draggable={false} style={imageStyle} />
     </div>

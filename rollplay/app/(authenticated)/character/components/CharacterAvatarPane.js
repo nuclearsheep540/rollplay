@@ -7,7 +7,9 @@
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
+import { faCropSimple } from '@fortawesome/free-solid-svg-icons'
 
+import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 // Same wedge-clip visual language as the workshop tool buttons + campaign-
@@ -33,17 +35,25 @@ const DEFAULT_AVATAR = '/heroes.png'
  * - ``isBusy`` — drives the dimmed/non-interactive state during the PATCH
  * - ``error`` — string from the wizard's mutation state
  * - ``onOpenPicker()`` — wizard handler that opens the avatar picker modal
+ * - ``onAdjustCrop()`` — re-opens the focal-area select on the current avatar
+ *   (tokens v3, §3.2); pass null/omit to hide the affordance (no avatar yet)
  * - ``readOnly`` — drops the edit affordances (pen icon, hover dim, click target)
  *   for the finalised-character view
  */
 export default function CharacterAvatarPane({
   avatarUrl,
+  focalArea = null,
   isBusy = false,
   error = null,
   onOpenPicker,
+  onAdjustCrop = null,
   readOnly = false,
 }) {
   const displayUrl = avatarUrl || DEFAULT_AVATAR
+  // Bias the cover-fit toward the avatar's token focal square (decision
+  // 36). Undefined (no area / probe pending / default hero image) leaves
+  // the bg-center class in charge — the pre-crop rendering.
+  const focalPosition = useImageFocalPosition(avatarUrl, focalArea)
 
   return (
     // ``group`` sits on the aside (not the button) so the wedge image — a
@@ -66,6 +76,7 @@ export default function CharacterAvatarPane({
         style={{
           clipPath: WEDGE_CLIP,
           backgroundImage: `${WEDGE_INNER_SHADOW}, url('${displayUrl}')`,
+          ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
         }}
       />
 
@@ -114,6 +125,28 @@ export default function CharacterAvatarPane({
               Saving…
             </span>
           )}
+        </button>
+      )}
+
+      {!readOnly && onAdjustCrop && (
+        // Adjust the token crop without re-picking the image (tokens v3,
+        // §3.2). Sits above the full-pane picker button (z-20 vs z-10) so
+        // its clicks never fall through to the picker.
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={onAdjustCrop}
+          aria-label="Adjust token crop"
+          title="Adjust how your token frames this image"
+          className="absolute bottom-4 left-4 z-20 rounded-sm border px-3 py-1.5 text-xs font-semibold backdrop-blur-sm transition-opacity duration-150 opacity-60 hover:opacity-100 focus-visible:opacity-100 disabled:cursor-default"
+          style={{
+            backgroundColor: `${COLORS.onyx}AA`,
+            borderColor: COLORS.silver,
+            color: COLORS.smoke,
+          }}
+        >
+          <FontAwesomeIcon icon={faCropSimple} className="h-3.5 w-3.5 mr-1.5" />
+          Token crop
         </button>
       )}
 

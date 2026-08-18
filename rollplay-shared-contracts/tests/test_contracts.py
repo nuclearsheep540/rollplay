@@ -468,6 +468,7 @@ class TestSessionRoundTrip:
                         hp_max=28,
                         ac=14,
                         color="#3b82f6",
+                        avatar_asset_id="img-asset-1",
                     ),
                 ),
                 SessionUser(
@@ -631,6 +632,29 @@ class TestCharacterShapeConformance:
             "hp_current", "hp_max", "ac",
         }
         assert required_keys.issubset(set(PlayerCharacter.model_fields.keys()))
+
+    def test_player_character_avatar_defaults_none(self):
+        # tokens v3 (decision 30): avatar is optional wire baggage — old
+        # payloads without it must revalidate cleanly, and its absence
+        # means "color disc" downstream.
+        character = PlayerCharacter(
+            user_id="u1",
+            player_name="alice",
+            campaign_role="player",
+            character_id="char-1",
+            character_name="Aelwyn",
+            character_class=["Wizard"],
+            character_race="Elf",
+            level=5,
+            hp_current=22,
+            hp_max=28,
+            ac=14,
+        )
+        assert character.avatar_asset_id is None
+        stamped = PlayerCharacter.model_validate(
+            {**character.model_dump(), "avatar_asset_id": "img-1"}
+        )
+        assert stamped.avatar_asset_id == "img-1"
 
     def test_session_end_final_state_has_required_fields(self):
         required_keys = {

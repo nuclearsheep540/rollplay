@@ -67,7 +67,7 @@ export default function CharacterDetailPage() {
       style={{ backgroundColor: COLORS.graphite, color: THEME.textOnDark }}
     >
       <div className="shrink-0" style={{ width: '33vw' }}>
-        <CharacterAvatarPane avatarUrl={character.avatar_url} readOnly />
+        <CharacterAvatarPane avatarUrl={character.avatar_url} focalArea={character.avatar_focal_area} readOnly />
       </div>
 
       <div className="flex-1 overflow-y-auto min-w-0">

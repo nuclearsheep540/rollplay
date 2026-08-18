@@ -8,7 +8,9 @@ import { authFetch } from '@/app/shared/utils/authFetch';
  * TanStack mutation for PATCH /api/library/{id}/focal-area (tokens v2,
  * decision 27). Sets one purpose-keyed focal square on an image asset;
  * area=null clears that purpose. The crop belongs to the image, so every
- * token using it shares the result.
+ * consumer (workshop tokens, character avatars) shares the result. No
+ * active-session 409 handling: the endpoint has no session guard (v3,
+ * decision 34) — crops snapshot at session start and land next session.
  */
 export function useSetFocalArea() {
   const queryClient = useQueryClient();
@@ -22,10 +24,6 @@ export function useSetFocalArea() {
       });
 
       const data = await response.json().catch(() => ({}));
-
-      if (response.status === 409) {
-        throw new Error(data.detail || 'This image is in an active session. End the session first.');
-      }
 
       if (!response.ok) {
         throw new Error(data.detail || 'Failed to save focal area');

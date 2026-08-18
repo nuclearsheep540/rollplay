@@ -183,9 +183,11 @@ export default function WizardChrome({
   characterSubtitle,
   onRename,
   avatarUrl,
+  avatarFocalArea,
   avatarIsBusy,
   avatarError,
   onOpenAvatarPicker,
+  onAdjustAvatarCrop,
   children,
 }) {
   const currentIdx = steps.findIndex((s) => s.id === currentStep)
@@ -207,9 +209,11 @@ export default function WizardChrome({
       <div className="shrink-0" style={{ width: '33vw' }}>
         <CharacterAvatarPane
           avatarUrl={avatarUrl}
+          focalArea={avatarFocalArea}
           isBusy={avatarIsBusy}
           error={avatarError}
           onOpenPicker={onOpenAvatarPicker}
+          onAdjustCrop={onAdjustAvatarCrop}
         />
       </div>
 

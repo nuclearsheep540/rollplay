@@ -1005,16 +1005,17 @@ async def set_focal_area(
     request: SetFocalAreaRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Set (or clear with area=null) one purpose-keyed focal square on an
     image asset (tokens v2, decision 27). The crop belongs to the image —
-    every token using it shares the same "token" area.
+    every token using it shares the same "token" area. No active-session
+    guard (v3, decision 34): crops snapshot at session start, so edits
+    land next session and cannot desync live play.
     """
     try:
-        command = SetImageFocalArea(repo, session_repo)
+        command = SetImageFocalArea(repo)
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
@@ -1026,9 +1027,6 @@ async def set_focal_area(
 
         return _to_media_asset_response(asset, s3_service)
 
-    except AssetInUseError as e:
-        logger.warning(f"Set focal area blocked (in-use): {e}")
-        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         logger.warning(f"Set focal area failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))

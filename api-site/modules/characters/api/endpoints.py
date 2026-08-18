@@ -247,6 +247,8 @@ def _to_character_response(
         display_name=character.get_display_name(),
         derived=derived,
         avatar_url=avatar_url,
+        avatar_asset_id=character.avatar_asset_id,
+        avatar_focal_area=character.avatar_focal_area,
         created_at=character.created_at,
         updated_at=character.updated_at,
     )

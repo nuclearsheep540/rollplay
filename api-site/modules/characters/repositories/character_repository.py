@@ -222,6 +222,14 @@ class CharacterRepository:
                 if model.avatar_asset is not None
                 else None
             ),
+            # The avatar image's "token" focal square (tokens v3, decision
+            # 36). getattr-guarded: SetCharacterAvatar enforces image-type,
+            # but a legacy non-image row must degrade to None, not raise.
+            avatar_focal_area=(
+                (getattr(model.avatar_asset, "focal_areas", None) or {}).get("token")
+                if model.avatar_asset is not None
+                else None
+            ),
             color=model.color,
             ability_score_method=model.ability_score_method,
             ability_roll_details=(

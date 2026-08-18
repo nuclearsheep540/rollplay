@@ -207,6 +207,13 @@ class CharacterResponse(BaseModel):
     # Presigned GET URL for the uploaded avatar — short-lived. ``None`` ⇒
     # frontend renders the /heroes.png default.
     avatar_url: Optional[str] = None
+    # The library asset behind avatar_url — the crop flow needs the id to
+    # read/write the image's focal area (tokens v3, §3.2).
+    avatar_asset_id: Optional[UUID] = None
+    # The avatar image's "token" focal square {x, y, size} in source-image
+    # native px (tokens v3, decision 36). Frontend biases avatar
+    # cover-positioning toward it; None ⇒ centered, the pre-crop look.
+    avatar_focal_area: Optional[Dict[str, float]] = None
 
     created_at: datetime
     updated_at: datetime

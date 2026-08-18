@@ -48,6 +48,10 @@ function MapTokenChipList({
                 character_id: seat.characterData.character_id,
                 label: characterName,
                 footprint: 1,
+                // Character avatar rides the placement (tokens v3, decision
+                // 30) — the image itself is resolved via token_images,
+                // delivered at session start for every rostered character.
+                image_asset_id: seat.characterData.avatar_asset_id || null,
               }}
               name={characterName}
               color={seatColorByIndex[seat.seatId] || getSeatColorHex(seat.seatId)}

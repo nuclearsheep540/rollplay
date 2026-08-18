@@ -605,6 +605,14 @@ body {
 }
 .left-drawer-tab-strip::-webkit-scrollbar { display: none; }
 
+/* Character index strip (tokens v3, decision 37): the scrollbar broke the
+   full-bleed look — hidden, scrolling stays (wheel converter + drag). */
+.character-index-strip {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.character-index-strip::-webkit-scrollbar { display: none; }
+
 .left-drawer-tab-strip-inner {
   display: flex;
   flex-direction: column;
