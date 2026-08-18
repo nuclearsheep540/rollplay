@@ -6,7 +6,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
 import { authFetch } from '@/app/shared/utils/authFetch'
+import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -20,21 +23,143 @@ import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
 import { Button } from './shared/Button'
 import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
-import { characterMetaLine } from '../utils/characterMeta'
 import CharacterAvatarPane from '@/app/(authenticated)/character/components/CharacterAvatarPane'
 import CharacterSheet from '@/app/(authenticated)/character/components/CharacterSheet'
 
-// Horizontal cousin of the workshop tiles' wedge: the avatar layer fills
-// the card and its bottom edge slants — 78% of card height at the left,
-// 64% at the right — revealing the metadata band beneath. At the fixed
-// 9:16 aspect that edge sits ~14° above horizontal; 346° is perpendicular
-// to it, so (as with the tiles) every point on the diagonal projects to
-// the same stop on the gradient axis and the inner shadow hugs the edge.
-// The diagonal crosses the axis at ~32%; everything before that is below
-// the edge and clipped away.
-const CARD_WEDGE_CLIP = 'polygon(0 0, 100% 0, 100% 64%, 0 78%)'
-const CARD_WEDGE_INNER_SHADOW =
-  'linear-gradient(346deg, rgba(0, 0, 0, 0.55) 32%, transparent 44%)'
+// 35° parallelogram strip (tokens v3, decision 37) — the workshop tiles'
+// slant promoted to a true tiling. Each card's SHELL is the visible band
+// (the old 9:16 stride); the card BOX inside it is wider by the slant run
+// and clipped to a parallelogram, spilling right across the following
+// shells so every seam is a 35°-from-vertical diagonal.
+//
+// Geometry, all derived from the fixed shell aspect (9:16 ⇒ stride
+// S = 0.5625·H) and the brand angle (slant run R = tan 35° · H ≈ 0.7002·H):
+//   box width   = S + R = 1.2627·H  ⇒  224.48% of the shell width
+//   clip x at top-left  = R/(S+R)  ≈ 55.45%
+//   clip x at bottom-right = S/(S+R) ≈ 44.55%
+// Both slant edges are parallel, so the strip tiles at any height without
+// re-deriving anything — the percentages are constants of the aspect.
+const STRIP_BOX_WIDTH_PERCENT = 224.48
+const STRIP_SLANT_CLIP = 'polygon(55.45% 0, 100% 0, 44.55% 100%, 0 100%)'
+// First card: square left edge (decision 37's QA fallback, taken
+// 2026-08-18 — at full-bleed heights the angled lead-in void is
+// tan 35° × H ≈ 860px of dead space, which reads broken, not deliberate).
+// Right edge keeps the strip slant so the tiling continues unchanged.
+const STRIP_FIRST_CLIP = 'polygon(0 0, 100% 0, 44.55% 100%, 0 100%)'
+// tan 35° — the slant run per pixel of card height.
+const STRIP_SLANT_RATIO = 0.7002
+// QA tuning (2026-08-18): even square-capped, the first card averages
+// ~1.6 strides of art vs every other card's 1. Pulling the strip left by
+// a fraction of the slant run lets the viewport edge trim the cap's bonus
+// zone — a vertical cut, same language as the cap itself. Each pixel of
+// shift also takes a pixel off the first card's bottom stride, so keep
+// this well under 1. Tune to taste.
+const STRIP_LEAD_SHIFT_FRACTION = 0.35
+// Seam shadow: 125° is perpendicular to the 35° slant (workshop tool nav
+// precedent), so every point of the left diagonal projects to ONE stop on
+// the gradient axis — a contact shadow hugging the seam, reading as the
+// previous card resting on this one.
+// The anchor stop is geometry, not taste: projecting the left clip edge
+// onto the 125° axis of our 1.2627:1 box lands at 35.67% (the nav's ~50%
+// is a property of its squat tile aspect, not a universal constant — QA
+// 2026-08-18 caught a ~280px solid shadow slab from anchoring at 50%).
+// The fade tail is fixed px so it stays a tight edge at any card height.
+const STRIP_SEAM_SHADOW = 'linear-gradient(125deg, rgba(0, 0, 0, 0.55) 35.67%, transparent calc(35.67% + 72px))'
+
+// Strip card — a real component (not a render helper) because the focal
+// bias is a hook (decision 36). Greyscale-at-rest lives on the image layer
+// only, so the name and In Game badge stay crisp while the art desaturates.
+function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = false }) {
+  const focalPosition = useImageFocalPosition(char.avatar_url, char.avatar_focal_area)
+  // Readability overlay — much lighter over a real avatar so the portrait
+  // stays visible; heavier over the default hero placeholder.
+  const overlay = char.avatar_url ? `${COLORS.onyx}26` : `${COLORS.onyx}80`
+  // The first card has no left neighbour: square cap (the seam-shadow
+  // layer below simply isn't rendered for it — the gradient exists to hug
+  // the left diagonal, which this card lacks).
+  const clip = isFirst ? STRIP_FIRST_CLIP : STRIP_SLANT_CLIP
+  const backgroundLayers = `linear-gradient(${overlay}, ${overlay}), url(${char.avatar_url || '/heroes.png'})`
+
+  return (
+    // pointer-events-none: shells are transparent layout rectangles that
+    // sit ABOVE the previous cards' spilling boxes in paint order — left
+    // interactive they'd swallow most of each neighbour's hover/click
+    // (clip-path clips the buttons' hit areas; nothing clips a shell).
+    // The button re-enables events for the actual parallelogram.
+    <div className="relative flex-shrink-0 pointer-events-none" style={shellStyle}>
+      <button
+        type="button"
+        aria-label={`View ${char.character_name || 'Unnamed'}`}
+        onClick={onSelect}
+        className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer hover:scale-[1.03] hover:z-30 focus-visible:scale-[1.03] focus-visible:z-30"
+        style={{
+          width: `${STRIP_BOX_WIDTH_PERCENT}%`,
+          clipPath: clip,
+          backgroundColor: THEME.bgPanel,
+          transition: isResizing ? 'none' : 'transform 200ms ease-out',
+        }}
+      >
+        {/* Avatar layer — overlay + seam shadow + image in one background
+            stack. saturate-0 at rest is the strip's greyscale skin; hover
+            restores color (decision 37). Focal bias (decision 36) rides
+            backgroundPosition; absent ⇒ bg-center exactly as before. */}
+        <div
+          className="absolute inset-0 bg-cover bg-center pointer-events-none saturate-0 group-hover:saturate-100 group-focus-visible:saturate-100"
+          style={{
+            backgroundImage: backgroundLayers,
+            transition: isResizing ? 'none' : 'filter 200ms ease-out',
+            ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
+          }}
+        />
+
+        {/* Seam shadow on its own layer so hover can fade it out: the pop
+            lifts this card above its neighbours, so the "previous card
+            rests on me" contact shadow no longer applies while popped. */}
+        {!isFirst && (
+          <div
+            className="absolute inset-0 pointer-events-none group-hover:opacity-0 group-focus-visible:opacity-0"
+            style={{
+              backgroundImage: STRIP_SEAM_SHADOW,
+              transition: isResizing ? 'none' : 'opacity 200ms ease-out',
+            }}
+          />
+        )}
+
+        {/* Name only (decision 37) — no meta line, no backplate. Bare text
+            first per the plan; QA fallback is a whisper of text-shadow or
+            a thin top scrim, never the band. Left offset clears the top
+            edge's slant start (55.45%); right offset leaves the badge
+            room when present. */}
+        <h3
+          className="absolute text-xl font-[family-name:var(--font-metamorphous)] truncate text-left"
+          style={{
+            // 1.5% = the exact top shave the 1.03 hover scale takes under
+            // the row's overflow-y clip — the name stays fully in view
+            // hovered or not, at any card height.
+            top: 'calc(1.5% + 0.9rem)',
+            left: '57%',
+            right: char.active_game ? '7.5rem' : '1rem',
+            color: THEME.textOnDark,
+          }}
+        >
+          {char.character_name || 'Unnamed'}
+        </h3>
+
+        {char.active_game && (
+          <div className="absolute right-3 z-10" style={{ top: 'calc(1.5% + 0.75rem)' }}>
+            <span
+              className="px-3 py-1.5 text-sm font-semibold rounded-sm border flex items-center gap-1.5"
+              style={{ backgroundColor: '#16a34a', borderColor: '#22c55e', color: 'white' }}
+            >
+              <FontAwesomeIcon icon={faLock} className="text-sm" />
+              In Game
+            </span>
+          </div>
+        )}
+      </button>
+    </div>
+  )
+}
 
 export default function CharacterManager({
   user,
@@ -51,6 +176,11 @@ export default function CharacterManager({
   const [characterToDelete, setCharacterToDelete] = useState(null)
   const [deleteError, setDeleteError] = useState(null)
   const deleteCharacterMutation = useDeleteCharacter()
+
+  // Lead shift (decision 37 QA tuning): measured px the strip pulls left
+  // so the first card's cap doesn't dominate. Derived from the row's
+  // rendered height, so it re-measures alongside the resize handling.
+  const [leadShiftPx, setLeadShiftPx] = useState(0)
 
   // Selection and resize state for horizontal scroll layout
   const [selectedCharacter, setSelectedCharacter] = useState(null)
@@ -73,9 +203,43 @@ export default function CharacterManager({
     return () => el.removeEventListener('wheel', onWheel)
   }, [loading, error, selectedCharacter])
 
+  // Measure the lead shift from the row's rendered height (shift =
+  // fraction × tan 35° × card height). Same mount/remount cadence as the
+  // wheel listener above; re-measures on window resize.
+  useEffect(() => {
+    const measureLeadShift = () => {
+      const rowHeight = scrollRowRef.current?.clientHeight || 0
+      setLeadShiftPx(Math.round(rowHeight * STRIP_SLANT_RATIO * STRIP_LEAD_SHIFT_FRACTION))
+    }
+    measureLeadShift()
+    window.addEventListener('resize', measureLeadShift)
+    return () => window.removeEventListener('resize', measureLeadShift)
+  }, [loading, error, selectedCharacter])
+
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false)
   const [isCloneMode, setIsCloneMode] = useState(false)
+
+  // Index→view choreography (tokens v3, decision 38): the hero pane enters
+  // sliding LEFT to its seat while the stats panel drawers out to the
+  // RIGHT from behind it. Same-tree state swap (like campaigns), so GSAP
+  // animates freely — no route change involved. The overlay's existing CSS
+  // opacity fade underneath is untouched; this choreographs the children.
+  const expandedViewRef = useRef(null)
+  useGSAP(() => {
+    if (!selectedCharacter || isResizing) return
+    const scope = expandedViewRef.current
+    if (!scope) return
+    const heroPane = scope.querySelector('[data-character-hero]')
+    const statsPanel = scope.querySelector('[data-character-stats]')
+    if (!heroPane || !statsPanel) return
+    gsap.fromTo(heroPane,
+      { x: 140, autoAlpha: 0 },
+      { x: 0, autoAlpha: 1, duration: 0.38, ease: 'power3.out' })
+    gsap.fromTo(statsPanel,
+      { x: -90, autoAlpha: 0 },
+      { x: 0, autoAlpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.08 })
+  }, { dependencies: [selectedCharacter?.id], scope: expandedViewRef })
 
   // Fetch characters from API
   const fetchCharacters = async () => {
@@ -277,119 +441,58 @@ export default function CharacterManager({
 
   // Render error state
   const renderError = () => (
-    <div className="rounded-sm border p-4" style={{backgroundColor: '#991b1b', borderColor: '#dc2626'}}>
+    // m-6: the characters tab is full-bleed (no dashboard gutter), so the
+    // banner carries its own inset instead of hugging the viewport edge.
+    <div className="rounded-sm border p-4 m-6" style={{backgroundColor: '#991b1b', borderColor: '#dc2626'}}>
       <p style={{color: '#fca5a5'}}>{error}</p>
     </div>
   )
 
-  // Cards fill the scroll row's full height; width is derived from the
-  // 9:16 portrait aspect ratio. Min/max keep the cards usable on extreme
-  // viewports without re-introducing a fixed-width clamp. Height clamps
-  // mirror the width clamps at 16/9 so the aspect genuinely holds —
-  // width clamps alone would win over aspect-ratio on very tall rows,
-  // skewing the wedge geometry the gradient angle is derived from.
+  // Card SHELLS fill the scroll row's full height; width is the strip
+  // stride, derived from the 9:16 portrait aspect. Min/max keep the cards
+  // usable on extreme viewports. Height clamps mirror the width clamps at
+  // 16/9 so the aspect genuinely holds — width clamps alone would win over
+  // aspect-ratio on very tall rows, skewing the parallelogram geometry the
+  // clip/gradient constants are derived from. The card BOX inside each
+  // shell is 224.48% of this width (STRIP_BOX_WIDTH_PERCENT).
+  // No max clamps: the full-bleed strip means cards genuinely fill the tab
+  // height (the old 600/1067 maxes left a dead band under the strip).
+  // Minimums stay so tiny viewports keep usable cards.
   const CARD_STYLE = {
     height: '100%',
     width: 'auto',
     aspectRatio: '9/16',
     minWidth: '140px',
-    maxWidth: '600px',
     minHeight: '249px',
-    maxHeight: '1067px',
   }
 
-  // Render character card (9:16 portrait aspect ratio for modern devices)
-  const renderCharacterCard = (char) => {
-    // Readability overlay - much lighter over a real avatar so the
-    // portrait stays visible. Folded into the background stack as a
-    // flat two-stop gradient so one element carries the whole wedge.
-    const overlay = char.avatar_url ? `${COLORS.onyx}26` : `${COLORS.onyx}80`
-
-    return (
-      // A real button so the card is keyboard-reachable (tab stop +
-      // Enter/Space), matching the create-card next to it
+  // Create-card — the strip's last member, same parallelogram shape,
+  // knocked-out content. Clicking through lands on the wizard whose avatar
+  // pane opens with the same wedge motif (decision 37 continuity).
+  const renderCreateCard = () => (
+    // Same shell/button pointer-events split as CharacterStripCard.
+    <div className="relative flex-shrink-0 pointer-events-none" style={CARD_STYLE}>
       <button
         type="button"
-        key={char.id}
-        aria-label={`View ${char.character_name || 'Unnamed'}`}
-        className="relative flex-shrink-0 rounded-sm border-2 overflow-hidden cursor-pointer origin-top hover:shadow-lg hover:scale-[1.01]"
-        style={{
-          ...CARD_STYLE,
-          backgroundColor: THEME.bgPanel,
-          borderColor: selectedCharacter?.id === char.id ? THEME.borderActive : THEME.borderDefault,
-          transition: isResizing
-            ? 'none'
-            : 'border-color 200ms ease-in-out, transform 200ms ease-out, box-shadow 200ms ease-out',
-        }}
-        onClick={() => toggleCharacterDetails(char)}
-      >
-        {/* Avatar layer - single-element wedge trick from the workshop
-            tiles: overlay + inner shadow + image stacked in the
-            background, clip-path slants the bottom edge */}
-        <div
-          className="absolute inset-0 bg-cover bg-center pointer-events-none"
-          style={{
-            clipPath: CARD_WEDGE_CLIP,
-            backgroundImage: `linear-gradient(${overlay}, ${overlay}), ${CARD_WEDGE_INNER_SHADOW}, url(${char.avatar_url || '/heroes.png'})`,
-          }}
-        />
-
-        {/* In Game badge */}
-        {char.active_game && (
-          <div className="absolute top-3 right-3 z-10">
-            <span
-              className="px-3 py-1.5 text-sm font-semibold rounded-sm border flex items-center gap-1.5"
-              style={{backgroundColor: '#16a34a', borderColor: '#22c55e', color: 'white'}}
-            >
-              <FontAwesomeIcon icon={faLock} className="text-sm" />
-              In Game
-            </span>
-          </div>
-        )}
-
-        {/* Metadata band - fills the area the wedge reveals. Top at 78%
-            (the diagonal's lowest point) keeps text clear of the slant. */}
-        <div
-          className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-center px-4 text-center"
-          style={{ top: '78%' }}
-        >
-          <h3 className="text-lg font-[family-name:var(--font-metamorphous)] truncate w-full" style={{color: THEME.textOnDark}}>
-            {char.character_name || 'Unnamed'}
-          </h3>
-          <p className="text-sm truncate w-full" style={{color: THEME.textSecondary}}>
-            {characterMetaLine(char)}
-          </p>
-        </div>
-      </button>
-    )
-  }
-
-  // Render Create New Character card - matches Campaign template styling but portrait
-  const renderCreateCard = () => (
-    <div
-      className="flex-shrink-0 rounded-sm overflow-hidden"
-      style={CARD_STYLE}
-    >
-      <button
+        aria-label="Create New Character"
         onClick={() => router.push('/character/create')}
-        className="w-full h-full relative"
+        className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer hover:scale-[1.03] hover:z-30 focus-visible:scale-[1.03] focus-visible:z-30"
         style={{
-          backgroundColor: 'transparent'
+          width: `${STRIP_BOX_WIDTH_PERCENT}%`,
+          // Square-capped when it leads the strip (zero characters) —
+          // same no-left-neighbour rule as the first character card.
+          clipPath: characters.length === 0 ? STRIP_FIRST_CLIP : STRIP_SLANT_CLIP,
+          backgroundColor: `${THEME.bgPanel}40`, // 25% opacity knocked-out skin
+          transition: isResizing ? 'none' : 'transform 200ms ease-out',
         }}
       >
-        {/* Knocked-out overlay - matches Campaign template */}
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center p-6"
-          style={{
-            backgroundColor: `${THEME.bgPanel}40` // 25% opacity for knocked-out effect
-          }}
-        >
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 opacity-50 group-hover:opacity-80 transition-opacity duration-200">
           <FontAwesomeIcon
             icon={faPlus}
-            className="text-7xl mb-4 opacity-50"
-            style={{color: COLORS.smoke}}
+            className="text-7xl mb-4"
+            style={{ color: COLORS.smoke }}
           />
-          <h4 className="text-2xl font-[family-name:var(--font-metamorphous)] mb-2 opacity-50 text-center" style={{color: THEME.textPrimary}}>
+          <h4 className="text-2xl font-[family-name:var(--font-metamorphous)] mb-2 text-center" style={{ color: THEME.textPrimary }}>
             Create New Character
           </h4>
         </div>
@@ -408,7 +511,7 @@ export default function CharacterManager({
       // double-painted layer (carbon under graphite) that previously made
       // this surface read darker than the wizard. No left border either:
       // the wedge avatar pane provides the visual division on its own.
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div data-character-stats className="flex-1 p-6 overflow-y-auto">
         {/* Drawer chrome — Close on the right, Edit + Delete on the left.
             Edit reuses the wizard via ?id=… (same surface as create); the
             backend's lock check (active_campaign) gates whether the PATCHes
@@ -464,6 +567,7 @@ export default function CharacterManager({
     const char = selectedCharacter
     return (
       <div
+        data-character-hero
         className="relative flex flex-col"
         style={{
           width: 'clamp(320px, 30vw, 800px)',
@@ -471,7 +575,7 @@ export default function CharacterManager({
           height: '100%',
         }}
       >
-        <CharacterAvatarPane avatarUrl={char.avatar_url} readOnly />
+        <CharacterAvatarPane avatarUrl={char.avatar_url} focalArea={char.avatar_focal_area} readOnly />
 
         {char.active_game && (
           <div className="absolute top-4 right-8 z-10">
@@ -501,11 +605,12 @@ export default function CharacterManager({
         {!loading && !error && (
           <div
             ref={scrollRowRef}
-            className="flex gap-4 overflow-x-auto h-full items-stretch"
+            className="flex gap-0 overflow-x-auto overflow-y-hidden h-full items-stretch"
             style={{
-              paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
-              paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)',
-              paddingBottom: '1rem',
+              // No padding at all: cards permanently fill the full-bleed
+              // tab (the strip IS the page). overflow-y-hidden clips the
+              // hover pop at the strip's bounds — the scaled card zooms in
+              // place and structurally cannot paint over the nav.
               scrollbarWidth: 'thin',
               WebkitOverflowScrolling: 'touch',
               opacity: selectedCharacter ? 0 : 1,
@@ -513,8 +618,22 @@ export default function CharacterManager({
               transition: isResizing ? 'none' : 'opacity 200ms ease-in-out'
             }}
           >
-            {/* Character Cards */}
-            {characters.map((char) => renderCharacterCard(char))}
+            {/* Character Cards — 35° parallelogram strip (decision 37) */}
+            {characters.map((char, cardIndex) => (
+              <CharacterStripCard
+                key={char.id}
+                char={char}
+                // First shell pulls the strip left so the viewport trims
+                // the cap's bonus art; overflow before the content origin
+                // is unreachable by scroll, so the cut is permanent.
+                shellStyle={cardIndex === 0
+                  ? { ...CARD_STYLE, marginLeft: `-${leadShiftPx}px` }
+                  : CARD_STYLE}
+                isResizing={isResizing}
+                isFirst={cardIndex === 0}
+                onSelect={() => toggleCharacterDetails(char)}
+              />
+            ))}
             {/* Create New Character Card */}
             {renderCreateCard()}
           </div>
@@ -525,6 +644,7 @@ export default function CharacterManager({
             finalised character" surface reads as one consistent page colour
             no matter which entry point the player came from. */}
         <div
+          ref={expandedViewRef}
           className="absolute top-0 bottom-0 flex"
           style={{
             left: selectedCharacter ? 'calc(50% - 50vw)' : '0',

@@ -286,6 +286,7 @@ class StartSession:
                     hp_max=character.hp_max,
                     ac=character.ac,
                     color=character.color,
+                    avatar_asset_id=str(character.avatar_asset_id) if character.avatar_asset_id else None,
                 )
 
             session_users.append(
@@ -386,20 +387,29 @@ class StartSession:
         logger.info(f"Restoring audio track config stash: {len(track_config)} tracks")
         return track_config
 
-    def _build_token_images(self, merged_boards: dict, asset_lookup: dict, url_map: dict) -> dict:
-        """Resolve every image referenced by the merged boards into a
-        TokenImageRef (signed URL + "token" focal area) — decision 27.
+    def _build_token_images(self, merged_boards: dict, session_users: list, asset_lookup: dict, url_map: dict) -> dict:
+        """Resolve every image the session's tokens may render into a
+        TokenImageRef (signed URL + "token" focal area) — decisions 27/30.
+
+        Two sources union: images referenced by the merged boards, and the
+        rostered characters' avatars (tokens v3) — a pc token placed
+        mid-session must find its avatar already resolvable, so the roster
+        is collected up front regardless of what is on the boards at start.
 
         Baselines are per-asset and shared across campaigns, so a board may
-        reference an image outside this campaign's library: those resolve
-        by id and sign individually. An unresolvable image degrades to the
-        color disc client-side (log, never fail a start).
+        reference an image outside this campaign's library — same for a
+        character avatar, which lives in its owner's personal library: both
+        resolve by id and sign individually. An unresolvable image degrades
+        to the color disc client-side (log, never fail a start).
         """
         referenced_image_ids = set()
         for board_tokens in merged_boards.values():
             for board_token in board_tokens:
                 if board_token.get("image_asset_id"):
                     referenced_image_ids.add(board_token["image_asset_id"])
+        for session_user in session_users:
+            if session_user.character and session_user.character.avatar_asset_id:
+                referenced_image_ids.add(session_user.character.avatar_asset_id)
 
         token_image_refs = {}
         for image_id in referenced_image_ids:
@@ -428,6 +438,38 @@ class StartSession:
 
         logger.info(f"Resolved {len(token_image_refs)} token image(s)")
         return token_image_refs
+
+    @staticmethod
+    def _stamp_pc_token_avatars(merged_boards: dict, session_users: list) -> dict:
+        """Re-stamp placed pc tokens' image refs from the current roster
+        (tokens v3, decision 39). PC tokens survive across sessions via the
+        paused board (decision 24), which would otherwise freeze the avatar
+        they were placed with. Invariant by construction: a pc token's image
+        always derives from its owner's current avatar as of session start —
+        including a cleared avatar (None → color disc). Owners no longer on
+        the roster keep whatever ref they had (conservative: never guess).
+        """
+        avatar_by_user_id = {}
+        for session_user in session_users:
+            if session_user.character:
+                avatar_by_user_id[session_user.user_id] = session_user.character.avatar_asset_id
+
+        stamped_count = 0
+        for board_tokens in merged_boards.values():
+            for board_token in board_tokens:
+                if board_token.get("kind") != "pc":
+                    continue
+                owner_id = board_token.get("owner_user_id")
+                if owner_id not in avatar_by_user_id:
+                    continue
+                current_avatar = avatar_by_user_id[owner_id]
+                if board_token.get("image_asset_id") != current_avatar:
+                    board_token["image_asset_id"] = current_avatar
+                    stamped_count += 1
+
+        if stamped_count:
+            logger.info(f"Re-stamped avatar refs on {stamped_count} pc token(s) at session start")
+        return merged_boards
 
     @staticmethod
     def _restore_map_token_state(session: SessionEntity, asset_lookup: dict) -> tuple:
@@ -648,6 +690,10 @@ class StartSession:
             map_config_for_game = self._restore_map_config(session, asset_lookup, url_map)
             image_config_for_game = self._restore_image_config(session, asset_lookup, url_map)
             session_users_for_game = self._build_session_users(session, campaign)
+            # After the merge AND the roster: pc tokens re-stamp their avatar
+            # refs before token_images collects ids (decision 39 — the board
+            # scan below must see fresh refs, not last session's).
+            map_token_boards = self._stamp_pc_token_avatars(map_token_boards, session_users_for_game)
             dm_contract = DungeonMaster(
                 user_id=str(campaign.dm_id),
                 player_name=host_user.screen_name or "",  # screen_name only — never email (PII)
@@ -681,7 +727,7 @@ class StartSession:
                 active_display=ActiveDisplayType(session.active_display) if session.active_display else None,
                 adventure_log=session.adventure_log or [],
                 map_token_state=map_token_boards,
-                token_images=self._build_token_images(map_token_boards, asset_lookup, url_map),
+                token_images=self._build_token_images(map_token_boards, session_users_for_game, asset_lookup, url_map),
                 urls_expire_at=urls_expire_at.isoformat() if urls_expire_at else None,
             )
 

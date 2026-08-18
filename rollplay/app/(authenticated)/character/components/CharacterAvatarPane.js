@@ -9,6 +9,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
 import { faCropSimple } from '@fortawesome/free-solid-svg-icons'
 
+import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 // Same wedge-clip visual language as the workshop tool buttons + campaign-
@@ -41,6 +42,7 @@ const DEFAULT_AVATAR = '/heroes.png'
  */
 export default function CharacterAvatarPane({
   avatarUrl,
+  focalArea = null,
   isBusy = false,
   error = null,
   onOpenPicker,
@@ -48,6 +50,10 @@ export default function CharacterAvatarPane({
   readOnly = false,
 }) {
   const displayUrl = avatarUrl || DEFAULT_AVATAR
+  // Bias the cover-fit toward the avatar's token focal square (decision
+  // 36). Undefined (no area / probe pending / default hero image) leaves
+  // the bg-center class in charge — the pre-crop rendering.
+  const focalPosition = useImageFocalPosition(avatarUrl, focalArea)
 
   return (
     // ``group`` sits on the aside (not the button) so the wedge image — a
@@ -70,6 +76,7 @@ export default function CharacterAvatarPane({
         style={{
           clipPath: WEDGE_CLIP,
           backgroundImage: `${WEDGE_INNER_SHADOW}, url('${displayUrl}')`,
+          ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
         }}
       />
 

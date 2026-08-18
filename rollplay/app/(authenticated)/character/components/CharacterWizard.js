@@ -433,6 +433,7 @@ export default function CharacterWizard() {
       characterSubtitle={subtitle}
       onRename={handleRename}
       avatarUrl={draft?.avatar_url}
+      avatarFocalArea={draft?.avatar_focal_area}
       avatarIsBusy={createDraft.isPending || setAvatarMutation.isPending || avatarSaving}
       avatarError={avatarError}
       onOpenAvatarPicker={handleOpenAvatarPicker}

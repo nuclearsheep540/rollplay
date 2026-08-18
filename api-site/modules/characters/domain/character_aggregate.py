@@ -277,8 +277,12 @@ class CharacterAggregate:
     # avatar. ``None`` ⇒ frontend shows the default /heroes.png. We also stash
     # ``avatar_s3_key`` so the response builder can produce a presigned URL
     # without re-querying the asset row; the repository sets it on load.
+    # ``avatar_focal_area`` is the image's "token" focal square (tokens v3,
+    # decision 36) — same stash mechanism, consumed by the frontend to bias
+    # avatar cover-positioning. None ⇒ centered, exactly the pre-crop look.
     avatar_asset_id: Optional[UUID] = None
     avatar_s3_key: Optional[str] = None
+    avatar_focal_area: Optional[dict] = None
 
     # Character-owned display color ('#rrggbb'). Seats and map tokens *display*
     # this; nothing stores color per-seat. None ⇒ seat-index palette fallback.

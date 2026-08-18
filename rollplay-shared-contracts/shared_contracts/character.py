@@ -33,6 +33,11 @@ class PlayerCharacter(ContractModel):
     # Character-owned color (hex). The seat a player occupies *displays* this;
     # it is never stored per-seat. None = no custom color chosen yet.
     color: Optional[str] = None
+    # Library image asset behind the character's avatar (tokens v3, decision
+    # 30): pc map tokens derive their face from it. Rides the ETL so seats
+    # can stamp it onto placed pc tokens; api-site resolves it into
+    # SessionStartPayload.token_images at start. None = color disc.
+    avatar_asset_id: Optional[str] = None
 
 
 class SessionUser(ContractModel):

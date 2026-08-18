@@ -501,6 +501,7 @@ export default function MapTokenLayer({
               <TokenAvatarDisc
                 url={tokenImages[token.image_asset_id].url}
                 area={tokenImages[token.image_asset_id].token_area}
+                ringColor={discColor}
               />
             )}
 

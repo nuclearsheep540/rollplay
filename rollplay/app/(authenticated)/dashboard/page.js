@@ -108,7 +108,7 @@ function DashboardContent() {
       activeSection={activeSection}
       setActiveSection={setActiveSection}
       isChildExpanded={isChildExpanded}
-      isChildFullBleed={activeSection === 'library'}
+      isChildFullBleed={activeSection === 'library' || activeSection === 'characters'}
     >
       {/* Campaigns Section */}
       {activeSection === 'campaigns' && (
