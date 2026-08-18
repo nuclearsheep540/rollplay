@@ -213,8 +213,9 @@ export default function CharacterManager({
   }, [loading, error, selectedCharacter])
 
   // Measure the lead shift from the row's rendered height (shift =
-  // fraction × tan 35° × card height). Same mount/remount cadence as the
-  // wheel listener above; re-measures on window resize.
+  // fraction × slant run, i.e. tan(STRIP_ANGLE_DEGREES) × card height).
+  // Same mount/remount cadence as the wheel listener above; re-measures
+  // on window resize.
   useEffect(() => {
     const measureLeadShift = () => {
       const rowHeight = scrollRowRef.current?.clientHeight || 0
@@ -626,7 +627,8 @@ export default function CharacterManager({
               transition: isResizing ? 'none' : 'opacity 200ms ease-in-out'
             }}
           >
-            {/* Character Cards — 35° parallelogram strip (decision 37) */}
+            {/* Character Cards — parallelogram strip (decision 37; angle
+                set by STRIP_ANGLE_DEGREES) */}
             {characters.map((char, cardIndex) => (
               <CharacterStripCard
                 key={char.id}
