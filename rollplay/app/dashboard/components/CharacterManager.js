@@ -26,45 +26,54 @@ import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
 import CharacterAvatarPane from '@/app/(authenticated)/character/components/CharacterAvatarPane'
 import CharacterSheet from '@/app/(authenticated)/character/components/CharacterSheet'
 
-// 35° parallelogram strip (tokens v3, decision 37) — the workshop tiles'
+// Parallelogram strip (tokens v3, decision 37) — the workshop tiles'
 // slant promoted to a true tiling. Each card's SHELL is the visible band
-// (the old 9:16 stride); the card BOX inside it is wider by the slant run
-// and clipped to a parallelogram, spilling right across the following
-// shells so every seam is a 35°-from-vertical diagonal.
+// (the 9:16 stride); the card BOX inside it is wider by the slant run and
+// clipped to a parallelogram, spilling right across the following shells
+// so every seam is a diagonal.
 //
-// Geometry, all derived from the fixed shell aspect (9:16 ⇒ stride
-// S = 0.5625·H) and the brand angle (slant run R = tan 35° · H ≈ 0.7002·H):
-//   box width   = S + R = 1.2627·H  ⇒  224.48% of the shell width
-//   clip x at top-left  = R/(S+R)  ≈ 55.45%
-//   clip x at bottom-right = S/(S+R) ≈ 44.55%
-// Both slant edges are parallel, so the strip tiles at any height without
-// re-deriving anything — the percentages are constants of the aspect.
-const STRIP_BOX_WIDTH_PERCENT = 224.48
-const STRIP_SLANT_CLIP = 'polygon(55.45% 0, 100% 0, 44.55% 100%, 0 100%)'
+// ONE dial: the slant, in degrees from vertical. The site's wedge family
+// spans ~8° (avatar pane) to 35° (workshop tool tiles), so anything in
+// that range stays in-family. Every other constant below derives from it
+// — clip points, box width, seam-shadow angle and anchor, lead shift —
+// so tuning the look is this single number.
+const STRIP_ANGLE_DEGREES = 18
+
+// Derived geometry (units of card height H): stride S = 0.5625·H (9:16),
+// slant run R = tan(angle)·H, box = S + R. Both slant edges are parallel,
+// so the strip tiles at any height — these are constants of the aspect.
+const STRIP_STRIDE_RATIO = 9 / 16
+const STRIP_SLANT_RATIO = Math.tan((STRIP_ANGLE_DEGREES * Math.PI) / 180)
+const STRIP_BOX_RATIO = STRIP_STRIDE_RATIO + STRIP_SLANT_RATIO
+const STRIP_BOX_WIDTH_PERCENT = ((STRIP_BOX_RATIO / STRIP_STRIDE_RATIO) * 100).toFixed(2)
+// Clip x-stops: where the slant crosses the box's top and bottom edges.
+const STRIP_TOP_INSET_PERCENT = ((STRIP_SLANT_RATIO / STRIP_BOX_RATIO) * 100).toFixed(2)
+const STRIP_BOTTOM_EDGE_PERCENT = ((STRIP_STRIDE_RATIO / STRIP_BOX_RATIO) * 100).toFixed(2)
+const STRIP_SLANT_CLIP = `polygon(${STRIP_TOP_INSET_PERCENT}% 0, 100% 0, ${STRIP_BOTTOM_EDGE_PERCENT}% 100%, 0 100%)`
 // First card: square left edge (decision 37's QA fallback, taken
-// 2026-08-18 — at full-bleed heights the angled lead-in void is
-// tan 35° × H ≈ 860px of dead space, which reads broken, not deliberate).
-// Right edge keeps the strip slant so the tiling continues unchanged.
-const STRIP_FIRST_CLIP = 'polygon(0 0, 100% 0, 44.55% 100%, 0 100%)'
-// tan 35° — the slant run per pixel of card height.
-const STRIP_SLANT_RATIO = 0.7002
-// QA tuning (2026-08-18): even square-capped, the first card averages
-// ~1.6 strides of art vs every other card's 1. Pulling the strip left by
-// a fraction of the slant run lets the viewport edge trim the cap's bonus
-// zone — a vertical cut, same language as the cap itself. Each pixel of
+// 2026-08-18 — the angled lead-in void read as broken at full-bleed
+// heights). Right edge keeps the strip slant so the tiling continues.
+const STRIP_FIRST_CLIP = `polygon(0 0, 100% 0, ${STRIP_BOTTOM_EDGE_PERCENT}% 100%, 0 100%)`
+// QA tuning (2026-08-18): even square-capped, the first card shows more
+// art than the others. Pulling the strip left by a fraction of the slant
+// run lets the viewport edge trim the cap's bonus zone. Each pixel of
 // shift also takes a pixel off the first card's bottom stride, so keep
-// this well under 1. Tune to taste.
+// this well under 1.
 const STRIP_LEAD_SHIFT_FRACTION = 0.35
-// Seam shadow: 125° is perpendicular to the 35° slant (workshop tool nav
-// precedent), so every point of the left diagonal projects to ONE stop on
-// the gradient axis — a contact shadow hugging the seam, reading as the
-// previous card resting on this one.
-// The anchor stop is geometry, not taste: projecting the left clip edge
-// onto the 125° axis of our 1.2627:1 box lands at 35.67% (the nav's ~50%
-// is a property of its squat tile aspect, not a universal constant — QA
-// 2026-08-18 caught a ~280px solid shadow slab from anchoring at 50%).
-// The fade tail is fixed px so it stays a tight edge at any card height.
-const STRIP_SEAM_SHADOW = 'linear-gradient(125deg, rgba(0, 0, 0, 0.55) 35.67%, transparent calc(35.67% + 72px))'
+// Seam shadow: perpendicular to the slant (gradient angle = 90° + slant),
+// so every point of the left diagonal projects to ONE stop on the
+// gradient axis — a contact shadow hugging the seam. The anchor is
+// geometry, not taste: the edge projects to sin(angle)·H along the axis,
+// i.e. sin/(box·cos + sin) of its length (QA 2026-08-18 caught a ~280px
+// solid shadow slab from borrowing the tool nav's 50% anchor — that
+// number is a property of ITS squat aspect). Fixed-px fade tail so the
+// shadow stays a tight edge at any card height.
+const STRIP_ANGLE_RADIANS = (STRIP_ANGLE_DEGREES * Math.PI) / 180
+const STRIP_SEAM_ANCHOR_PERCENT = (
+  (Math.sin(STRIP_ANGLE_RADIANS)
+    / (STRIP_BOX_RATIO * Math.cos(STRIP_ANGLE_RADIANS) + Math.sin(STRIP_ANGLE_RADIANS))) * 100
+).toFixed(2)
+const STRIP_SEAM_SHADOW = `linear-gradient(${90 + STRIP_ANGLE_DEGREES}deg, rgba(0, 0, 0, 0.55) ${STRIP_SEAM_ANCHOR_PERCENT}%, transparent calc(${STRIP_SEAM_ANCHOR_PERCENT}% + 72px))`
 
 // Strip card — a real component (not a render helper) because the focal
 // bias is a hook (decision 36). Greyscale-at-rest lives on the image layer
@@ -91,23 +100,24 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
         type="button"
         aria-label={`View ${char.character_name || 'Unnamed'}`}
         onClick={onSelect}
-        className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer hover:scale-[1.03] hover:z-30 focus-visible:scale-[1.03] focus-visible:z-30"
+        className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer"
         style={{
           width: `${STRIP_BOX_WIDTH_PERCENT}%`,
           clipPath: clip,
           backgroundColor: THEME.bgPanel,
-          transition: isResizing ? 'none' : 'transform 200ms ease-out',
         }}
       >
-        {/* Avatar layer — overlay + seam shadow + image in one background
-            stack. saturate-0 at rest is the strip's greyscale skin; hover
-            restores color (decision 37). Focal bias (decision 36) rides
-            backgroundPosition; absent ⇒ bg-center exactly as before. */}
+        {/* Avatar layer — overlay + image in one background stack.
+            saturate-0 at rest is the strip's greyscale skin; hover
+            restores color (decision 37). THIS is the element the hover
+            zoom scales: the art grows inside the fixed parallelogram
+            frame, so the title, badge, and seams never move. Focal bias
+            (decision 36) rides backgroundPosition; absent ⇒ bg-center. */}
         <div
-          className="absolute inset-0 bg-cover bg-center pointer-events-none saturate-0 group-hover:saturate-100 group-focus-visible:saturate-100"
+          className="absolute inset-0 bg-cover bg-center pointer-events-none saturate-0 group-hover:saturate-100 group-focus-visible:saturate-100 group-hover:scale-[1.05] group-focus-visible:scale-[1.05]"
           style={{
             backgroundImage: backgroundLayers,
-            transition: isResizing ? 'none' : 'filter 200ms ease-out',
+            transition: isResizing ? 'none' : 'filter 200ms ease-out, transform 200ms ease-out',
             ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
           }}
         />
@@ -128,16 +138,15 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
         {/* Name only (decision 37) — no meta line, no backplate. Bare text
             first per the plan; QA fallback is a whisper of text-shadow or
             a thin top scrim, never the band. Left offset clears the top
-            edge's slant start (55.45%); right offset leaves the badge
-            room when present. */}
+            edge's slant start (derived from the strip angle); right offset
+            leaves the badge room when present. */}
+        {/* The title lives beside the scaling image layer, not inside it —
+            it cannot move or resize during the hover zoom. */}
         <h3
-          className="absolute text-xl font-[family-name:var(--font-metamorphous)] truncate text-left"
+          className="absolute text-2xl font-[family-name:var(--font-metamorphous)] truncate text-left"
           style={{
-            // 1.5% = the exact top shave the 1.03 hover scale takes under
-            // the row's overflow-y clip — the name stays fully in view
-            // hovered or not, at any card height.
-            top: 'calc(1.5% + 0.9rem)',
-            left: '57%',
+            top: '2rem',
+            left: `calc(${STRIP_TOP_INSET_PERCENT}% + 1rem)`,
             right: char.active_game ? '7.5rem' : '1rem',
             color: THEME.textOnDark,
           }}
@@ -146,7 +155,7 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
         </h3>
 
         {char.active_game && (
-          <div className="absolute right-3 z-10" style={{ top: 'calc(1.5% + 0.75rem)' }}>
+          <div className="absolute top-3 right-3 z-10">
             <span
               className="px-3 py-1.5 text-sm font-semibold rounded-sm border flex items-center gap-1.5"
               style={{ backgroundColor: '#16a34a', borderColor: '#22c55e', color: 'white' }}
@@ -454,7 +463,7 @@ export default function CharacterManager({
   // 16/9 so the aspect genuinely holds — width clamps alone would win over
   // aspect-ratio on very tall rows, skewing the parallelogram geometry the
   // clip/gradient constants are derived from. The card BOX inside each
-  // shell is 224.48% of this width (STRIP_BOX_WIDTH_PERCENT).
+  // shell is STRIP_BOX_WIDTH_PERCENT of this width (angle-derived).
   // No max clamps: the full-bleed strip means cards genuinely fill the tab
   // height (the old 600/1067 maxes left a dead band under the strip).
   // Minimums stay so tiny viewports keep usable cards.
@@ -476,17 +485,16 @@ export default function CharacterManager({
         type="button"
         aria-label="Create New Character"
         onClick={() => router.push('/character/create')}
-        className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer hover:scale-[1.03] hover:z-30 focus-visible:scale-[1.03] focus-visible:z-30"
+        className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer"
         style={{
           width: `${STRIP_BOX_WIDTH_PERCENT}%`,
           // Square-capped when it leads the strip (zero characters) —
           // same no-left-neighbour rule as the first character card.
           clipPath: characters.length === 0 ? STRIP_FIRST_CLIP : STRIP_SLANT_CLIP,
           backgroundColor: `${THEME.bgPanel}40`, // 25% opacity knocked-out skin
-          transition: isResizing ? 'none' : 'transform 200ms ease-out',
         }}
       >
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 opacity-50 group-hover:opacity-80 transition-opacity duration-200">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 opacity-50 group-hover:opacity-80 group-hover:scale-[1.05] group-focus-visible:scale-[1.05] transition-[opacity,transform] duration-200">
           <FontAwesomeIcon
             icon={faPlus}
             className="text-7xl mb-4"
@@ -605,13 +613,13 @@ export default function CharacterManager({
         {!loading && !error && (
           <div
             ref={scrollRowRef}
-            className="flex gap-0 overflow-x-auto overflow-y-hidden h-full items-stretch"
+            className="character-index-strip flex gap-0 overflow-x-auto overflow-y-hidden h-full items-stretch"
             style={{
               // No padding at all: cards permanently fill the full-bleed
-              // tab (the strip IS the page). overflow-y-hidden clips the
-              // hover pop at the strip's bounds — the scaled card zooms in
-              // place and structurally cannot paint over the nav.
-              scrollbarWidth: 'thin',
+              // tab (the strip IS the page). Hover zooms the ART inside
+              // each fixed parallelogram (frames never move); overflow-y
+              // hidden stays as the structural guard against anything
+              // painting over the nav.
               WebkitOverflowScrolling: 'touch',
               opacity: selectedCharacter ? 0 : 1,
               pointerEvents: selectedCharacter ? 'none' : 'auto',
