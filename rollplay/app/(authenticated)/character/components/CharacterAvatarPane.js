@@ -9,7 +9,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons'
 import { faCropSimple } from '@fortawesome/free-solid-svg-icons'
 
-import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
+import { useAvatarImage } from '@/app/shared/hooks/useAvatarImage'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 // Same wedge-clip visual language as the workshop tool buttons + campaign-
@@ -19,8 +19,6 @@ import { THEME, COLORS } from '@/app/styles/colorTheme'
 const WEDGE_CLIP = 'polygon(0 0, 100% 0, 80% 100%, 0 100%)'
 const WEDGE_INNER_SHADOW =
   'linear-gradient(105deg, transparent 60%, rgba(0, 0, 0, 0.55) 78%)'
-
-const DEFAULT_AVATAR = '/heroes.png'
 
 /**
  * Avatar pane — presentational + opens the picker modal on click.
@@ -32,6 +30,9 @@ const DEFAULT_AVATAR = '/heroes.png'
  *
  * Props:
  * - ``avatarUrl`` — presigned GET URL for the linked asset, or null for the default
+ * - ``avatarAssetId`` — the asset's stable id; keys the blob cache so a
+ *   re-signed URL doesn't re-download an unchanged portrait. Null is safe
+ *   (falls back to caching by URL, i.e. the old behaviour).
  * - ``isBusy`` — drives the dimmed/non-interactive state during the PATCH
  * - ``error`` — string from the wizard's mutation state
  * - ``onOpenPicker()`` — wizard handler that opens the avatar picker modal
@@ -42,6 +43,7 @@ const DEFAULT_AVATAR = '/heroes.png'
  */
 export default function CharacterAvatarPane({
   avatarUrl,
+  avatarAssetId = null,
   focalArea = null,
   isBusy = false,
   error = null,
@@ -49,11 +51,16 @@ export default function CharacterAvatarPane({
   onAdjustCrop = null,
   readOnly = false,
 }) {
-  const displayUrl = avatarUrl || DEFAULT_AVATAR
-  // Bias the cover-fit toward the avatar's token focal square (decision
-  // 36). Undefined (no area / probe pending / default hero image) leaves
-  // the bg-center class in charge — the pre-crop rendering.
-  const focalPosition = useImageFocalPosition(avatarUrl, focalArea)
+  // Blob-cached by asset id, so re-signing the URL doesn't re-download the
+  // portrait. Also biases the cover-fit toward the avatar's token focal
+  // square (decision 36); undefined focalPosition (no area / probe pending /
+  // default hero image) leaves the bg-center class in charge — the pre-crop
+  // rendering.
+  const { imageUrl: displayUrl, focalPosition } = useAvatarImage(
+    avatarUrl,
+    avatarAssetId,
+    focalArea
+  )
 
   return (
     // ``group`` sits on the aside (not the button) so the wedge image — a

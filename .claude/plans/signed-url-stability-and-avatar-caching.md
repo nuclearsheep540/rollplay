@@ -1,6 +1,7 @@
 # Avatar Asset Caching + Signed URL Stability
 
 > **Status:** PLANNED (investigated and designed with Matt, 2026-08-19). **Not started.** Deferred to its own PR.
+> **Update 2026-08-19 (post-plan verification):** §9.1 and §9.6 are **resolved** — see those sections. `MapImageEditor.js` was dead code and has been **deleted**; the `CharacterAvatarPane` call sites are **three**, all with `avatar_asset_id` already on the wire.
 > **Trigger:** avatars in the campaign drawer's party list visibly reload when a session is started or paused.
 > **Written for a fresh context window** — everything needed is in this file. No other plan is a prerequisite.
 
@@ -73,6 +74,13 @@ This is the section that settled the design. Every S3-backed media surface in th
 
 **Four non-conforming surfaces, and they are all the same media type: character avatars.**
 
+*Verified 2026-08-19.* Two footnotes on the table's completeness, neither of which weakens it:
+
+- `MapImageEditor.js` was checked as a possible fifth entry (§9.1) and turned out to be **dead code** — deleted. It is not in the table because it never rendered.
+- The table covers *rendering* surfaces. One **probe-style** raw-URL usage exists outside it: `ImageDimensions` in `game/components/MapControlsPanel.js:42` sets `img.src = activeMap.map_config.file_path` to read natural dimensions. It does not have the churn problem (`file_path` comes from game state, stable within a page session) and it renders nothing. **Out of scope — noted so the next audit doesn't rediscover it as a finding.**
+
+Note also that **`CharacterManager.js` hosts two of the four surfaces** — the strip card wedge (`:82`, `:90`) and the expanded `CharacterAvatarPane` (`:587`). Convenient for PR 1: one file, two conversions.
+
 Avatars shipped in release 0.61.0 (tokens v3, "Character Token Avatars"), days before this investigation. Every earlier media type was wired through the manager. Avatars skipped it because they were new and the payloads were shaped before avatars existed — the campaign drawer originally rendered `/heroes.png` for everyone, with a code comment saying *"Swap `/heroes.png` for a per-character portrait once character image uploads exist."*
 
 ### The precedent that proves this is conformance
@@ -144,7 +152,15 @@ See §2. The audit is the argument. An intermediate claim that "C is borrowing a
 
 Matt favoured a reusable `AvatarWedge`. With four surfaces the extraction is justified, **but the wedge geometry is not shared**: `CharacterAvatarPane` uses `WEDGE_INNER_SHADOW` and a different shape from the three card wedges.
 
-So the reusable unit is a **hook** mirroring `useHeroImage` — blob URL + focal position + ready state — used by all four. An `AvatarWedge` component can sit on top for the three card surfaces that genuinely share geometry. Decide the component's exact shape with the code in front of you; the hook is the part that is certain.
+So the reusable unit is a **hook** mirroring `useHeroImage` — blob URL + focal position + ready state — used by all four. An `AvatarWedge` component can sit on top for the card surfaces that genuinely share geometry. Decide the component's exact shape with the code in front of you; the hook is the part that is certain.
+
+**RESOLVED at implementation, 2026-08-19 — it is two surfaces, not three.** With the code side by side:
+
+- `PartyMemberCard` and `CharacterChoiceCard` were **byte-identical**, explanatory comments included (`width: 42%`, `polygon(33% 0, 100% 0, 100% 100%, 0 100%)`, the same 105° scrim). The modal's own comment already said *"same diagonal as the campaign party cards"*. Extracted → `dashboard/components/shared/AvatarWedge.js`.
+- `CharacterStripCard` does **not** share it — it is a parallelogram (`STRIP_SLANT_CLIP` / `STRIP_FIRST_CLIP`) clipped on the *button*, with a flat two-stop overlay rather than the diagonal scrim, plus greyscale-at-rest, hover-zoom, and an `isResizing` transition guard. It uses the hook directly.
+- `CharacterAvatarPane` likewise keeps its own `WEDGE_CLIP` / `WEDGE_INNER_SHADOW` full-pane shape.
+
+So the split is exactly as §4.4 predicted in kind — hook is the shared unit, component sits on top only where the shape repeats — just across **2 of 4** surfaces rather than 3.
 
 ---
 
@@ -179,9 +195,19 @@ Two things this must get right, both load-bearing:
 | `PartyMemberCard` (CampaignManager) | new `character_avatar_asset_id` | **yes** |
 | `CharacterStripCard` (CharacterManager) | `char.avatar_asset_id` | no |
 | `CharacterChoiceCard` (CharacterSelectionModal) | `char.avatar_asset_id` | no |
-| `CharacterAvatarPane` | needs `avatar_asset_id` passed in by callers | no (already on `CharacterResponse`) |
+| `CharacterAvatarPane` | `avatar_asset_id` passed in by its **three** callers (enumerated below) | no (already on `CharacterResponse`) |
 
-`CharacterAvatarPane` currently receives only `avatarUrl` as a prop; its call sites will need to pass the asset id through. Check all of them — the wizard, the drawer and the character sheet.
+`CharacterAvatarPane` currently receives only `avatarUrl` as a prop; its call sites need to pass the asset id through. **Audited 2026-08-19 — there are exactly three, and all three already have `avatar_asset_id` on the wire:**
+
+| # | Call site | Data source | Threading |
+|---|---|---|---|
+| 1 | `CharacterWizard.js:435` → `WizardChrome.js:211` → pane | `draft` (draft / finalize routes) | **2 hops** — needs a new prop on `WizardChrome` |
+| 2 | `(authenticated)/character/[id]/page.js:70` | `useCharacterDraft(id)` → `GET /api/characters/{id}` | 1 hop — direct |
+| 3 | `dashboard/components/CharacterManager.js:587` | `useCharacters` → `GET /api/characters/me` | 1 hop — direct |
+
+Every character route declares `response_model=CharacterResponse`, and `_to_character_response` populates the field at `characters/api/endpoints.py:250` (`avatar_asset_id=character.avatar_asset_id`). **So no backend change for any of the three.**
+
+The wizard is the only one needing real threading, and it is the easy case: `CharacterWizard` already reads `draft?.avatar_asset_id` at `:337` and `:440` for the crop flow, so it is a one-line prop add in the same JSX block that already passes `avatarUrl`.
 
 ### 5.2 — A: bucketed expiry (api-site only, separate PR)
 
@@ -212,10 +238,12 @@ expires_at = bucket_start + timedelta(seconds=ttl)
 
 | PR | Contents | Notes |
 |---|---|---|
-| **1 — Avatar asset caching (C)** | §5.1: `character_avatar_asset_id` on the member payload; `useAvatarImage` hook; four surfaces converted; optional `AvatarWedge` for the three card wedges. **Fixes the reported bug.** | api-site + frontend. No migration, no shared-contract change. |
-| **2 — Bucketed signed URLs (A)** | §5.2: bucketed expiry + config knob. **Performance, not a bug fix.** | api-site only, but touches every media surface in the app. Needs the §5.2 sign-off. |
+| **1 — Avatar asset caching (C)** | §5.1: `character_avatar_asset_id` on the member payload; `useAvatarImage` hook; four surfaces converted; `AvatarWedge` for the two identical card wedges. **Fixes the reported bug.** ✅ **IMPLEMENTED 2026-08-19 — awaiting QA.** | api-site + frontend. No migration, no shared-contract change. |
+| **2 — Bucketed signed URLs (A)** | §5.2: bucketed expiry + config knob. **Performance, not a bug fix.** ⏸️ **PARKED 2026-08-19 — Matt's call, see below.** | api-site only, but touches every media surface in the app. Needs the §5.2 sign-off. |
 
 No ordering dependency — either can go first.
+
+**Already landed on the `avatar-asset-cache` branch, ahead of PR 1:** deletion of the dead `map_management/components/MapImageEditor.js` (§9.1). Unrelated to the fix itself — it rode along because the audit is what proved it dead.
 
 ---
 
@@ -228,6 +256,28 @@ No ordering dependency — either can go first.
 - **No `S3Image` adoption on these surfaces** — it renders an `<img>` and the wedges need `background-image`. `useHeroImage` is the right precedent, not `S3Image`.
 
 ---
+
+## 7b. What was actually built (PR 1, 2026-08-19)
+
+| File | Change |
+|---|---|
+| `campaign/application/queries.py` | `character_avatar_asset_id` on the member dict, guarded on `avatar_asset` so it stays in lockstep with the s3-key and focal-area fields |
+| `campaign/api/schemas.py` | same field on `CampaignMemberResponse` |
+| `shared/hooks/useAvatarImage.js` | **new** — the shared unit; also the single home for `DEFAULT_AVATAR` |
+| `dashboard/components/shared/AvatarWedge.js` | **new** — the wedge shared by the two identical card surfaces |
+| `dashboard/components/CampaignManager.js` | `PartyMemberCard` → `AvatarWedge` |
+| `dashboard/components/CharacterSelectionModal.js` | `CharacterChoiceCard` → `AvatarWedge` |
+| `dashboard/components/CharacterManager.js` | `CharacterStripCard` → hook directly; pane call site threads the id |
+| `character/components/CharacterAvatarPane.js` | new `avatarAssetId` prop; uses the hook |
+| `character/components/CharacterWizard.js` + `wizard/WizardChrome.js` | id threaded through the one intermediate component |
+| `character/[id]/page.js` | pane call site threads the id |
+
+**Pre-QA verification already done:**
+- `next lint` on all ten touched files — no new warnings (the ones it reports are pre-existing `exhaustive-deps` in unrelated code).
+- Backend probed in `api-site-dev` against real data: a character with an avatar returns `asset_id`, `focal_area` and a signed `url` together, and the dict validates cleanly through `CampaignMemberResponse`.
+- **Dev CDN CORS probed** (`d3prsa4h53bww8`): `ACAO: *` for localhost, 127.0.0.1 and no-Origin, on both cache hits and misses. This is the §9.3 risk — it is clear on dev, so the blob fetch will succeed and caching will genuinely engage rather than silently falling back to raw URLs.
+
+`/heroes.png` had been duplicated as a literal across all four surfaces; it now exists once, in the hook.
 
 ## 8. Verification
 
@@ -250,7 +300,7 @@ No ordering dependency — either can go first.
 
 ## 9. Open items / risks
 
-1. **`MapImageEditor.js` may be a fifth non-conforming surface.** It puts `activeMap.map_config.file_path` straight into a `backgroundImage`. That may be deliberate for an editor preview, or it may be a gap. **Unverified — check before assuming either way.**
+1. ~~**`MapImageEditor.js` may be a fifth non-conforming surface.**~~ **RESOLVED 2026-08-19 — it was dead code, and has been deleted.** Repo-wide grep found only its own `const MapImageEditor = ...` and `export default` — no import anywhere, no `next/dynamic` or `React.lazy` in the slice, and it was absent from `map_management/index.js`. It imported nothing but React, so the deletion orphans nothing. Last touched in `94efec6` (#124). `.claude/plans/tokens/01-token-system.md:60` had already recorded it as dead; this confirms it. **It is not a fifth surface — the §2 conclusion stands unweakened.**
 
 2. **Blob cache growth.** No eviction, so every avatar viewed is retained for the page session. Small individually, unbounded across heavy dashboard browsing. It shares the pool the game preloader uses, so it inflates `cachedCount`/`cachedSize` — invisible on the dashboard, but the same budget.
 
@@ -260,4 +310,4 @@ No ordering dependency — either can go first.
 
 5. **Page reload is unaffected by C.** The blob cache is in-memory. That gap is exactly what A closes — the argument for eventually doing both.
 
-6. **`CharacterAvatarPane` call sites** need auditing to pass the asset id through; it currently takes only `avatarUrl`.
+6. ~~**`CharacterAvatarPane` call sites** need auditing to pass the asset id through.~~ **RESOLVED 2026-08-19 — audited; three call sites, enumerated in §5.1.** All three already carry `avatar_asset_id` (every character route returns `CharacterResponse`, which populates it), so **no backend change**. Only the wizard needs prop-threading, through one intermediate component. Nothing hidden, no dynamic call sites.

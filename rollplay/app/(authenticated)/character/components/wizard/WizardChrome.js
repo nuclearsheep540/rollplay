@@ -183,6 +183,7 @@ export default function WizardChrome({
   characterSubtitle,
   onRename,
   avatarUrl,
+  avatarAssetId,
   avatarFocalArea,
   avatarIsBusy,
   avatarError,
@@ -209,6 +210,7 @@ export default function WizardChrome({
       <div className="shrink-0" style={{ width: '33vw' }}>
         <CharacterAvatarPane
           avatarUrl={avatarUrl}
+          avatarAssetId={avatarAssetId}
           focalArea={avatarFocalArea}
           isBusy={avatarIsBusy}
           error={avatarError}

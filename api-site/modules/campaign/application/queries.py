@@ -143,6 +143,17 @@ class GetCampaignMembers:
                     (getattr(character.avatar_asset, "focal_areas", None) or {}).get("token")
                     if character and character.avatar_asset else None
                 ),
+                # Stable cache key for the frontend's AssetDownloadManager. The
+                # presigned URL above is re-signed on every request, so it can't
+                # identify the image across refetches - the asset id can, which
+                # is what stops the party wedge re-downloading an unchanged
+                # avatar. Guarded on avatar_asset (not the raw FK column) so
+                # this stays in lockstep with the two fields above: either all
+                # three describe an avatar, or all three are None.
+                'character_avatar_asset_id': (
+                    str(character.avatar_asset_id)
+                    if character and character.avatar_asset else None
+                ),
                 'is_host': role == CampaignRole.DM
             })
 

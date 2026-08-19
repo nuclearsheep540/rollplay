@@ -13,7 +13,7 @@ import Modal from '@/app/shared/components/Modal'
 import { Button } from './shared/Button'
 import { useSelectCharacter } from '../hooks/mutations/useCharacterMutations'
 import { characterMetaLine } from '../utils/characterMeta'
-import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
+import { AvatarWedge } from './shared/AvatarWedge'
 
 /**
  * One selectable character row. A component rather than inline JSX because
@@ -21,10 +21,6 @@ import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
  * run inside the list's map.
  */
 function CharacterChoiceCard({ char, isSelected, onSelect }) {
-  // Bias only a real avatar: /heroes.png has no focal area, and the hook
-  // returns undefined without one, so the bg-center class stands unchanged.
-  const focalPosition = useImageFocalPosition(char.avatar_url, char.avatar_focal_area)
-
   return (
     <div
       onClick={onSelect}
@@ -34,19 +30,12 @@ function CharacterChoiceCard({ char, isSelected, onSelect }) {
           : 'border-border bg-surface-secondary'
       }`}
     >
-      {/* Avatar wedge - same diagonal as the campaign party cards */}
-      <div
-        aria-hidden="true"
-        className="absolute top-0 bottom-0 right-0 pointer-events-none bg-cover bg-center"
-        style={{
-          width: '42%',
-          clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
-          backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('${char.avatar_url || '/heroes.png'}')`,
-          // backgroundPosition applies to every layer, but the gradient has
-          // no intrinsic size — `cover` fits it exactly to the box, so no
-          // position can shift it. Only the portrait moves.
-          ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
-        }}
+      {/* Avatar wedge - same diagonal as the campaign party cards, and now
+          literally the same component. */}
+      <AvatarWedge
+        avatarUrl={char.avatar_url}
+        avatarAssetId={char.avatar_asset_id}
+        focalArea={char.avatar_focal_area}
       />
 
       <div className="relative z-10 max-w-[62%] p-4">
