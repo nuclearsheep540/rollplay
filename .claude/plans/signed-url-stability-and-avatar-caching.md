@@ -1,7 +1,6 @@
 # Avatar Asset Caching + Signed URL Stability
 
-> **Status:** PLANNED (investigated and designed with Matt, 2026-08-19). **Not started.** Deferred to its own PR.
-> **Update 2026-08-19 (post-plan verification):** §9.1 and §9.6 are **resolved** — see those sections. `MapImageEditor.js` was dead code and has been **deleted**; the `CharacterAvatarPane` call sites are **three**, all with `avatar_asset_id` already on the wire.
+> **Status (2026-08-19):** **PR 1 (C) IMPLEMENTED AND QA-PASSED — the reported bug is fixed.** PR 2 (A) is **PARKED** by Matt's decision; see the note at the end of §6. Risks §9.1 and §9.6 are **resolved**. `MapImageEditor.js` was dead code and has been deleted. What was actually built is listed in §7b.
 > **Trigger:** avatars in the campaign drawer's party list visibly reload when a session is started or paused.
 > **Written for a fresh context window** — everything needed is in this file. No other plan is a prerequisite.
 
@@ -244,6 +243,18 @@ expires_at = bucket_start + timedelta(seconds=ttl)
 No ordering dependency — either can go first.
 
 **Already landed on the `avatar-asset-cache` branch, ahead of PR 1:** deletion of the dead `map_management/components/MapImageEditor.js` (§9.1). Unrelated to the fix itself — it rode along because the audit is what proved it dead.
+
+### PR 2 parked (2026-08-19)
+
+PR 1 shipped and **passed QA — the reported bug is fixed.** Matt's call to park A there.
+
+The reasoning, so it is not re-litigated a fourth time (§4.2 already records three swings):
+
+- **A is not conformance, and this was verified, not assumed.** `generate_download_url` is the app's *only* download-signing path, and nothing anywhere buckets expiry today. So A would be a genuinely new behaviour on that path — it does **not** inherit the "every other media surface already does this" argument that justified C. Applying uniformly to all seven call sites is a property of the change, not evidence of precedent.
+- **A's win is speculative; C's was reported.** The avatar reload came from actual use. Nobody has complained about reload-time cost, and with C shipped the observed symptom is gone.
+- **A carries its own costs:** a per-window boundary where the flicker briefly returns (uncorrelated with user action, hence arguably worse to live with than a reproducible bug), and identical URLs across users inside a window.
+
+**Revisit when there is something concrete to measure** — most likely repeat-visit cost in the game's gate preload, not the dashboard. The §5.2 design and the §8 seven-call-site test plan stand as written; only the trigger is missing. The §5.2 sign-off has **not** been given.
 
 ---
 
