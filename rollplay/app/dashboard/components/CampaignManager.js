@@ -47,7 +47,7 @@ import { useCreateSession, useStartSession, usePauseSession, useFinishSession, u
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
 import { useAssets } from '@/app/asset_library/hooks/useAssets'
 import { useCampaignAssetsMetadata } from '@/app/asset_library/hooks/useCampaignAssetsMetadata'
-import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
+import { AvatarWedge } from './shared/AvatarWedge'
 
 /**
  * Format a byte count into a human-friendly string (B / KB / MB / GB).
@@ -167,13 +167,6 @@ function PartyMemberCard({
   onRelease,
   releaseDisabled,
 }) {
-  // Bias only a real avatar: /heroes.png has no focal area, and the hook
-  // returns undefined without one, so the bg-center class stands unchanged.
-  const focalPosition = useImageFocalPosition(
-    member.character_avatar_url,
-    member.character_avatar_focal_area
-  )
-
   return (
     <div
       onClick={canSelectCharacter ? onSelect : undefined}
@@ -183,26 +176,13 @@ function PartyMemberCard({
         borderColor: canSelectCharacter && !member.character_id ? THEME.borderActive : THEME.borderSubtle,
       }}
     >
-      {/* Hero-image wedge — angled reveal of the character portrait on the
-          card's right side, with a dark gradient perpendicular to the slope
-          so the text on the left stays readable. Same pattern as the
-          workshop tool cards. */}
-      <div
-        aria-hidden="true"
-        className="absolute top-0 bottom-0 right-0 pointer-events-none bg-cover bg-center"
-        style={{
-          // Div wraps just the wedge's bounding box (right 42 % of the card)
-          // so `bg-cover` fits the character image to the wedge region
-          // instead of the whole card. Clip-path coords + gradient stops
-          // re-expressed in this local frame.
-          width: '42%',
-          clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
-          backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('${member.character_avatar_url || '/heroes.png'}')`,
-          // backgroundPosition applies to every layer, but the gradient has
-          // no intrinsic size — `cover` fits it exactly to the box, so no
-          // position can shift it. Only the portrait moves.
-          ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
-        }}
+      {/* Hero-image wedge. Keyed on the asset id, so a campaigns refetch
+          (session start/pause/finish, invite, remove player) re-signs the
+          URL without the browser re-downloading an unchanged portrait. */}
+      <AvatarWedge
+        avatarUrl={member.character_avatar_url}
+        avatarAssetId={member.character_avatar_asset_id}
+        focalArea={member.character_avatar_focal_area}
       />
       <PlayerCardAction
         isDm={member.is_host}

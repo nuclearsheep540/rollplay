@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { authFetch } from '@/app/shared/utils/authFetch'
-import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
+import { useAvatarImage } from '@/app/shared/hooks/useAvatarImage'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -79,7 +79,15 @@ const STRIP_SEAM_SHADOW = `linear-gradient(${90 + STRIP_ANGLE_DEGREES}deg, rgba(
 // bias is a hook (decision 36). Greyscale-at-rest lives on the image layer
 // only, so the name and In Game badge stay crisp while the art desaturates.
 function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = false }) {
-  const focalPosition = useImageFocalPosition(char.avatar_url, char.avatar_focal_area)
+  // Blob-cached by asset id rather than the presigned URL, so the strip
+  // survives a characters refetch without re-downloading. Geometry here is a
+  // parallelogram with a flat overlay, so this uses the hook directly rather
+  // than the AvatarWedge the party/choice cards share.
+  const { imageUrl, focalPosition } = useAvatarImage(
+    char.avatar_url,
+    char.avatar_asset_id,
+    char.avatar_focal_area
+  )
   // Readability overlay — much lighter over a real avatar so the portrait
   // stays visible; heavier over the default hero placeholder.
   const overlay = char.avatar_url ? `${COLORS.onyx}26` : `${COLORS.onyx}80`
@@ -87,7 +95,7 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
   // layer below simply isn't rendered for it — the gradient exists to hug
   // the left diagonal, which this card lacks).
   const clip = isFirst ? STRIP_FIRST_CLIP : STRIP_SLANT_CLIP
-  const backgroundLayers = `linear-gradient(${overlay}, ${overlay}), url(${char.avatar_url || '/heroes.png'})`
+  const backgroundLayers = `linear-gradient(${overlay}, ${overlay}), url(${imageUrl})`
 
   return (
     // pointer-events-none: shells are transparent layout rectangles that
@@ -584,7 +592,12 @@ export default function CharacterManager({
           height: '100%',
         }}
       >
-        <CharacterAvatarPane avatarUrl={char.avatar_url} focalArea={char.avatar_focal_area} readOnly />
+        <CharacterAvatarPane
+          avatarUrl={char.avatar_url}
+          avatarAssetId={char.avatar_asset_id}
+          focalArea={char.avatar_focal_area}
+          readOnly
+        />
 
         {char.active_game && (
           <div className="absolute top-4 right-8 z-10">

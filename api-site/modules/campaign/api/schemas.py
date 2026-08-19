@@ -60,6 +60,10 @@ class CampaignMemberResponse(BaseModel):
     # The avatar image's "token" focal square (tokens v3, decision 36) — biases
     # the party card's cover-fit so a portrait keeps its face in the wedge.
     character_avatar_focal_area: Optional[Dict[str, float]] = None
+    # Stable identity for the avatar image, unlike the re-signed URL above.
+    # The frontend keys its blob cache on this so a campaigns refetch doesn't
+    # re-download an avatar that hasn't changed.
+    character_avatar_asset_id: Optional[str] = None
     is_host: bool = False  # Kept for frontend backward compat (true when role=dm)
 
 
