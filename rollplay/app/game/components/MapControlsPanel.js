@@ -194,11 +194,21 @@ export default function MapControlsPanel({
    */
   const toggleGrid = async () => {
     if (!activeMap || !savedGridConfig) return;
-    const nextEnabled = !gridIsOn;
-    if (grid) grid.setGridEnabled(nextEnabled);
-    // Persist the new value explicitly rather than via effectiveGridConfig:
-    // setState has not landed yet, so that object still holds the old flag.
-    await applyGridConfig({ ...savedGridConfig, enabled: nextEnabled });
+    // Deliberately does NOT touch grid.gridEnabled — the saved map is the only
+    // source of truth. On success applyGridConfig calls setActiveMap, which
+    // re-runs GameContent's initFromConfig effect and re-hydrates the hook from
+    // the authoritative value, so an optimistic write here buys nothing.
+    //
+    // It would also cost something real: on a FAILED save the optimistic value
+    // survives while the map keeps the old one, and effectiveGridConfig — which
+    // is what "Apply Grid Changes" sends — would then carry an `enabled` the DM
+    // never chose. The switch reads the saved map, so it would show the correct
+    // state the whole time, and the ETL would persist the wrong flag to cold
+    // storage at session end.
+    //
+    // Sent explicitly rather than via effectiveGridConfig for the same reason:
+    // that object reflects hook state, and this write is about the saved map.
+    await applyGridConfig({ ...savedGridConfig, enabled: !gridIsOn });
   };
 
   /**

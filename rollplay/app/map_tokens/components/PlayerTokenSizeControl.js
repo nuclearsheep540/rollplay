@@ -3,12 +3,19 @@
 
 'use client'
 
+import { useEffect, useRef } from 'react';
+
 import {
   PC_TOKEN_SCALE_DEFAULT,
   PC_TOKEN_SCALE_MAX,
   PC_TOKEN_SCALE_MIN,
   gridIsUsable,
 } from '../config';
+
+// Quiet period after the last value change before the save fires. Long enough
+// to swallow keyboard auto-repeat, short enough that letting go and looking
+// away still saves before you have moved on.
+const SAVE_DEBOUNCE_MS = 400;
 
 /**
  * PlayerTokenSizeControl — the map's player-token size (tokens v4).
@@ -24,9 +31,24 @@ import {
  * Owns its own persist path deliberately — it writes one map_config field and
  * never touches grid_config. Keeping token art and map geometry on separate
  * write paths is the point of the v4 redesign (see plans/tokens/04 §0).
+ *
+ * Saving is debounced, and that matters more than it looks: each save is a
+ * MongoDB write plus a map broadcast to every client in the room. Firing one
+ * per keypress meant holding an arrow key spammed the whole table.
  */
 export default function PlayerTokenSizeControl({ roomId, activeMap, setActiveMap }) {
-  if (!activeMap) return null;
+  // Hooks first — the early return below cannot sit above them.
+  const pendingScaleRef = useRef(null);
+  const saveTimerRef = useRef(null);
+  // Refreshed every render so the unmount cleanup never calls a stale closure
+  // (it would otherwise save against a long-dead activeMap).
+  const commitPendingRef = useRef(() => {});
+
+  // Flush on unmount. Without this the debounce reintroduces the exact bug it
+  // was added to avoid: close the drawer inside the quiet period and the last
+  // adjustment is silently lost — visible locally via the preview, never sent,
+  // and gone at session end when the ETL reads what Mongo actually holds.
+  useEffect(() => () => commitPendingRef.current(), []);
 
   const gridSetsTokenSize = gridIsUsable(activeMap?.map_config?.grid_config || null);
   const scale = activeMap?.map_config?.pc_token_scale ?? PC_TOKEN_SCALE_DEFAULT;
@@ -35,7 +57,7 @@ export default function PlayerTokenSizeControl({ roomId, activeMap, setActiveMap
   // activeMap, so a local update resizes the discs as the slider moves. The
   // broadcast from the PUT lands the same value moments later.
   const previewScale = (nextScale) => {
-    if (!setActiveMap) return;
+    if (!setActiveMap || !activeMap) return;
     setActiveMap({
       ...activeMap,
       map_config: { ...activeMap.map_config, pc_token_scale: nextScale },
@@ -43,6 +65,7 @@ export default function PlayerTokenSizeControl({ roomId, activeMap, setActiveMap
   };
 
   const persistScale = async (nextScale) => {
+    if (!activeMap) return;
     const { _id, ...mapWithoutId } = activeMap;
     const updatedMap = {
       ...mapWithoutId,
@@ -64,6 +87,30 @@ export default function PlayerTokenSizeControl({ roomId, activeMap, setActiveMap
     }
   };
 
+  /** Save whatever is queued, now. Safe to call with nothing pending. */
+  const commitPending = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const scaleToSave = pendingScaleRef.current;
+    if (scaleToSave === null) return;
+    pendingScaleRef.current = null;
+    persistScale(scaleToSave);
+  };
+  commitPendingRef.current = commitPending;
+
+  // Debounced on the VALUE rather than on an input-method event: keyboard has
+  // no equivalent of pointerup, and blur is not it — a DM can arrow the slider
+  // to where they want it and simply stop, never leaving the control.
+  const queueSave = (nextScale) => {
+    pendingScaleRef.current = nextScale;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(commitPending, SAVE_DEBOUNCE_MS);
+  };
+
+  if (!activeMap) return null;
+
   return (
     <div className="ml-4 mb-4">
       <label className="block text-xs text-gray-400 mb-1">
@@ -76,9 +123,14 @@ export default function PlayerTokenSizeControl({ roomId, activeMap, setActiveMap
         step="0.05"
         value={scale}
         disabled={gridSetsTokenSize}
-        onChange={(event) => previewScale(parseFloat(event.target.value))}
-        onPointerUp={(event) => persistScale(parseFloat(event.target.value))}
-        onKeyUp={(event) => persistScale(parseFloat(event.target.value))}
+        onChange={(event) => {
+          const nextScale = parseFloat(event.target.value);
+          previewScale(nextScale);
+          queueSave(nextScale);
+        }}
+        // Mouse has a real "I'm done" moment, so skip the quiet period. No-op
+        // when nothing is queued (a click that never moved the thumb).
+        onPointerUp={commitPending}
         className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider disabled:opacity-40 disabled:cursor-not-allowed"
         aria-label="Player token size"
       />
