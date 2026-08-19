@@ -10,7 +10,6 @@ import { faEyeSlash, faLock } from '@fortawesome/free-solid-svg-icons';
 
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import {
-  DRAG_FRAME_STALENESS_MS,
   DRAG_LERP_FACTOR,
   DRAG_STREAM_INTERVAL_MS,
   FALLBACK_TOKEN_COLOR,
@@ -82,6 +81,16 @@ export default function MapTokenLayer({
   const dragRef = useRef(null);
   // token_id → element, for the remote lerp loop's direct style writes.
   const tokenElementsRef = useRef({});
+  // token_id → { left, top } — where the remote lerp loop currently has each
+  // steered disc. A ref, not effect-local state: it must survive board
+  // commits and other players' grabs, or every disc restarts its chase from
+  // the committed position (the rubber band).
+  const lerpPositionsRef = useRef({});
+  // Latest board, holds and scale for that loop. Assigned during render
+  // rather than in an effect on purpose: React runs every effect *cleanup*
+  // before any effect *body*, so an effect-updated ref would lag one commit
+  // behind and the teardown path would put discs back at stale positions.
+  const lerpInputsRef = useRef(null);
 
   // Track rendered + natural image size (fog wrapper pattern).
   useEffect(() => {
@@ -113,6 +122,12 @@ export default function MapTokenLayer({
   }, [attachTokenLayer, naturalDims.w, naturalDims.h]);
 
   const renderScale = naturalDims.w > 0 ? imgDims.w / naturalDims.w : 0;
+
+  // Feed the remote lerp loop without making it a dependency of the loop.
+  lerpInputsRef.current = { tokens, heldTokens, renderScale };
+  // Coarse on purpose — flips only on the first grab and the last release,
+  // so one player grabbing or releasing never restarts another's steering.
+  const hasRemoteHolds = Object.keys(heldTokens).length > 0;
 
   // Discs scale with the map (they occupy grid cells); the annotations on
   // them (names, nameplates, badges) hold constant SCREEN size by scaling
@@ -333,71 +348,115 @@ export default function MapTokenLayer({
 
   // Remote lerp loop (v1.1 live-drag): while any remote hand holds a token,
   // an rAF loop steers its disc toward the latest relayed frame — direct
-  // style writes on the hot path, zero React re-renders per frame. With no
-  // fresh frame (markers-only sender, or stream gap > staleness) the target
-  // is the committed position, so this also degrades gracefully.
+  // style writes on the hot path, zero React re-renders per frame.
+  //
+  // The dependency list is deliberately coarse. Board commits and other
+  // players' grabs/releases must NOT restart this loop: the old teardown
+  // wrote committed positions over every steered disc, and the restart then
+  // re-seeded from those same values, so any activity elsewhere on the board
+  // yanked an in-flight disc back to its pre-pickup position and sprang it
+  // out again. Everything the loop needs it reads per frame from
+  // lerpInputsRef instead.
   useEffect(() => {
     if (!LIVE_DRAG_STREAMING || !remoteDragFramesRef || !mapAssetId) return;
-    const heldTokenIds = Object.keys(heldTokens);
-    if (!heldTokenIds.length || renderScale <= 0) return;
+    if (!hasRemoteHolds) return;
 
-    const committedByTokenId = {};
-    tokens.forEach((token) => {
-      committedByTokenId[token.id] = { left: token.x * renderScale, top: token.y * renderScale };
-    });
-
-    const lerpPositions = {};
     let frameHandle = null;
 
+    const committedPositions = (boardTokens, scale) => {
+      const committedByTokenId = {};
+      for (const boardToken of boardTokens) {
+        committedByTokenId[boardToken.id] = {
+          left: boardToken.x * scale,
+          top: boardToken.y * scale,
+        };
+      }
+      return committedByTokenId;
+    };
+
+    // Direct mutations bypass React, and a settled token's committed values
+    // usually match React's last render (the diff then skips the write), so
+    // a disc this loop steered has to be put back by hand.
+    const settleToCommitted = (tokenId, committedByTokenId) => {
+      const element = tokenElementsRef.current[tokenId];
+      const committed = committedByTokenId[tokenId];
+      if (element && committed) {
+        element.style.left = `${committed.left}px`;
+        element.style.top = `${committed.top}px`;
+      }
+      delete lerpPositionsRef.current[tokenId];
+      // The frame outlived its release on purpose (it steered the handover);
+      // once the disc has settled it is spent, and leaving it would let it
+      // steer a later grab of the same token.
+      if (remoteDragFramesRef.current[mapAssetId]) {
+        delete remoteDragFramesRef.current[mapAssetId][tokenId];
+      }
+    };
+
     const animate = () => {
-      const nowMs = Date.now();
-      heldTokenIds.forEach((tokenId) => {
+      frameHandle = requestAnimationFrame(animate);
+
+      const { tokens: boardTokens, heldTokens: currentHolds, renderScale: scale } =
+        lerpInputsRef.current;
+      if (!(scale > 0)) return;
+
+      const committedByTokenId = committedPositions(boardTokens, scale);
+
+      // Someone let go while others kept dragging — settle just that disc,
+      // without disturbing the hands still in flight.
+      for (const steeredTokenId of Object.keys(lerpPositionsRef.current)) {
+        if (!currentHolds[steeredTokenId]) {
+          settleToCommitted(steeredTokenId, committedByTokenId);
+        }
+      }
+
+      for (const tokenId of Object.keys(currentHolds)) {
         const element = tokenElementsRef.current[tokenId];
         const committed = committedByTokenId[tokenId];
-        if (!element || !committed) return;
+        if (!element || !committed) continue;
 
+        // Frames have no staleness cutoff by design (see config.js): a gap
+        // means the hand paused, not that it vanished, so keep steering to
+        // the last known position. Hold expiry resolves a hand gone dark.
+        // No frame at all (markers-only sender) still degrades to committed.
         const frame = remoteDragFramesRef.current[mapAssetId]?.[tokenId];
-        const frameFresh = frame && nowMs - frame.atMs <= DRAG_FRAME_STALENESS_MS;
-        const target = frameFresh
-          ? { left: frame.x * renderScale, top: frame.y * renderScale }
+        const target = frame
+          ? { left: frame.x * scale, top: frame.y * scale }
           : committed;
 
-        // Seed from the element's current inline style so effect restarts
-        // (board commits elsewhere) don't visibly snap the disc.
-        let current = lerpPositions[tokenId];
+        // Seed from the element's current inline style so a disc that starts
+        // being steered mid-flight continues from where it already is.
+        let current = lerpPositionsRef.current[tokenId];
         if (!current) {
           const styleLeft = parseFloat(element.style.left);
           const styleTop = parseFloat(element.style.top);
           current = Number.isFinite(styleLeft) && Number.isFinite(styleTop)
             ? { left: styleLeft, top: styleTop }
             : { ...committed };
-          lerpPositions[tokenId] = current;
+          lerpPositionsRef.current[tokenId] = current;
         }
 
         current.left += (target.left - current.left) * DRAG_LERP_FACTOR;
         current.top += (target.top - current.top) * DRAG_LERP_FACTOR;
         element.style.left = `${current.left}px`;
         element.style.top = `${current.top}px`;
-      });
-      frameHandle = requestAnimationFrame(animate);
+      }
     };
     frameHandle = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(frameHandle);
-      // Direct mutations bypass React; on release the committed values may
-      // match React's last-rendered ones (diff skips the write), so put the
-      // steered discs back by hand.
-      heldTokenIds.forEach((tokenId) => {
-        const element = tokenElementsRef.current[tokenId];
-        const committed = committedByTokenId[tokenId];
-        if (element && committed) {
-          element.style.left = `${committed.left}px`;
-          element.style.top = `${committed.top}px`;
+      // Loop stopping for real — last hold released, map switched, unmount.
+      const { tokens: boardTokens, renderScale: scale } = lerpInputsRef.current;
+      if (scale > 0) {
+        const committedByTokenId = committedPositions(boardTokens, scale);
+        for (const steeredTokenId of Object.keys(lerpPositionsRef.current)) {
+          settleToCommitted(steeredTokenId, committedByTokenId);
         }
-      });
+      }
+      lerpPositionsRef.current = {};
     };
-  }, [heldTokens, tokens, renderScale, remoteDragFramesRef, mapAssetId]);
+  }, [hasRemoteHolds, remoteDragFramesRef, mapAssetId]);
 
 
   return (

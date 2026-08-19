@@ -85,6 +85,13 @@ export const useMapTokens = ({
   const applyRemoteDrag = useCallback(({ tokenId, assetId, phase, holderUserId, x, y }) => {
     if (!assetId) return;
     if (phase === 'grab') {
+      // A new hand starts clean. Frames outlive their drag by design (they
+      // steer the disc until the committed position catches up), so a leftover
+      // from a previous drag — one whose release relay the server suppressed,
+      // or that ended while we were disconnected — must not steer this one.
+      if (remoteDragFramesRef.current[assetId]) {
+        delete remoteDragFramesRef.current[assetId][tokenId];
+      }
       setHeldTokens((previousHolds) => ({
         ...previousHolds,
         [assetId]: {
@@ -104,8 +111,30 @@ export const useMapTokens = ({
         remoteDragFramesRef.current[assetId][tokenId] = { x, y, atMs: Date.now() };
       }
     } else if (phase === 'release') {
-      if (remoteDragFramesRef.current[assetId]) {
-        delete remoteDragFramesRef.current[assetId][tokenId];
+      // The release frame carries where the hand let go, and the mover sends
+      // it BEFORE the lane-1 commit (plan §3.2). Adopt it as a provisional
+      // position: without it the hold clears here while the board still holds
+      // the pre-drag position, so the disc snapped home for the length of a
+      // Mongo round-trip and then jumped to its destination. The authoritative
+      // fragment lands moments later and applies the grid snap on top — a
+      // sub-cell correction rather than a round trip across the map.
+      //
+      // The frame is deliberately NOT deleted here: it keeps steering the disc
+      // through the render that clears the hold, so the handover is seamless.
+      // MapTokenLayer disposes of it when the disc settles.
+      if (typeof x === 'number' && typeof y === 'number') {
+        setMapTokenState((previousState) => {
+          const board = previousState[assetId];
+          if (!board) return previousState;
+          let boardChanged = false;
+          const nextBoard = board.map((existingToken) => {
+            if (existingToken.id !== tokenId) return existingToken;
+            if (existingToken.x === x && existingToken.y === y) return existingToken;
+            boardChanged = true;
+            return { ...existingToken, x, y };
+          });
+          return boardChanged ? { ...previousState, [assetId]: nextBoard } : previousState;
+        });
       }
       setHeldTokens((previousHolds) => {
         if (!previousHolds[assetId]?.[tokenId]) return previousHolds;

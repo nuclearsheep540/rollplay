@@ -32,9 +32,14 @@ export const LIVE_DRAG_STREAMING = true;
 // Sender throttle: minimum gap between relayed move frames (~20 Hz). The
 // devtools-throttled head-of-line test (§3.3) is what tunes or vetoes this.
 export const DRAG_STREAM_INTERVAL_MS = 50;
-// A remote drag with no frame for this long stops steering the disc — it
-// reverts to its committed position (the lift stays until release/hold expiry).
-export const DRAG_FRAME_STALENESS_MS = 2000;
+// Frames deliberately have NO staleness timeout. A gap in the stream means
+// "the hand stopped moving" far more often than "the hand went dark" — people
+// hold a mini still while they talk — so the disc keeps steering to the last
+// known position rather than reverting to its pre-pickup one. A hand that
+// really has gone dark is resolved by hold expiry (HELD_STALENESS_MS above),
+// which is the mechanism that actually asks "is this hand alive". A frame
+// timeout on top only disagreed with it: it told the table a held mini was
+// back at its origin while its owner's hand was visibly still on it.
 // Remote lerp factor per animation frame — how fast the disc chases the
 // latest relayed position (0–1; higher = snappier, lower = smoother).
 export const DRAG_LERP_FACTOR = 0.3;
