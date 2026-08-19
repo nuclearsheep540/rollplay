@@ -40,6 +40,14 @@ Continues v3 numbering (30–39 in [03](03-pc-token-avatars.md)).
 
 48. **Nothing else may read it.** A hard rule, not a preference: the failure mode in §0 began when one value acquired a second consumer. If a future feature wants this number, that is a design review, not a convenience import.
 
+49. **Inert when the map has a usable grid** (grid enabled AND cell size tuned). Matt's rule from 2026-08-18: *"when there is a [grid], a PC is always 1 cell footprint regardless."* The reverted design got this for free — disc and lines read one number — but a multiplier does not, so it needs one explicit condition. Without it a 0.5× disc floats inside its square and a 1.5× disc overhangs it, which is exactly the rendering Matt rejected under decision 40.
+
+    The knob therefore only does anything where the cell size is an *estimate* rather than a measurement — which is the population that produced the original complaint. The slider stays visible but disabled on a gridded map, with a line saying why; silently doing nothing would be worse than saying nothing.
+
+50. **DM token controls get their own `TOKENS` tab; the players' chips do not move** (Matt, 2026-08-19). Token UI had drifted across three hosts: `MapTokenChipList` in the left PARTY drawer, `MapTokenCreator` in the right COMBAT tab, and the new size slider in MAP. The last two are misplaced — NPC token authoring is not combat-specific (you place minis for exploration and social scenes too), and the slider only landed in MAP because that is where the persist path happened to live.
+
+    **But the left/right split is the permission boundary, not decoration** — every right-drawer tab except MOD is `dmOnly`. So `MapTokenChipList` stays in PARTY: moving it right would take a player's own token away from the player. The new tab holds DM tools only, and COMBAT keeps `CombatControlsPanel` so it is not left empty.
+
 ## 2. Facts the design rests on (verified 2026-08-18/19)
 
 - `tokenDiameterPx(footprint, gridConfig, w, h)` (`map_tokens/config.js:83-85`) is the single sizing function. Three call sites, **all in `MapTokenLayer`** (`:155`, `:158`, `:447`), and all three already hold the token — so taking the token instead of the footprint costs nothing.
@@ -64,21 +72,25 @@ Continues v3 numbering (30–39 in [03](03-pc-token-avatars.md)).
 
 ### 3.2 Rendering
 
-- `tokenDiameterPx(token, gridConfig, naturalWidth, naturalHeight, pcTokenScale)` — takes the token, applies the multiplier when the shared player-side predicate says so (decision 43), otherwise returns exactly today's value.
-- `MapTokenLayer` passes `activeMap.map_config.pc_token_scale` through to its three call sites.
-- No change to `snapTokenCenter`, `cellPxForMap`, `grid_math`, or any grid reader.
+- `tokenDiameterPx(token, gridConfig, naturalWidth, naturalHeight, pcTokenScale)` — takes the token; applies the multiplier only when the map has **no** usable grid (decision 49) **and** the shared player-side predicate says so (decision 43). Otherwise returns exactly today's value.
+- `gridIsUsable(gridConfig)` extracted as the client twin of `shared_contracts.grid_math.grid_usable`; `snapTokenCenter` adopts it too (it was inlining the same check).
+- `isPlayerSideToken(token)` extracted — third derivation of a predicate that already existed as `isCompanion` and the server's `companion_move_allowed`.
+- `MapTokenLayer` takes a `pcTokenScale` prop, fed by `MapDisplay` from `activeMap.map_config.pc_token_scale`, and passes it to all three call sites (disc render + both stack-membership measurements, so the stack badge follows what you see).
+- No change to `cellPxForMap`, `grid_math`, or any grid reader.
 
 ### 3.3 Control
 
-- A slider in `MapControlsPanel` (already DM-gated), labelled **"Player token size"** — accurate here, unlike in the reverted design, because it now only moves player tokens.
-- Persists through the existing complete-map PUT.
-- Applies on release rather than per-pixel, one write per adjustment. Assess during QA: if eyeballing it against the map needs live feedback, the disc diameter is derived, so a local preview value is a contained follow-up.
+- `PlayerTokenSizeControl` in `map_tokens/components/`, labelled **"Player token size"** and shown as a percentage — accurate here, unlike in the reverted design, because it only moves player tokens. It lives in the token slice, not `map_management`, because it is token UI.
+- **Hosted in a new DM-only `TOKENS` right-drawer tab** (decision 50), first in the tab so the map-wide value sits above the per-token list it governs.
+- Its own `applyPcTokenScale`, deliberately **not** folded into `applyGrid`: it writes one `map_config` field and never touches `grid_config`. Keeping the two persist paths apart is the point of the redesign.
+- **Live preview costs nothing here.** The board reads `pc_token_scale` straight off `activeMap`, so an optimistic local `setActiveMap` on every slider change resizes the discs as it moves, with a single PUT on release. No new plumbing, unlike the reverted design where preview would have dragged `enabled: true` along and switched snapping on mid-drag.
+- Disabled with an explanatory line when the grid sets token size (decision 49).
 
 ## 4. PR sequence
 
 | PR | Contents | Ships on |
 |---|---|---|
-| **14 — PC token scale** | §3.1 contract + column + migration + ETL threading; §3.2 predicate + `tokenDiameterPx`; §3.3 slider. api-site + frontend + one autogenerated migration + contracts bump. No api-game change. | feature branch |
+| **14 — PC token scale** | §3.1 contract + column + migration + ETL threading; §3.2 predicates + `tokenDiameterPx`; §3.3 slider. api-site + frontend + one autogenerated migration + contracts bump, plus one line in api-game's `_merge_preserved_map_fields`. **Release note: this touches `MapConfig`, which api-game `model_validate`s — so `api_site` AND `api_game` must both move in `releases.json`.** Shipping api-site alone means api-game rejects every map payload on `extra="forbid"`. (Contrast 0.61.0, which bumped contracts but correctly shipped api-site alone because the changed model, `PlayerCharacter`, is never parsed by api-game.) | feature branch |
 | **15 — Re-snap reachability** | Unrelated pre-existing bug, kept from the first version: `update_map` (`app.py:130-177`) never calls `_grid_resnap_fragment`, and the WS handler that does is only reached by `sendMapConfigUpdate`, which has **zero call sites**. So the exact-cell re-snap (decision 20, shipped 0.60.0) has never fired in the app. api-game + tests. | feature branch |
 
 ## 5. What we will NOT build

@@ -84,9 +84,53 @@ export function mintTokenId() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/** Native-px disc diameter for a token (decision 8: diameter = footprint × cellPx). */
-export function tokenDiameterPx(footprint, gridConfig, naturalWidth, naturalHeight) {
-  return (footprint || 1) * cellPxForMap(gridConfig, naturalWidth, naturalHeight);
+// Player-token scale bounds (tokens v4), mirroring MapConfig.pc_token_scale.
+// Bounded rather than free so a disc can't wander far enough from its cell to
+// read as broken.
+export const PC_TOKEN_SCALE_MIN = 0.5;
+export const PC_TOKEN_SCALE_MAX = 1.5;
+export const PC_TOKEN_SCALE_DEFAULT = 1;
+
+/**
+ * Is this token player-side? True for pc tokens, and for npc tokens the DM has
+ * assigned to a player — a companion is the player's piece (decision 2), so it
+ * follows the same rules including this one.
+ *
+ * Third derivation of a predicate that already existed as MapTokenLayer's
+ * `isCompanion` and the server's `companion_move_allowed`, so it earns a name.
+ */
+export function isPlayerSideToken(token) {
+  return token?.kind === 'pc' || !!token?.owner_user_id;
+}
+
+/**
+ * Can this grid address positions? Present, enabled, and cell size tuned —
+ * the client twin of shared_contracts.grid_math.grid_usable.
+ */
+export function gridIsUsable(gridConfig) {
+  return !!gridConfig?.enabled && gridConfig.grid_cell_size > 0;
+}
+
+/**
+ * Native-px disc diameter for a token (decision 8: diameter = footprint × cellPx),
+ * scaled by the map's player-token size for player-side tokens only.
+ *
+ * The scale is presentation ONLY. footprint stays the occupancy truth, so
+ * snapping, grid cell labels and the exact-cell re-snap never see this.
+ *
+ * It is also inert on a map with a usable grid: there, a cell IS the scale,
+ * and a pc token is exactly one cell — Matt's rule, and the thing that stops
+ * a scaled disc overhanging or floating inside its square. The knob exists
+ * for maps with no grid, where the cell size is only an estimate.
+ */
+export function tokenDiameterPx(token, gridConfig, naturalWidth, naturalHeight, pcTokenScale = null) {
+  const baseDiameter = (token?.footprint || 1)
+    * cellPxForMap(gridConfig, naturalWidth, naturalHeight);
+  if (gridIsUsable(gridConfig) || !isPlayerSideToken(token)) return baseDiameter;
+
+  const scale = Number.isFinite(pcTokenScale) ? pcTokenScale : PC_TOKEN_SCALE_DEFAULT;
+  const clampedScale = Math.max(PC_TOKEN_SCALE_MIN, Math.min(PC_TOKEN_SCALE_MAX, scale));
+  return baseDiameter * clampedScale;
 }
 
 /**
@@ -96,7 +140,7 @@ export function tokenDiameterPx(footprint, gridConfig, naturalWidth, naturalHeig
  * whole cells. No grid (or untuned cell size) → no snap.
  */
 export function snapTokenCenter(x, y, gridConfig, footprint = 1) {
-  if (!gridConfig?.enabled || !(gridConfig.grid_cell_size > 0)) return { x, y };
+  if (!gridIsUsable(gridConfig)) return { x, y };
 
   const cellSize = gridConfig.grid_cell_size;
   const originX = gridConfig.offset_x || 0;

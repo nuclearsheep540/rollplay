@@ -53,6 +53,10 @@ export default function MapTokenLayer({
   mapViewScale = 1,          // camera zoom — annotations counter-scale so text/badges hold screen size
   showTokenNames = true,     // per-user client-side label toggle: names + hidden/locked glyphs (held-by nameplates always show)
   gridConfig = null,
+  // Map's player-token size (tokens v4): a 0.5-1.5 multiplier on player-side
+  // discs only, and inert on a map with a usable grid (a cell IS the scale
+  // there). null = never set = 1.0.
+  pcTokenScale = null,
   mapAssetId = null,
   attachTokenLayer,
   grabToken,
@@ -167,15 +171,15 @@ export default function MapTokenLayer({
     // giant is the giant's stack too), so a pair counts when EITHER disc
     // covers the other's center — max of the radii, not just the other's.
     const centerDiameter = tokenDiameterPx(
-      centerToken.footprint, gridConfig, naturalDims.w, naturalDims.h);
+      centerToken, gridConfig, naturalDims.w, naturalDims.h, pcTokenScale);
     return orderedTokens.filter((otherToken) => {
       const otherDiameter = tokenDiameterPx(
-        otherToken.footprint, gridConfig, naturalDims.w, naturalDims.h);
+        otherToken, gridConfig, naturalDims.w, naturalDims.h, pcTokenScale);
       const centerDistance = Math.hypot(
         otherToken.x - centerToken.x, otherToken.y - centerToken.y);
       return centerDistance <= Math.max(otherDiameter, centerDiameter) / 2;
     });
-  }, [orderedTokens, gridConfig, naturalDims.w, naturalDims.h]);
+  }, [orderedTokens, gridConfig, naturalDims.w, naturalDims.h, pcTokenScale]);
 
   // A no-move click on a stack rotates its bottom token to the top.
   const cycleStackAt = useCallback((clickedToken) => {
@@ -503,8 +507,8 @@ export default function MapTokenLayer({
           ? (displayNameMap[hold.holderUserId] || 'someone') : null;
         const isDragging = draggingTokenId === token.id;
         const drag = isDragging ? dragRef.current : null;
-        const diameter = tokenDiameterPx(token.footprint, gridConfig, naturalDims.w, naturalDims.h)
-          * renderScale;
+        const diameter = tokenDiameterPx(
+          token, gridConfig, naturalDims.w, naturalDims.h, pcTokenScale) * renderScale;
         const left = drag ? drag.currentLeft : token.x * renderScale;
         const top = drag ? drag.currentTop : token.y * renderScale;
         const lifted = !!hold || isDragging;

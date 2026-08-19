@@ -405,6 +405,7 @@ const MapDisplay = ({
             showTokenNames={showTokenNames}
             mapViewScale={viewTransform.scale}
             gridConfig={activeMap?.map_config?.grid_config || null}
+            pcTokenScale={activeMap?.map_config?.pc_token_scale ?? null}
             mapAssetId={activeMap?.map_config?.asset_id || null}
             attachTokenLayer={mapTokensApi.attachTokenLayer}
             grabToken={mapTokensApi.grabToken}

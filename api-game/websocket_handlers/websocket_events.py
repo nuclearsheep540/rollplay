@@ -62,7 +62,7 @@ def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any
       • EndSession ETL    — null = "user cleared this on purpose"
     """
     out: Dict[str, Any] = {}
-    for field in ("grid_config", "fog_config", "map_image_config"):
+    for field in ("grid_config", "fog_config", "map_image_config", "pc_token_scale"):
         value = incoming.get(field)
         if value is None:
             value = existing.get(field)  # preserve existing when chaperone is silent
@@ -1438,6 +1438,7 @@ class WebsocketEvent():
                 "grid_config":      preserved["grid_config"],
                 "fog_config":       preserved["fog_config"],
                 "map_image_config": preserved["map_image_config"],
+                "pc_token_scale":   preserved["pc_token_scale"],
             })
             map_settings = MapSettings(
                 room_id=room_id,

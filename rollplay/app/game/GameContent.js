@@ -33,7 +33,7 @@ import { useUnifiedAudio } from '../audio_management';
 import { useSpotifyPlayback, SPOTIFY_DEFAULT_LEVEL } from '../audio_management/hooks/useSpotifyPlayback';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
-import { useMapTokens, MapTokenChipList, MapTokenCreator } from '../map_tokens';
+import { useMapTokens, MapTokenChipList, MapTokenCreator, PlayerTokenSizeControl } from '../map_tokens';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge } from '@fortawesome/free-solid-svg-icons';
@@ -63,6 +63,11 @@ const RIGHT_DRAWER_TABS = [
   { id: 'moderator', label: 'MOD', dmOnly: false },
   { id: 'audio', label: 'AUDIO', dmOnly: true },
   { id: 'map', label: 'MAP', dmOnly: true },
+  // DM token tools, next to MAP because they configure the same board. The
+  // players' own token chips deliberately stay in the left PARTY drawer —
+  // this whole side is dmOnly, so moving them here would take them away
+  // from the people who place them.
+  { id: 'tokens', label: 'TOKENS', dmOnly: true },
   { id: 'image', label: 'IMAGE', dmOnly: true },
   { id: 'combat', label: 'COMBAT', dmOnly: true },
 ];
@@ -2323,8 +2328,14 @@ export default function GameContent() {
                   sendImageConfigUpdate={sendImageConfigUpdate}
                 />
               )}
-              {activeRightDrawer === 'combat' && isDM && (
+              {activeRightDrawer === 'tokens' && isDM && (
                 <>
+                {/* Map-wide first — it governs every player disc listed below. */}
+                <PlayerTokenSizeControl
+                  roomId={roomId}
+                  activeMap={activeMap}
+                  setActiveMap={setActiveMapWithDisplay}
+                />
                 <MapTokenCreator
                   npcDrafts={mapTokens.npcDrafts}
                   tokens={mapTokens.tokensForActiveMap}
@@ -2344,6 +2355,9 @@ export default function GameContent() {
                   cancelCarry={mapTokens.cancelCarry}
                   dropCarriedToken={mapTokens.dropCarriedToken}
                 />
+                </>
+              )}
+              {activeRightDrawer === 'combat' && isDM && (
                 <CombatControlsPanel
                   promptPlayerRoll={promptPlayerRoll}
                   promptAllPlayersInitiative={promptAllPlayersInitiative}
@@ -2355,7 +2369,6 @@ export default function GameContent() {
                   characterNameMap={characterNameMap}
                   displayNameMap={displayNameMap}
                 />
-                </>
               )}
               {activeRightDrawer === 'audio' && isDM && (
                 <AudioMixerPanel

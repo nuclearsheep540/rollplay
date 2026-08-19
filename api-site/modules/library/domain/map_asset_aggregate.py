@@ -40,6 +40,10 @@ class MapAsset(MediaAssetAggregate):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
+    # Player-token size on this map (tokens v4): a 0.5-1.5 multiplier on the
+    # rendered diameter of player-side discs. None reads as 1.0. Not grid
+    # state — footprint, snapping and the re-snap never see it.
+    pc_token_scale: Optional[float] = None
     # v2 shape: { "version": 2, "regions": [FogRegion, ...] } or None.
     # See FogConfig / FogRegion in shared_contracts.map for the field
     # schema. None means "no fog ever painted on this map".
@@ -101,6 +105,7 @@ class MapAsset(MediaAssetAggregate):
         grid_offset_y: Optional[int] = None,
         grid_line_color: Optional[str] = None,
         grid_cell_size: Optional[float] = None,
+        pc_token_scale: Optional[float] = None,
         fog_config: Optional[Dict[str, Any]] = None,
         token_config: Optional[Dict[str, Any]] = None,
     ) -> "MapAsset":
@@ -118,6 +123,7 @@ class MapAsset(MediaAssetAggregate):
             grid_offset_y=grid_offset_y,
             grid_line_color=grid_line_color,
             grid_cell_size=grid_cell_size,
+            pc_token_scale=pc_token_scale,
             fog_config=fog_config,
             token_config=token_config,
         )
@@ -446,6 +452,7 @@ class MapAsset(MediaAssetAggregate):
             "file_size":         self.file_size,
             "grid_config":       self.build_grid_config_for_game(),
             "fog_config":        self.build_fog_config_for_game(),
+            "pc_token_scale":    self.pc_token_scale,
         })
 
     def update_from_contract(self, contract: MapConfig) -> None:
@@ -465,3 +472,8 @@ class MapAsset(MediaAssetAggregate):
         # Fog: pass through as-is. None propagates as a clear, matching
         # update_fog_config_from_game's owner semantics.
         self.update_fog_config_from_game(contract.fog_config)
+        # Player-token scale: owner path, so None propagates as "the DM reset
+        # it to the default" rather than "no signal". map_load is the surface
+        # that chaperones a MapConfig, and it applies the preserve rule
+        # itself via _merge_preserved_map_fields before this is ever reached.
+        self.pc_token_scale = contract.pc_token_scale

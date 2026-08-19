@@ -45,6 +45,12 @@ class MapAssetModel(MediaAsset):
     grid_line_color = Column(String(20), nullable=True)  # hex colour e.g. "#d1d5db"
     grid_cell_size = Column(Float, nullable=True)  # absolute cell size in native image pixels
 
+    # Player-token size on this map (tokens v4). Multiplier (0.5-1.5) on the
+    # rendered diameter of player-side discs only. NULL means never set and
+    # reads as 1.0. Sits outside the grid_* block on purpose: it scales token
+    # art, not map geometry, and nothing in the grid subsystem reads it.
+    pc_token_scale = Column(Float, nullable=True)
+
     # Fog of war config - NULL means no fog configured for this map.
     # Shape: FogConfig v2 — { version: 2, regions: [FogRegion, ...] }
     # where each FogRegion carries its own mask data-URL plus per-region
