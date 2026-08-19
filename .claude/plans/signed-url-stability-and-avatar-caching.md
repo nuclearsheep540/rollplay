@@ -1,6 +1,8 @@
 # Avatar Asset Caching + Signed URL Stability
 
-> **Status (2026-08-19):** **PR 1 (C) IMPLEMENTED AND QA-PASSED — the reported bug is fixed.** PR 2 (A) is **PARKED** by Matt's decision; see the note at the end of §6. Risks §9.1 and §9.6 are **resolved**. `MapImageEditor.js` was dead code and has been deleted. What was actually built is listed in §7b.
+> **Status (2026-08-19):** **PR 1 (C) IMPLEMENTED AND QA-PASSED — the reported bug is fixed.** PR 2 (A) is **PARKED**; see the note at the end of §6. Risks §9.1 and §9.6 are **resolved**. `MapImageEditor.js` was dead code and has been deleted. What was actually built is listed in §7b.
+>
+> **§10 is a post-QA exploration log — read it before touching PR 2 or IndexedDB.** It contains a blocking finding (§10.4: bucketing the ETL would silently desync the session lease from the real URL expiry) that §5.2 does not account for, plus verified facts that invert the intuition about where URL churn hurts (§10.1). **No direction is chosen** — options are listed unranked in §10.7.
 > **Trigger:** avatars in the campaign drawer's party list visibly reload when a session is started or paused.
 > **Written for a fresh context window** — everything needed is in this file. No other plan is a prerequisite.
 
@@ -231,6 +233,19 @@ expires_at = bucket_start + timedelta(seconds=ttl)
 
 **Needs Matt's sign-off before building:** with bucketing, every user fetching the same asset in the same window receives an **identical URL**, rather than a per-request unique one. These are bearer tokens either way and authorisation already happened at the API layer, so the delta looks immaterial — but it is a deliberate change from the current behaviour and should be agreed, not discovered.
 
+> ⚠️ **This section is incomplete — see §10.4 before building it.** Bucketing the two session-ETL
+> call sites would desynchronise `sessions.urls_expire_at` (which recomputes `now + ttl` on its own)
+> from the URLs' real expiry, by up to one bucket. The claim above that bucketing "applies to all
+> seven call sites automatically" reads that as a pure win; it is not.
+>
+> Also worth noting for the security question: bucketing rounds **down**, so effective URL life
+> becomes 18–24h rather than a flat 24h. It can never exceed the configured TTL — it only ever
+> truncates. And the `Expires` param is an **access-control** lifetime, not a cache-freshness one;
+> cache freshness is the separate `CacheControl: public, max-age=31536000, immutable` header set at
+> upload (`s3_service.py:105`). Bucketing does not bypass any cache policy — the two mechanisms are
+> unrelated except that the access token happens to live in the query string, which is also what the
+> browser cache keys on. That collision is the entire problem.
+
 ---
 
 ## 6. PR sequence
@@ -322,3 +337,115 @@ The reasoning, so it is not re-litigated a fourth time (§4.2 already records th
 5. **Page reload is unaffected by C.** The blob cache is in-memory. That gap is exactly what A closes — the argument for eventually doing both.
 
 6. ~~**`CharacterAvatarPane` call sites** need auditing to pass the asset id through.~~ **RESOLVED 2026-08-19 — audited; three call sites, enumerated in §5.1.** All three already carry `avatar_asset_id` (every character route returns `CharacterResponse`, which populates it), so **no backend change**. Only the wizard needs prop-threading, through one intermediate component. Nothing hidden, no dynamic call sites.
+
+---
+
+## 10. Follow-up exploration — 2026-08-19, post-QA conversation
+
+> **Nothing here is decided.** This is a record of what was explored and verified after PR 1 shipped,
+> so the ground does not have to be re-covered. Direction is still open (§10.7). PR 2's park (§6)
+> stands, but some of the reasoning behind it has moved — read §10.4 before unparking anything.
+
+### 10.1 Game asset URLs are already stable — the ETL signs them once
+
+Verified by code, and it **inverts the intuition that the game runtime is where URL churn hurts most**:
+
+- `StartSession` signs every session asset once and writes the URLs into the Mongo doc.
+- **api-game never signs anything** — grepped for `generate_download_url`, presigning, `boto3`: zero hits. It has no S3 service, per the service boundaries in CLAUDE.md.
+- The game frontend reads `data.active_map.file_path` straight from api-game (`game/page.js:33`), i.e. the string the ETL wrote.
+
+So a game asset URL is **fixed for the life of the session**, while core-site URLs are re-signed per request and churn every second (measured: `Expires` 1787229324 → 1787229325 across 1.2s; two signings inside the same second are byte-identical, so the churn granularity is exactly 1s).
+
+Consequences:
+- The browser HTTP cache **should already work for a mid-session reload in the game**. This puts `loading_v2/01`'s line-52 claim — *"presigned URLs are unique per request so the browser HTTP cache never hits"* — in doubt for the game path specifically. **Unverified; needs a devtools check** (F5 mid-session, look for disk hits vs network). If reloads really do re-download, the cause is something other than URL churn and worth finding before building a storage tier over it.
+- Mid-session asset swaps *do* pull freshly-signed URLs from api-site (`MapSelectionModal.js:160`), so churn is partially present in-game, just not for the preload manifest.
+- IDB's genuine game win is therefore **cross-session** (next week's session re-signs everything → new strings → HTTP cache misses), not within-session.
+
+### 10.2 Three different URLs — the mental model
+
+Repeated confusion in this conversation; recorded because the naming actively misleads.
+
+| | Shape | Made by | In the JSON? | Survives reload? |
+|---|---|---|---|---|
+| **Presigned URL** | `https://…cloudfront.net/x.png?Expires=…&Signature=…` | api-site, per request | **yes** | n/a |
+| **Blob URL** | `blob:http://localhost:3000/550e8400…` | browser, `createObjectURL` | **never** | no |
+| **Cache key** | `09b7e422-…` (asset UUID) | internal to the manager | n/a | no (Map is JS memory) |
+
+A blob URL points at bytes in the *current document's* memory; it cannot be serialised, sent to a server, or persisted. The JSON can only ever carry the presigned URL.
+
+**Why reload is a guaranteed miss:** the blob cache Map is plain JS memory, so a reload starts it empty — a stable `assetId` key cannot help when the container it indexes no longer exists. The fetch then falls to the browser HTTP cache, **which knows nothing about `assetId` and matches on the full URL including query string**. Two caches, two different keys, and only the URL-keyed one survives a reload:
+
+| Layer | Keyed on | Survives refetch | Survives reload |
+|---|---|---|---|
+| Blob cache (PR 1) | `assetId` — stable | ✅ | ❌ |
+| Browser HTTP cache | full URL — churns | ✅ | ✅ |
+| IndexedDB (deferred) | `assetId` — stable | ✅ | ✅ |
+
+Each existing layer has exactly one of the two properties needed. That is the whole problem in one table.
+
+### 10.3 TanStack is not part of this
+
+`QueryProvider` is a plain `QueryClient` (30s stale, 5min gc, no persister package installed). It caches **JSON keyed by `queryKey`**, never image bytes, and it never compares response content.
+
+Two independent chains: TanStack fetches the payload; `AssetDownloadManager` separately fetches the bytes the payload points at. The only link is that chain 2 reads a string out of chain 1's response. **A perfect TanStack cache would still leave every image to download**, because the JSON carries pointers, not bytes.
+
+Persisting the query cache (`@tanstack/query-persist-client`) is an **anti-solution** while URLs churn: what survives reload would be a payload full of *expired* presigned URLs — broken images instead of a re-download.
+
+**One real interaction, though:** TanStack v5 does structural sharing by default. A churning `avatar_url` means no character/member object can keep its identity across a refetch, so every consumer re-renders even when nothing meaningful changed. PR 1 made that re-render harmless (no download follows it); stable URLs would remove the re-render too. Minor, but it is a second independent cost of the churn.
+
+### 10.4 ⚠️ `urls_expire_at` duplicates the signer's expiry — the significant finding
+
+`StartSession` stamps a session lease at `session/application/commands.py:677`:
+
+```python
+urls_expire_at = datetime.now(timezone.utc) + timedelta(seconds=self.s3_service.expiry)
+```
+
+It is stored on the session row and drives real behaviour: the expiry sweeper (`session/application/expired_session_cleanup.py`) auto-pauses past-due sessions, plus an in-game countdown and the admin view (`admin.py:122`).
+
+**It recomputes `now + ttl` independently of the signer**, which computes its own `now + ttl` inside `generate_download_url` moments later. The two agree today only because they share a formula — not by construction.
+
+**Therefore bucketing the ETL call sites would silently desynchronise them:**
+
+- `urls_expire_at` → `now + 24h`
+- actual URLs → `bucket_start + 24h`, i.e. **up to one bucket (6h) earlier**
+
+For those hours the session looks healthy — countdown running, sweeper leaving it alone — while every asset fetch 403s. A silent failure presenting as *"the game randomly broke"*: precisely the class of bug §4.2 rejected wall-clock bucketing to avoid.
+
+**§5.2 missed this.** It states bucketing "applies to all seven call sites automatically" and reads that as a pure win, without noticing that two of those call sites sit inside a system that separately tracks the deadline.
+
+Note the duplicated derivation is a latent trap **independent of PR 2** — a hand-maintained copy of a value the signer already knows.
+
+### 10.5 Surfaces that bypass `AssetDownloadManager` entirely
+
+IDB would live *inside* the manager, so anything not routed through it is invisible to IDB — but **not** to the browser HTTP cache. Found by grep, still fetching presigned URLs directly:
+
+- `asset_library/components/AssetCard.js:91`, `AssetListView.js:105`, `AssetQuickLook.js:57` — raw `<img src={asset.s3_url}>`. The library grid, the most image-dense page in the app.
+- `map_tokens/components/TokenAvatarDisc.js:73` — raw `<img>` plus a `new Image()` probe. Game runtime, and already flagged in `loading_v2/01` as downloading untracked behind the gate.
+- `game/components/MapControlsPanel.js:25` — `new Image()` dimension probe (stable `file_path`, so no churn; renders nothing).
+
+`S3Image` *does* use the manager, so library thumbnails rendered through it are fine — these are the surfaces that never adopted it.
+
+Three ways to close this, all viable: stable URLs (helps all of them, no component changes); convert them to `S3Image` (the PR 1 conformance move, then IDB covers them); or leave them.
+
+### 10.6 Scoping IDB to the game runtime — the seam is in the wrong place
+
+Explored: IDB for api-game assets, bucketed URLs for api-site. Problems found:
+
+- `AssetDownloadManager` is a **single provider in root `layout.js`** with one cache, shared by both. It has no idea whether a URL came from api-site or api-game, and giving it that knowledge means threading provenance through every call site to select a storage tier.
+- The thing that legitimately *is* per-context is **preload scope** — and that is already split (`useGatePreload` builds a manifest for the game; the core site loads on demand).
+
+So a uniform storage tier keyed by `assetId` with scope staying where it already is looks more natural than splitting the tier. Recorded as an argument, not a decision.
+
+Also settled in passing: **audio in RAM is not the problem.** 300–500MB of PCM is unremarkable on a 16–64GB machine, and IDB was never going to change playback anyway — the mixer plays decoded PCM from RAM either way (`loading_v2/01` §2). IDB only ever replaces the *network* hop. Storage pressure and request cost are separate concerns and were being conflated.
+
+### 10.7 Options on the table — none chosen
+
+1. **Do nothing.** PR 1 fixed the reported bug; everything below is improvement, not repair.
+2. **PR 2 with the ETL opted out** (`generate_download_url(key, bucketed=False)` at the two session call sites). Core-site reloads get cheap; game runtime byte-identical to today; sidesteps §10.4 entirely.
+3. **Derive `urls_expire_at` from the signer** — have `generate_download_url` return the expiry it used. Worth doing on its own merits (§10.4), and it makes bucketing safe by default instead of by remembering to opt out.
+4. **PR 2 everywhere**, only after option 3.
+5. **Convert the §10.5 raw-`<img>` surfaces to `S3Image`** — independent of all the above, pure conformance, no backend change.
+6. **IndexedDB tier** (`loading_v2/01` §2) — the thorough answer, explicitly deferred; Matt is keen but not ready to take it on.
+
+**Do the §10.1 devtools measurement before anything in the IDB direction** — it may show the headline reload problem is narrower than `loading_v2/01` currently claims.
