@@ -47,6 +47,7 @@ import { useCreateSession, useStartSession, usePauseSession, useFinishSession, u
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
 import { useAssets } from '@/app/asset_library/hooks/useAssets'
 import { useCampaignAssetsMetadata } from '@/app/asset_library/hooks/useCampaignAssetsMetadata'
+import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
 
 /**
  * Format a byte count into a human-friendly string (B / KB / MB / GB).
@@ -145,6 +146,96 @@ function PlayerCardAction({ isDm, canRemove, onRemove, canRelease, onRelease, re
   }
 
   return null
+}
+
+/**
+ * One occupied party seat in the campaign drawer.
+ *
+ * A real component rather than a render helper because the avatar's focal
+ * bias is a hook (tokens v3, decision 36), and hooks can't run inside the
+ * seat grid's map — the same constraint that made CharacterStripCard a
+ * component in CharacterManager.
+ */
+function PartyMemberCard({
+  member,
+  characterLine,
+  canSelectCharacter,
+  onSelect,
+  canRemove,
+  onRemove,
+  canRelease,
+  onRelease,
+  releaseDisabled,
+}) {
+  // Bias only a real avatar: /heroes.png has no focal area, and the hook
+  // returns undefined without one, so the bg-center class stands unchanged.
+  const focalPosition = useImageFocalPosition(
+    member.character_avatar_url,
+    member.character_avatar_focal_area
+  )
+
+  return (
+    <div
+      onClick={canSelectCharacter ? onSelect : undefined}
+      className={`flex items-stretch justify-between rounded-sm border overflow-hidden relative ${canSelectCharacter ? 'cursor-pointer transition-all hover:opacity-90' : ''}`}
+      style={{
+        backgroundColor: THEME.bgSecondary,
+        borderColor: canSelectCharacter && !member.character_id ? THEME.borderActive : THEME.borderSubtle,
+      }}
+    >
+      {/* Hero-image wedge — angled reveal of the character portrait on the
+          card's right side, with a dark gradient perpendicular to the slope
+          so the text on the left stays readable. Same pattern as the
+          workshop tool cards. */}
+      <div
+        aria-hidden="true"
+        className="absolute top-0 bottom-0 right-0 pointer-events-none bg-cover bg-center"
+        style={{
+          // Div wraps just the wedge's bounding box (right 42 % of the card)
+          // so `bg-cover` fits the character image to the wedge region
+          // instead of the whole card. Clip-path coords + gradient stops
+          // re-expressed in this local frame.
+          width: '42%',
+          clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
+          backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('${member.character_avatar_url || '/heroes.png'}')`,
+          // backgroundPosition applies to every layer, but the gradient has
+          // no intrinsic size — `cover` fits it exactly to the box, so no
+          // position can shift it. Only the portrait moves.
+          ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
+        }}
+      />
+      <PlayerCardAction
+        isDm={member.is_host}
+        canRemove={canRemove}
+        onRemove={onRemove}
+        canRelease={canRelease}
+        onRelease={onRelease}
+        releaseDisabled={releaseDisabled}
+      />
+      <div className="relative z-10 flex flex-col gap-0.5 min-w-0 flex-1 justify-center px-3 py-2">
+        {/* Top line: username + role badges (DM badge lives in the left-edge
+            sibling instead; only MOD shows inline for now). */}
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="font-medium text-sm truncate drop-shadow" style={{color: THEME.textOnDark}}>
+            {member.username}
+          </p>
+          {member.campaign_role === 'mod' && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{backgroundColor: '#1e3a5f', color: '#93c5fd'}}>MOD</span>
+          )}
+        </div>
+        {/* Bottom line: character meta or role descriptor (italic + muted
+            when no character is selected). */}
+        <p
+          className={`text-xs truncate drop-shadow${!member.character_id && !member.is_host && member.campaign_role !== 'mod' ? ' italic' : ''}`}
+          style={{
+            color: member.character_id ? THEME.textAccent : THEME.textSecondary,
+          }}
+        >
+          {characterLine}
+        </p>
+      </div>
+    </div>
+  )
 }
 
 export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, showToast }) {
@@ -1696,76 +1787,18 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                         ? 'Select a character →'
                                         : 'No character selected'
                                 return (
-                                  <div
+                                  <PartyMemberCard
                                     key={member.user_id}
-                                    onClick={canSelectCharacter ? () => handleSelectCharacter(campaign) : undefined}
-                                    className={`flex items-stretch justify-between rounded-sm border overflow-hidden relative ${canSelectCharacter ? 'cursor-pointer transition-all hover:opacity-90' : ''}`}
-                                    style={{
-                                      backgroundColor: THEME.bgSecondary,
-                                      borderColor: canSelectCharacter && !member.character_id ? THEME.borderActive : THEME.borderSubtle,
-                                    }}
-                                  >
-                                    {/* Hero-image wedge — angled reveal of
-                                        the default character portrait on
-                                        the card's right side, with a dark
-                                        gradient perpendicular to the
-                                        slope so the text on the left
-                                        stays readable. Same pattern as
-                                        the workshop tool cards. Swap
-                                        `/heroes.png` for a per-character
-                                        portrait once character image
-                                        uploads exist. */}
-                                    <div
-                                      aria-hidden="true"
-                                      className="absolute top-0 bottom-0 right-0 pointer-events-none bg-cover bg-center"
-                                      style={{
-                                        // Div now wraps just the wedge's
-                                        // bounding box (right 42 % of the
-                                        // card) so `bg-cover` fits the
-                                        // character image to the wedge
-                                        // region instead of the whole
-                                        // card. Clip-path coords + gradient
-                                        // stops re-expressed in this
-                                        // local frame.
-                                        width: '42%',
-                                        clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
-                                        backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('${member.character_avatar_url || '/heroes.png'}')`,
-                                      }}
-                                    />
-                                    <PlayerCardAction
-                                      isDm={member.is_host}
-                                      canRemove={!member.is_host && campaign.host_id === user.id}
-                                      onRemove={() => setRemovePlayerTarget({ campaign, member })}
-                                      canRelease={isCurrentUser && !member.is_host && member.campaign_role !== 'mod' && !!member.character_id}
-                                      onRelease={() => handleReleaseCharacter(campaign)}
-                                      releaseDisabled={hasActiveSession(campaign.id)}
-                                    />
-                                    <div className="relative z-10 flex flex-col gap-0.5 min-w-0 flex-1 justify-center px-3 py-2">
-                                      {/* Top line: username + role badges
-                                          (DM badge lives in the left-edge
-                                          sibling instead; only MOD shows
-                                          inline for now). */}
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <p className="font-medium text-sm truncate drop-shadow" style={{color: THEME.textOnDark}}>
-                                          {member.username}
-                                        </p>
-                                        {member.campaign_role === 'mod' && (
-                                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{backgroundColor: '#1e3a5f', color: '#93c5fd'}}>MOD</span>
-                                        )}
-                                      </div>
-                                      {/* Bottom line: character meta or
-                                          role descriptor (italic + muted
-                                          when no character is selected). */}
-                                      <p
-                                        className={`text-xs truncate drop-shadow${!member.character_id && !member.is_host && member.campaign_role !== 'mod' ? ' italic' : ''}`}
-                                        style={{
-                                          color: member.character_id ? THEME.textAccent : THEME.textSecondary,
-                                        }}
-                                      >
-                                        {characterLine}
-                                      </p>
-                                    </div>
-                                  </div>
+                                    member={member}
+                                    characterLine={characterLine}
+                                    canSelectCharacter={canSelectCharacter}
+                                    onSelect={() => handleSelectCharacter(campaign)}
+                                    canRemove={!member.is_host && campaign.host_id === user.id}
+                                    onRemove={() => setRemovePlayerTarget({ campaign, member })}
+                                    canRelease={isCurrentUser && !member.is_host && member.campaign_role !== 'mod' && !!member.character_id}
+                                    onRelease={() => handleReleaseCharacter(campaign)}
+                                    releaseDisabled={hasActiveSession(campaign.id)}
+                                  />
                                 )
                               })}
                             </div>

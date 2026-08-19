@@ -13,6 +13,73 @@ import Modal from '@/app/shared/components/Modal'
 import { Button } from './shared/Button'
 import { useSelectCharacter } from '../hooks/mutations/useCharacterMutations'
 import { characterMetaLine } from '../utils/characterMeta'
+import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
+
+/**
+ * One selectable character row. A component rather than inline JSX because
+ * the avatar's focal bias is a hook (tokens v3, decision 36) and hooks can't
+ * run inside the list's map.
+ */
+function CharacterChoiceCard({ char, isSelected, onSelect }) {
+  // Bias only a real avatar: /heroes.png has no focal area, and the hook
+  // returns undefined without one, so the bg-center class stands unchanged.
+  const focalPosition = useImageFocalPosition(char.avatar_url, char.avatar_focal_area)
+
+  return (
+    <div
+      onClick={onSelect}
+      className={`relative overflow-hidden rounded-sm border-2 cursor-pointer transition-all ${
+        isSelected
+          ? 'border-border-active bg-surface-panel'
+          : 'border-border bg-surface-secondary'
+      }`}
+    >
+      {/* Avatar wedge - same diagonal as the campaign party cards */}
+      <div
+        aria-hidden="true"
+        className="absolute top-0 bottom-0 right-0 pointer-events-none bg-cover bg-center"
+        style={{
+          width: '42%',
+          clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
+          backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('${char.avatar_url || '/heroes.png'}')`,
+          // backgroundPosition applies to every layer, but the gradient has
+          // no intrinsic size — `cover` fits it exactly to the box, so no
+          // position can shift it. Only the portrait moves.
+          ...(focalPosition ? { backgroundPosition: focalPosition } : {}),
+        }}
+      />
+
+      <div className="relative z-10 max-w-[62%] p-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="truncate text-lg font-semibold text-content-on-dark">
+            {char.character_name}
+          </h3>
+          {char.is_alive === false && (
+            <span className="shrink-0 px-2 py-1 text-xs font-semibold rounded-sm bg-feedback-error/15 text-content-accent">
+              ☠ Deceased
+            </span>
+          )}
+        </div>
+        <p className="text-sm mt-1 truncate text-content-secondary">
+          {characterMetaLine(char)}
+        </p>
+        <div className="flex gap-4 mt-2 text-sm text-content-secondary">
+          <span>HP: {char.hp_current}/{char.hp_max}</span>
+          <span>AC: {char.ac}</span>
+        </div>
+      </div>
+
+      {/* Selection check - floats above the wedge */}
+      {isSelected && (
+        <div className="absolute top-2 right-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-feedback-success">
+          <svg className="w-4 h-4 text-content-on-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CharacterSelectionModal({ campaign, characters, onClose, onCharacterSelected, onCreateCharacter = null, currentCharacterId = null, sessionActive = false }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
@@ -118,55 +185,12 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
 
               <div className="space-y-3">
                 {availableCharacters.map((char) => (
-                  <div
+                  <CharacterChoiceCard
                     key={char.id}
-                    onClick={() => setSelectedCharacterId(char.id)}
-                    className={`relative overflow-hidden rounded-sm border-2 cursor-pointer transition-all ${
-                      selectedCharacterId === char.id
-                        ? 'border-border-active bg-surface-panel'
-                        : 'border-border bg-surface-secondary'
-                    }`}
-                  >
-                    {/* Avatar wedge - same diagonal as the campaign party cards */}
-                    <div
-                      aria-hidden="true"
-                      className="absolute top-0 bottom-0 right-0 pointer-events-none bg-cover bg-center"
-                      style={{
-                        width: '42%',
-                        clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
-                        backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('${char.avatar_url || '/heroes.png'}')`,
-                      }}
-                    />
-
-                    <div className="relative z-10 max-w-[62%] p-4">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <h3 className="truncate text-lg font-semibold text-content-on-dark">
-                          {char.character_name}
-                        </h3>
-                        {char.is_alive === false && (
-                          <span className="shrink-0 px-2 py-1 text-xs font-semibold rounded-sm bg-feedback-error/15 text-content-accent">
-                            ☠ Deceased
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm mt-1 truncate text-content-secondary">
-                        {characterMetaLine(char)}
-                      </p>
-                      <div className="flex gap-4 mt-2 text-sm text-content-secondary">
-                        <span>HP: {char.hp_current}/{char.hp_max}</span>
-                        <span>AC: {char.ac}</span>
-                      </div>
-                    </div>
-
-                    {/* Selection check - floats above the wedge */}
-                    {selectedCharacterId === char.id && (
-                      <div className="absolute top-2 right-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-feedback-success">
-                        <svg className="w-4 h-4 text-content-on-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
+                    char={char}
+                    isSelected={selectedCharacterId === char.id}
+                    onSelect={() => setSelectedCharacterId(char.id)}
+                  />
                 ))}
               </div>
 
