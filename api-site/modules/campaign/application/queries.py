@@ -135,6 +135,14 @@ class GetCampaignMembers:
                     character.avatar_asset.s3_key
                     if character and character.avatar_asset else None
                 ),
+                # The avatar image's "token" focal square (tokens v3, decision
+                # 36) - same already-loaded asset, so still no extra query.
+                # getattr-guarded like CharacterRepository: a legacy non-image
+                # avatar row must degrade to None rather than raise.
+                'character_avatar_focal_area': (
+                    (getattr(character.avatar_asset, "focal_areas", None) or {}).get("token")
+                    if character and character.avatar_asset else None
+                ),
                 'is_host': role == CampaignRole.DM
             })
 

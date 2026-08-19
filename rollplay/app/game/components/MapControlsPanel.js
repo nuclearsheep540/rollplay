@@ -9,6 +9,7 @@ import {
   DM_ARROW,
   ACTIVE_BACKGROUND,
 } from '../../styles/constants';
+import Switch from '@/app/shared/components/Switch';
 import { FogPaintControls, RegionListPanel, RegionParamsEditor } from '@/app/fog_management';
 import MapSelectionSection from './MapSelectionModal';
 
@@ -99,6 +100,10 @@ export default function MapControlsPanel({
       grid_width: grid.gridCols,
       grid_height: grid.gridRows,
       grid_cell_size: grid.cellSize,
+      // Preview only — always draws the lattice regardless of the saved
+      // on/off state, so a DM tuning a switched-off grid has something to
+      // align against. grid.effectiveGridConfig carries the real flag, and
+      // that is what applyGrid persists.
       enabled: true,
       colors: {
         edit_mode:    { line_color: grid.gridColor, opacity: grid.gridOpacity, line_width: 1 },
@@ -175,12 +180,43 @@ export default function MapControlsPanel({
     }
   };
 
-  // Apply grid settings to MongoDB (hot storage). ETL handles cold persistence at session end.
-  const applyGrid = async () => {
-    if (!activeMap || !grid) return;
+  // A grid can only be switched off once one exists — "off" with nothing
+  // configured is just the map's default state, and Edit Grid is how you
+  // create one.
+  const savedGridConfig = activeMap?.map_config?.grid_config || null;
+  const gridIsOn = savedGridConfig ? savedGridConfig.enabled !== false : false;
 
-    const newGridConfig = grid.effectiveGridConfig;
+  /**
+   * Flip the grid on or off. A real off, not a hide: lines, snapping, cell
+   * labels and token sizing all stop together (tokens v4 decision 51). The
+   * DM's tuned dimensions, offsets and cell size are kept, so switching back
+   * on restores the same lattice rather than making them re-align it.
+   */
+  const toggleGrid = async () => {
+    if (!activeMap || !savedGridConfig) return;
+    // Deliberately does NOT touch grid.gridEnabled — the saved map is the only
+    // source of truth. On success applyGridConfig calls setActiveMap, which
+    // re-runs GameContent's initFromConfig effect and re-hydrates the hook from
+    // the authoritative value, so an optimistic write here buys nothing.
+    //
+    // It would also cost something real: on a FAILED save the optimistic value
+    // survives while the map keeps the old one, and effectiveGridConfig — which
+    // is what "Apply Grid Changes" sends — would then carry an `enabled` the DM
+    // never chose. The switch reads the saved map, so it would show the correct
+    // state the whole time, and the ETL would persist the wrong flag to cold
+    // storage at session end.
+    //
+    // Sent explicitly rather than via effectiveGridConfig for the same reason:
+    // that object reflects hook state, and this write is about the saved map.
+    await applyGridConfig({ ...savedGridConfig, enabled: !gridIsOn });
+  };
 
+  /**
+   * Write a grid config to MongoDB (hot storage) as a complete map object;
+   * ETL handles cold persistence at session end. Returns whether it landed.
+   */
+  const applyGridConfig = async (newGridConfig) => {
+    if (!activeMap) return false;
     const { _id, ...mapWithoutId } = activeMap;
     const updatedMap = {
       ...mapWithoutId,
@@ -194,30 +230,35 @@ export default function MapControlsPanel({
         body: JSON.stringify({ map: updatedMap, updated_by: 'dm' })
       });
 
-      if (response.ok) {
-        // Optimistic local update: reflect the trimmed config immediately so the
-        // grid shows the correct result when the panel closes, without waiting for
-        // the WebSocket broadcast. The broadcast will follow and set the same value.
-        if (setActiveMap) {
-          setActiveMap(updatedMap);
-        }
-
-        // Close the panel — display mode uses activeMap.grid_config directly,
-        // which we just set above, so the correct trimmed grid shows immediately.
-        setIsDimensionsExpanded(false);
-        if (setGridEditMode) setGridEditMode(false);
-        if (onTuningModeChange) onTuningModeChange(null);
-        setOriginalServerOpacity(null);
-        setOriginalTuning(null);
-      } else {
-        const error = await response.text();
-        console.error('❌ Failed to apply grid:', error);
+      if (!response.ok) {
+        console.error('❌ Failed to apply grid:', await response.text());
         alert('Failed to apply grid configuration. Please try again.');
+        return false;
       }
+
+      // Optimistic local update: reflect the config immediately rather than
+      // waiting for the WebSocket broadcast, which follows with the same value.
+      if (setActiveMap) {
+        setActiveMap(updatedMap);
+      }
+      return true;
     } catch (error) {
       console.error('❌ Error applying grid:', error);
       alert('Failed to apply grid configuration. Please try again.');
+      return false;
     }
+  };
+
+  const applyGrid = async () => {
+    if (!grid) return;
+    if (!(await applyGridConfig(grid.effectiveGridConfig))) return;
+    // Close the editor — display mode reads activeMap.grid_config directly,
+    // which applyGridConfig just set, so the result shows immediately.
+    setIsDimensionsExpanded(false);
+    if (setGridEditMode) setGridEditMode(false);
+    if (onTuningModeChange) onTuningModeChange(null);
+    setOriginalServerOpacity(null);
+    setOriginalTuning(null);
   };
 
   return (
@@ -256,6 +297,23 @@ export default function MapControlsPanel({
             🗑️ Clear Map
           </button>
         )}
+        {/* Grid on/off — only once a grid exists; before that "off" is just
+            the map's default and Edit Grid is how you make one. A real off:
+            lines, snapping, cell labels and token sizing stop together, and
+            the DM's tuned dimensions/offsets are kept for switching back. */}
+        {activeMap && savedGridConfig && (
+          <div
+            className={`${DM_CHILD} w-full flex items-center justify-between cursor-pointer`}
+            onClick={toggleGrid}
+            role="switch"
+            aria-checked={gridIsOn}
+            aria-label="Grid"
+          >
+            ▦ Grid
+            <Switch checked={gridIsOn} />
+          </div>
+        )}
+
         {/* Grid Dimensions Controls */}
         <button
           className={`${DM_CHILD} ${isDimensionsExpanded ? ACTIVE_BACKGROUND : ''}`}

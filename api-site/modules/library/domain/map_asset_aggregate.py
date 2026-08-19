@@ -40,6 +40,13 @@ class MapAsset(MediaAssetAggregate):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
+    # Player-token size on this map (tokens v4): a 0.5-1.5 multiplier on the
+    # rendered diameter of player-side discs. None reads as 1.0. Not grid
+    # state — footprint, snapping and the re-snap never see it.
+    pc_token_scale: Optional[float] = None
+    # Grid on/off (decision 51). None means never set and reads as True.
+    # A real off: lines, snapping, cell labels and token sizing all stop.
+    grid_enabled: Optional[bool] = None
     # v2 shape: { "version": 2, "regions": [FogRegion, ...] } or None.
     # See FogConfig / FogRegion in shared_contracts.map for the field
     # schema. None means "no fog ever painted on this map".
@@ -101,6 +108,8 @@ class MapAsset(MediaAssetAggregate):
         grid_offset_y: Optional[int] = None,
         grid_line_color: Optional[str] = None,
         grid_cell_size: Optional[float] = None,
+        pc_token_scale: Optional[float] = None,
+        grid_enabled: Optional[bool] = None,
         fog_config: Optional[Dict[str, Any]] = None,
         token_config: Optional[Dict[str, Any]] = None,
     ) -> "MapAsset":
@@ -118,6 +127,8 @@ class MapAsset(MediaAssetAggregate):
             grid_offset_y=grid_offset_y,
             grid_line_color=grid_line_color,
             grid_cell_size=grid_cell_size,
+            pc_token_scale=pc_token_scale,
+            grid_enabled=grid_enabled,
             fog_config=fog_config,
             token_config=token_config,
         )
@@ -130,7 +141,8 @@ class MapAsset(MediaAssetAggregate):
         grid_offset_x: Optional[int] = None,
         grid_offset_y: Optional[int] = None,
         grid_line_color: Optional[str] = None,
-        grid_cell_size: Optional[float] = None
+        grid_cell_size: Optional[float] = None,
+        grid_enabled: Optional[bool] = None
     ) -> None:
         """
         Update grid configuration.
@@ -163,6 +175,12 @@ class MapAsset(MediaAssetAggregate):
 
         if grid_cell_size is not None:
             self.grid_cell_size = grid_cell_size
+
+        # Keep-current-on-None like every field above. The workshop's flat
+        # PATCH shape carries no `enabled`, so tuning dimensions there can
+        # never switch a grid the DM deliberately turned off back on.
+        if grid_enabled is not None:
+            self.grid_enabled = grid_enabled
 
         self.updated_at = datetime.utcnow()
 
@@ -199,6 +217,10 @@ class MapAsset(MediaAssetAggregate):
             grid_kwargs["offset_y"] = self.grid_offset_y
         if self.grid_cell_size is not None:
             grid_kwargs["grid_cell_size"] = self.grid_cell_size
+        # Omitted when never set, so the contract default (True) applies
+        # and pre-existing maps keep drawing their grid.
+        if self.grid_enabled is not None:
+            grid_kwargs["enabled"] = self.grid_enabled
         return GridConfig(
             grid_width=self.grid_width,
             grid_height=self.grid_height,
@@ -227,6 +249,9 @@ class MapAsset(MediaAssetAggregate):
             grid_offset_y=game_grid_config.offset_y,
             grid_line_color=grid_line_color,
             grid_cell_size=game_grid_config.grid_cell_size,
+            # The session's on/off state becomes the map's — this is the
+            # write that makes 'grid off' survive a session boundary.
+            grid_enabled=game_grid_config.enabled,
         )
 
     def clear_grid_config(self) -> None:
@@ -446,6 +471,7 @@ class MapAsset(MediaAssetAggregate):
             "file_size":         self.file_size,
             "grid_config":       self.build_grid_config_for_game(),
             "fog_config":        self.build_fog_config_for_game(),
+            "pc_token_scale":    self.pc_token_scale,
         })
 
     def update_from_contract(self, contract: MapConfig) -> None:
@@ -465,3 +491,8 @@ class MapAsset(MediaAssetAggregate):
         # Fog: pass through as-is. None propagates as a clear, matching
         # update_fog_config_from_game's owner semantics.
         self.update_fog_config_from_game(contract.fog_config)
+        # Player-token scale: owner path, so None propagates as "the DM reset
+        # it to the default" rather than "no signal". map_load is the surface
+        # that chaperones a MapConfig, and it applies the preserve rule
+        # itself via _merge_preserved_map_fields before this is ever reached.
+        self.pc_token_scale = contract.pc_token_scale

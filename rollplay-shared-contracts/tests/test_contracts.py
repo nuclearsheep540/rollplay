@@ -117,8 +117,33 @@ class TestMapRoundTrip:
             file_path="https://s3.example.com/dungeon.png",
             grid_config=GridConfig(),
             map_image_config={"brightness": 1.2, "contrast": 0.9},
+            pc_token_scale=0.75,
         )
         assert MapConfig.model_validate(config.model_dump()) == config
+
+    def test_pc_token_scale_defaults_to_none(self):
+        # None means "never set" and reads as 1.0 client-side, so a map that
+        # predates the feature renders exactly as it did.
+        config = MapConfig(
+            asset_id="map-1", filename="dungeon.png", file_path="/dungeon.png"
+        )
+        assert config.pc_token_scale is None
+
+    def test_pc_token_scale_bounds(self):
+        base = {"asset_id": "map-1", "filename": "d.png", "file_path": "/d.png"}
+        assert MapConfig.model_validate({**base, "pc_token_scale": 0.5}).pc_token_scale == 0.5
+        assert MapConfig.model_validate({**base, "pc_token_scale": 1.5}).pc_token_scale == 1.5
+        with pytest.raises(ValidationError):
+            MapConfig.model_validate({**base, "pc_token_scale": 0.4})
+        with pytest.raises(ValidationError):
+            MapConfig.model_validate({**base, "pc_token_scale": 1.6})
+
+    def test_pc_token_scale_is_not_grid_config(self):
+        # Guards the shape decision that the reverted v4 design got wrong:
+        # this scales token art, it is not map geometry. If it ever migrates
+        # into GridConfig, snapping and the grid re-snap start reading it.
+        assert "pc_token_scale" in MapConfig.model_fields
+        assert "pc_token_scale" not in GridConfig.model_fields
 
     def test_fog_config_defaults_round_trip(self):
         config = FogConfig()

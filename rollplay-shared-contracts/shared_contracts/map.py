@@ -128,3 +128,19 @@ class MapConfig(ContractModel):
     grid_config: Optional[GridConfig] = None
     fog_config: Optional[FogConfig] = None
     map_image_config: Optional[Dict[str, Any]] = None  # Opaque to contracts, owned by frontend
+    # Player-token size on this map (tokens v4). A multiplier on the rendered
+    # diameter of player-side discs only — pc tokens and npc tokens assigned
+    # to a player. None means "never set" and reads as 1.0, so every existing
+    # map is unchanged.
+    #
+    # Deliberately a top-level sibling of grid_config, NOT a field inside it:
+    # this scales token art, it is not map geometry. It must never touch
+    # footprint, snapping, cell labels or the grid re-snap — a scaled disc
+    # still occupies exactly its footprint in cells. A first design routed
+    # this through grid_config.grid_cell_size and had to invent a
+    # "grid exists but is hidden" state to do it; see plans/tokens/04 §0.
+    #
+    # Bounded rather than free: an unbounded multiplier lets a disc wander
+    # far enough from its cell to read as broken, which is a UI-quality
+    # judgement the product principle does not protect.
+    pc_token_scale: Optional[float] = Field(default=None, ge=0.5, le=1.5)

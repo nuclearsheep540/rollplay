@@ -18,6 +18,11 @@ const DEFAULT_COLOR = '#d1d5db';
  */
 export function useGridConfig() {
   const [cellSize, setCellSizeRaw] = useState(DEFAULT_CELL_SIZE);
+  // Grid on/off (tokens v4 decision 51). Its own state because it is a real
+  // off, not a hide — when false, lines, snapping, cell labels and token
+  // sizing all stop. Consumers rendering an EDIT preview override this to
+  // true; only the saved payload carries the real value.
+  const [gridEnabled, setGridEnabled] = useState(true);
   const [gridCols, setGridColsRaw] = useState(DEFAULT_COLS);
   const [gridRows, setGridRowsRaw] = useState(DEFAULT_ROWS);
   const [gridOpacity, setGridOpacity] = useState(DEFAULT_OPACITY);
@@ -77,9 +82,16 @@ export function useGridConfig() {
       setGridRowsRaw(DEFAULT_ROWS);
       setGridOpacity(DEFAULT_OPACITY);
       setGridColor(DEFAULT_COLOR);
+      setGridEnabled(true);
       setOffset({ x: 0, y: 0 });
       return;
     }
+
+    // Absent means "never set", which reads as on — matching the contract
+    // default and the NULL column, so existing maps are unchanged. The flat
+    // REST shape carries no `enabled` at all, so the workshop always hydrates
+    // to on, which is right for a tuning preview.
+    setGridEnabled(config.enabled !== false);
 
     const cols = config.grid_width || DEFAULT_COLS;
     const rows = config.grid_height || DEFAULT_ROWS;
@@ -119,17 +131,23 @@ export function useGridConfig() {
     grid_width: gridCols,
     grid_height: gridRows,
     grid_cell_size: cellSize,
-    enabled: true,
+    // The real value — this object is what applyGrid persists. Consumers
+    // that render it as an EDIT preview override to true, or a DM tuning
+    // a switched-off grid would have no lattice to align against.
+    enabled: gridEnabled,
     offset_x: offset.x,
     offset_y: offset.y,
     colors: {
       edit_mode:    { line_color: gridColor, opacity: gridOpacity, line_width: 1 },
       display_mode: { line_color: gridColor, opacity: gridOpacity, line_width: 1 },
     },
-  }), [gridCols, gridRows, cellSize, offset, gridColor, gridOpacity]);
+  }), [gridCols, gridRows, cellSize, gridEnabled, offset, gridColor, gridOpacity]);
 
   // --- Derived: flat config for REST PATCH ---
 
+  // Deliberately carries no `enabled`: the workshop has no on/off control,
+  // and MapAsset.update_grid_config keeps the current value on None — so
+  // tuning dimensions there can never switch a map's grid back on.
   const toFlatConfig = () => ({
     grid_width: gridCols,
     grid_height: gridRows,
@@ -147,9 +165,11 @@ export function useGridConfig() {
     gridRows,
     gridOpacity,
     gridColor,
+    gridEnabled,
     offset,
 
     // Actions
+    setGridEnabled,
     setCellSize,
     adjustCellSize,
     setGridCols,

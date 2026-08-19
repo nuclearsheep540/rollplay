@@ -169,6 +169,8 @@ class MediaAssetRepository:
                 existing.grid_offset_y = aggregate.grid_offset_y
                 existing.grid_line_color = aggregate.grid_line_color
                 existing.grid_cell_size = aggregate.grid_cell_size
+                existing.pc_token_scale = aggregate.pc_token_scale
+                existing.grid_enabled = aggregate.grid_enabled
                 existing.fog_config = aggregate.fog_config
                 existing.token_config = aggregate.token_config
 
@@ -228,6 +230,8 @@ class MediaAssetRepository:
                     grid_offset_y=aggregate.grid_offset_y,
                     grid_line_color=aggregate.grid_line_color,
                     grid_cell_size=aggregate.grid_cell_size,
+                    pc_token_scale=aggregate.pc_token_scale,
+                    grid_enabled=aggregate.grid_enabled,
                     fog_config=aggregate.fog_config,
                     token_config=aggregate.token_config,
                 )
@@ -412,6 +416,8 @@ class MediaAssetRepository:
                 grid_offset_y=model.grid_offset_y,
                 grid_line_color=model.grid_line_color,
                 grid_cell_size=model.grid_cell_size,
+                pc_token_scale=model.pc_token_scale,
+                grid_enabled=model.grid_enabled,
                 fog_config=model.fog_config,
                 token_config=model.token_config,
             )

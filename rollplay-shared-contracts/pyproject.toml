@@ -1,6 +1,6 @@
 [project]
 name = "rollplay-shared-contracts"
-version = "0.2.0"
+version = "0.3.0"
 description = "Shared boundary schemas between Rollplay services"
 requires-python = ">=3.9"
 dependencies = ["pydantic>=2.0"]

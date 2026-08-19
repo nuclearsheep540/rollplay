@@ -7,3 +7,4 @@
 export { default as InviteButton } from './InviteButton'
 export { default as Combobox } from './Combobox'
 export { default as HoldButton } from './HoldButton'
+export { default as Switch } from './Switch'

@@ -62,7 +62,7 @@ def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any
       • EndSession ETL    — null = "user cleared this on purpose"
     """
     out: Dict[str, Any] = {}
-    for field in ("grid_config", "fog_config", "map_image_config"):
+    for field in ("grid_config", "fog_config", "map_image_config", "pc_token_scale"):
         value = incoming.get(field)
         if value is None:
             value = existing.get(field)  # preserve existing when chaperone is silent
@@ -70,7 +70,7 @@ def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any
     return out
 
 
-def _grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str,
+def grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str,
                           old_grid_config: Optional[Dict[str, Any]],
                           new_grid_config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Rewrite a map's token board for a grid geometry change and build the
@@ -127,7 +127,7 @@ def _grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str
     }
 
 
-async def _send_map_token_fragment(manager, room_id: str, fragment: Dict[str, Any]) -> None:
+async def send_map_token_fragment(manager, room_id: str, fragment: Dict[str, Any]) -> None:
     """Deliver a map_token_state_update with per-recipient hidden filtering
     (decision 17) — the shared rail for server-initiated board rewrites
     like the grid re-snap. Hidden tokens must never reach player clients,
@@ -1438,6 +1438,7 @@ class WebsocketEvent():
                 "grid_config":      preserved["grid_config"],
                 "fog_config":       preserved["fog_config"],
                 "map_image_config": preserved["map_image_config"],
+                "pc_token_scale":   preserved["pc_token_scale"],
             })
             map_settings = MapSettings(
                 room_id=room_id,
@@ -1570,14 +1571,14 @@ class WebsocketEvent():
                 # dispatcher broadcasts config_update_message after we
                 # return); both messages are self-contained so the one-tick
                 # ordering gap is cosmetic only.
-                resnap_fragment = _grid_resnap_fragment(
+                resnap_fragment = grid_resnap_fragment(
                     room_id, map_asset_id, user_id, old_grid_config, grid_config
                 )
                 if resnap_fragment:
                     # Per-recipient delivery — a raw room broadcast here
                     # would hand players every hidden token's position
                     # (decision 17).
-                    await _send_map_token_fragment(manager, room_id, resnap_fragment)
+                    await send_map_token_fragment(manager, room_id, resnap_fragment)
                     print(f"🗺️ Re-snapped {len(resnap_fragment['data']['tokens'])} tokens for room {room_id}")
 
                 print(f"🗺️ Map config updated for room {room_id}")

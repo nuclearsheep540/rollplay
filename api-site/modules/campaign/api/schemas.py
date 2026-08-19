@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -57,6 +57,9 @@ class CampaignMemberResponse(BaseModel):
     character_class: Optional[str] = None  # Multi-class formatted
     character_race: Optional[str] = None
     character_avatar_url: Optional[str] = None  # Presigned URL, resolved at the endpoint
+    # The avatar image's "token" focal square (tokens v3, decision 36) — biases
+    # the party card's cover-fit so a portrait keeps its face in the wedge.
+    character_avatar_focal_area: Optional[Dict[str, float]] = None
     is_host: bool = False  # Kept for frontend backward compat (true when role=dm)
 
 
