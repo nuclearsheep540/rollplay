@@ -102,11 +102,18 @@ Notes on the columns:
   returns 409. Two browser tabs on the same game is a real scenario and last-write-wins silently
   eats one of them. No merge logic — the client shows "edited elsewhere, reload".
 
-Registration checklist (all three are required, all three are easy to forget):
+Registration checklist (all four are required, all four are easy to forget):
 1. Router in `api-site/main.py` alongside the others (`main.py:87-96`).
 2. `from modules.notes.model.note_model import Note` in `api-site/alembic/env.py` (`:22-50`) —
    autogenerate will not see the table otherwise.
-3. `api-site/modules/notes/tests/` — every other module has one.
+3. **The same import again in `api-site/conftest.py`** — it keeps its own explicit model-import
+   block (`:40-60`, each line `# noqa: F401`) so `Base.metadata.create_all` sees the table in the
+   SQLite harness. Miss this and every notes test fails on a missing table, with no hint that the
+   cause is an import.
+4. `api-site/modules/notes/tests/` — every other module has one.
+
+The test harness handles our column types already: `conftest.py:148` rewrites `JSONB` → `JSON` for
+SQLite, and `PostgreSQL_UUID` → a `GUID` TypeDecorator. No harness work needed for this table.
 
 Migration via `docker exec api-site-dev alembic revision --autogenerate -m "add notes table"`.
 Never hand-written.
@@ -207,6 +214,12 @@ own bounded height rather than inheriting that scroll, or the picker header scro
 anyone accumulates enough notes to need filtering — same single-select semantics, so it is a
 component swap, not a rework. Do not pre-emptively build it.
 
+Note that `Dropdown` is an **action menu**, not a value-select: its API is
+`items: [{label, onClick, icon?, variant?, disabled?}]` (`Dropdown.js:32`) with no concept of a
+selected item. That is fine — each item's `onClick` selects that note — but marking the *current*
+note needs the `icon` prop; it will not happen for free. `EmptyState({icon, title, description,
+action})` has the `action` slot the "New note" button needs.
+
 ## 7. Autosave
 
 No save button — the runtime is fluid and a button is a thing to forget. The status indicator
@@ -265,7 +278,13 @@ against a modified client.
 5. Router into `main.py`. Tests in `modules/notes/tests/`.
 
 **PR 2 — frontend (`rollplay/app/notes/` + drawer tab)**
-1. `npm i @tiptap/react @tiptap/core @tiptap/pm @tiptap/extension-text-style`.
+1. Install the editor. ⚠️ **A host-side `npm i` will not reach the dev container.**
+   `docker-compose.dev.yml` mounts a named volume `rollplay_node_modules:/app/node_modules` over
+   the `./rollplay:/app` bind mount, so host-installed packages are masked inside the container.
+   Install in the container (`docker exec rollplay-dev npm i @tiptap/react @tiptap/core @tiptap/pm
+   @tiptap/extension-text-style`) **and** on the host so `package.json` / lockfile are committed —
+   or rebuild the image and recreate the volume. Also note HMR is unreliable in this container; a
+   `.next` clear + restart may be needed to see changes.
 2. `NoteEditor` (dynamic, `ssr: false`, `immediatelyRender: false`), toolbar: H2, H3, bold, italic,
    font-family (one proportional, one monospace).
 3. `useNotes` (TanStack) + `useNoteAutosave` (§7) + save-status indicator.
@@ -279,9 +298,11 @@ against a modified client.
   `rev` mismatch → 409; size cap; `campaign_name` stamped at create; **campaign deletion leaves
   the note with `campaign_id IS NULL` and its name intact** — the one behaviour most likely to
   regress silently.
-- **Frontend:** the autosave ceiling actually fires during sustained typing (not just the idle
-  debounce); flush on drawer close does not lose the last edit; StrictMode double-mount does not
-  duplicate the editor or its toolbar.
+- **Frontend: manual only.** There is no JS test runner in this repo — `package.json` scripts are
+  `dev` / `build` / `start` / `lint`, with no jest or vitest. So the following are QA steps, not a
+  suite: the autosave ceiling actually fires during sustained typing (not just the idle debounce);
+  flush on drawer close does not lose the last edit; StrictMode double-mount does not duplicate the
+  editor or its toolbar.
 - **Manual:** two tabs on the same note → second save 409s and prompts rather than clobbering.
 
 ## 11. v2 and out of scope
