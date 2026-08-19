@@ -19,6 +19,7 @@ from imageservice import ImageService, ImageSettings
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
+from websocket_handlers.websocket_events import grid_resnap_fragment, send_map_token_fragment
 from shared_contracts.session import (
     LogEntry,
     SessionStartPayload,
@@ -140,6 +141,19 @@ async def update_map(room_id: str, request: dict):
         if not updated_map or not filename:
             raise HTTPException(status_code=400, detail="Complete map object with map_config.filename is required")
 
+        # Capture the pre-update grid + the map's asset_id: token boards are
+        # keyed by asset_id, and the exact-cell re-snap (tokens v2 decision 20)
+        # needs the OLD lattice to know which cell each token was in.
+        #
+        # Guarded on filename so a map *switch* through this endpoint never
+        # re-snaps: old and new would be different boards entirely.
+        pre_update_map_config = (map_service.get_active_map(room_id) or {}).get("map_config", {})
+        old_grid_config = None
+        map_asset_id = None
+        if pre_update_map_config.get("filename") == filename:
+            old_grid_config = pre_update_map_config.get("grid_config")
+            map_asset_id = pre_update_map_config.get("asset_id")
+
         # Replace entire map in database (atomic)
         logger.info(f"HTTP: Updating complete map for room {room_id}, filename {filename} by {updated_by}")
         success = map_service.update_complete_map(room_id, updated_map)
@@ -163,6 +177,26 @@ async def update_map(room_id: str, request: dict):
 
                 # Broadcast to all connected clients in this room
                 await connection_manager.update_room_data(room_id, map_update_message)
+
+                # Exact-cell re-snap (tokens v2 decision 20). This lives here
+                # because THIS is the path the app actually uses to save a
+                # grid — the WebSocket map_config_update handler has the same
+                # call but no client ever sends that event, so the re-snap has
+                # never fired in the app since it shipped in 0.60.0.
+                #
+                # Returns None for everything that isn't a lattice move, so a
+                # cosmetic change (colour, opacity) or a pc_token_scale write
+                # through this same endpoint costs one dict comparison.
+                # Per-recipient delivery: a raw room broadcast would hand
+                # players every hidden token's position (decision 17).
+                resnap_fragment = grid_resnap_fragment(
+                    room_id, map_asset_id, updated_by,
+                    old_grid_config, result_mc.get("grid_config"),
+                )
+                if resnap_fragment:
+                    await send_map_token_fragment(connection_manager, room_id, resnap_fragment)
+                    logger.info(
+                        f"HTTP: Re-snapped {len(resnap_fragment['data']['tokens'])} tokens for room {room_id}")
 
                 logger.info(f"HTTP: Complete map updated and broadcasted for room {room_id}")
                 return {"success": True, "updated_map": updated_map_result}

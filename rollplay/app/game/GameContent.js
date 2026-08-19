@@ -786,12 +786,17 @@ export default function GameContent() {
   const effectiveGridConfig = useMemo(() => {
     if (gridEditMode) {
       if (!activeMap) return null;
+      // Edit mode always draws the lattice whatever the saved on/off state:
+      // tuning a switched-off grid with nothing to align against would be
+      // pointless. Only grid.effectiveGridConfig, which applyGrid persists,
+      // carries the real `enabled`.
+      const preview = { ...grid.effectiveGridConfig, enabled: true };
       // If MapControlsPanel has pushed a preview config via handleGridChange, merge its colors
       const colorOverride = gridConfig?.colors;
       if (colorOverride) {
-        return { ...grid.effectiveGridConfig, colors: colorOverride };
+        return { ...preview, colors: colorOverride };
       }
-      return grid.effectiveGridConfig;
+      return preview;
     }
     const base = activeMap?.map_config?.grid_config;
     if (!base) return null;

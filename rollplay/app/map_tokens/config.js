@@ -53,13 +53,30 @@ export const NPC_TOKEN_COLOR = '#f43f5e';
 export const FALLBACK_TOKEN_COLOR = '#6b7280';
 
 /**
- * Native px per grid cell for token sizing. A tuned grid_cell_size wins
- * (even when the grid overlay is toggled off — it's still the map's scale
- * truth); otherwise assume the VTT-convention cell, clamped against the
- * smaller image dimension.
+ * Can this grid address positions? Present, enabled, and cell size tuned —
+ * the client twin of shared_contracts.grid_math.grid_usable.
+ */
+export function gridIsUsable(gridConfig) {
+  return !!gridConfig?.enabled && gridConfig.grid_cell_size > 0;
+}
+
+/**
+ * Native px per grid cell for token sizing.
+ *
+ * One rule decides where scale comes from: **with a grid, the grid is the
+ * truth; without one, the image is.** A usable grid has measured the map, so
+ * its cell size wins. Otherwise nothing has measured anything, and the best
+ * available answer is derived from the image's own dimensions — an estimate,
+ * which is exactly what the player-token scale exists to correct.
+ *
+ * "Usable" is gridIsUsable, not merely "a cell size is stored": a grid that is
+ * off, or on but never tuned, has measured nothing and cannot be the truth.
+ * The same predicate gates snapping and the scale multiplier, so all three
+ * agree on which regime the map is in — there is no state where the lines are
+ * off but the grid is still quietly sizing things.
  */
 export function cellPxForMap(gridConfig, naturalWidth, naturalHeight) {
-  if (gridConfig?.grid_cell_size > 0) return gridConfig.grid_cell_size;
+  if (gridIsUsable(gridConfig)) return gridConfig.grid_cell_size;
 
   const smallerMapDim = Math.min(naturalWidth || 0, naturalHeight || 0);
   if (smallerMapDim <= 0) return GRIDLESS_ASSUMED_CELL_PX;
@@ -101,14 +118,6 @@ export const PC_TOKEN_SCALE_DEFAULT = 1;
  */
 export function isPlayerSideToken(token) {
   return token?.kind === 'pc' || !!token?.owner_user_id;
-}
-
-/**
- * Can this grid address positions? Present, enabled, and cell size tuned —
- * the client twin of shared_contracts.grid_math.grid_usable.
- */
-export function gridIsUsable(gridConfig) {
-  return !!gridConfig?.enabled && gridConfig.grid_cell_size > 0;
 }
 
 /**

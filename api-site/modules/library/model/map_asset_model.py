@@ -8,7 +8,7 @@ Extends MediaAsset with grid configuration fields (width, height, opacity).
 Uses SQLAlchemy joined table inheritance pattern.
 """
 
-from sqlalchemy import Column, Integer, Float, ForeignKey, String
+from sqlalchemy import Boolean, Column, Integer, Float, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from modules.library.model.asset_model import MediaAsset
@@ -44,6 +44,12 @@ class MapAssetModel(MediaAsset):
     grid_offset_y = Column(Integer, nullable=True)
     grid_line_color = Column(String(20), nullable=True)  # hex colour e.g. "#d1d5db"
     grid_cell_size = Column(Float, nullable=True)  # absolute cell size in native image pixels
+    # Grid on/off. NULL means never set and reads as True, so every map that
+    # predates the toggle keeps its grid. This is a real off, not a hide: when
+    # false, lines, snapping, cell labels AND token sizing all stop, because
+    # cellPxForMap gates on the same flag (tokens v4 decision 51 — with a grid
+    # the grid is the truth, without one the image is).
+    grid_enabled = Column(Boolean, nullable=True)
 
     # Player-token size on this map (tokens v4). Multiplier (0.5-1.5) on the
     # rendered diameter of player-side discs only. NULL means never set and

@@ -7,10 +7,9 @@ import {
   DM_CHILD,
   DM_CHILD_LAST,
   DM_ARROW,
-  COMBAT_TOGGLE_ACTIVE,
-  COMBAT_TOGGLE_INACTIVE,
   ACTIVE_BACKGROUND,
 } from '../../styles/constants';
+import Switch from '@/app/shared/components/Switch';
 import DicePrompt from './DMDicePrompt';
 
 // Local helper for title case (avoids prototype mutation)
@@ -101,22 +100,12 @@ export default function CombatControlsPanel({
         <div
           className={`${DM_CHILD} w-full flex items-center justify-between cursor-pointer`}
           onClick={toggleCombat}
+          role="switch"
+          aria-checked={combatActive}
+          aria-label="Combat"
         >
-          ⚔️ Toggle Combat
-
-          <div
-            className={`rounded-full border-2 transition-colors duration-200 w-14 h-7 ${
-              combatActive
-                ? COMBAT_TOGGLE_ACTIVE
-                : COMBAT_TOGGLE_INACTIVE
-            }`}
-          >
-            <div
-              className={`inline-block rounded-full bg-white shadow-lg transform transition-transform duration-300 w-4 h-4 m-1 ${
-                combatActive ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            ></div>
-          </div>
+          ⚔️ Combat
+          <Switch checked={combatActive} />
         </div>
 
         <button
