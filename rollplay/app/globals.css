@@ -370,9 +370,24 @@ body {
   --panel-width-addition: 180px;
 }
 
+/* Expanded right drawer: double whatever the UI-scale setting makes it, capped at
+   half the viewport so it never overwhelms the board on a small screen. Nothing
+   here is a fixed pixel guess — it tracks --panel-width-addition, so all four UI
+   scales double correctly. */
+.game-interface[data-right-drawer-expanded="true"] {
+  --right-drawer-width: min(calc(2 * (380px + var(--panel-width-addition))), 50vw);
+}
+
 /* Game Interface Layout
    ========================================================================== */
 .game-interface {
+  /* Single source of truth for the right drawer's width. Both .right-drawer and
+     MapSafeArea read this — the map insets itself by the drawer's width so the
+     board is never covered, and before this variable existed the formula was
+     duplicated as a JS string in MapSafeArea.js. Two copies, one of which would
+     silently stop matching the moment the drawer could resize. */
+  --right-drawer-width: calc(380px + var(--panel-width-addition));
+
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #1a1a2e;
   color: var(--content-on-dark);
@@ -756,9 +771,9 @@ body {
   right: 0;
   top: var(--nav-height, calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px)));
   bottom: 0;
-  width: calc(380px + var(--panel-width-addition));
+  width: var(--right-drawer-width);
   z-index: 30;
-  transition: transform 300ms ease;
+  transition: transform 300ms ease, width 300ms ease;
   background: linear-gradient(270deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
@@ -1347,3 +1362,217 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   border-radius: 2px;
   border: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Notes editor (TipTap)
+
+   TipTap ships no stylesheet — the schema is all it provides, so every node needs
+   a rule here or it renders as unstyled text. Lists in particular need their
+   markers restored: Tailwind's preflight strips them globally.
+
+   Colours are written literally rather than through the app tokens on purpose.
+   The token palette is authored for the LIGHT page background (--content-primary
+   is #1F1F1F, --content-bold is #0B0A09), so using it here paints near-black text
+   onto a dark panel and the note looks empty. The editor owns an opaque surface
+   of its own — the drawer's translucent backdrop is unreadable behind body copy —
+   so its foreground colours are fixed to that surface, not inherited.
+   --------------------------------------------------------------------------- */
+.notes-editor {
+  background: #171614;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.notes-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  background: #0B0A09;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.notes-toolbar-btn {
+  border-radius: 3px;
+  padding: 4px 7px;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: #B5ADA6;
+  background: transparent;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.notes-toolbar-btn:hover {
+  background: #37322F;
+  color: #F7F4F3;
+}
+
+.notes-toolbar-btn.is-active {
+  background: #F7F4F3;
+  color: #0B0A09;
+}
+
+.notes-toolbar-divider {
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: var(--border-default);
+}
+
+.notes-editor__body {
+  padding: 10px 12px;
+  max-height: 48vh;
+  overflow-y: auto;
+}
+
+.notes-prose {
+  color: #F7F4F3;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.notes-prose h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0.9rem 0 0.35rem;
+}
+
+.notes-prose h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0.75rem 0 0.3rem;
+}
+
+.notes-prose h2:first-child,
+.notes-prose h3:first-child {
+  margin-top: 0;
+}
+
+.notes-prose p {
+  margin: 0 0 0.5rem;
+}
+
+.notes-prose ul,
+.notes-prose ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.notes-prose ul { list-style: disc; }
+.notes-prose ol { list-style: decimal; }
+
+.notes-prose li { margin: 0.15rem 0; }
+.notes-prose li > p { margin: 0; }
+
+.notes-prose mark {
+  background: #E0A82E;
+  color: #0B0A09;
+  padding: 0 0.15em;
+  border-radius: 2px;
+}
+
+.notes-prose s { opacity: 0.6; }
+
+/* Placeholder: the extension writes data-placeholder onto the empty first node
+   and there is nothing to see until we render it. */
+.notes-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #B5ADA6;
+  opacity: 0.55;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Notes chrome — the picker, its actions and the empty-state CTA.
+   Same reasoning as .notes-editor above: these sit on the drawer's translucent
+   backdrop, where a transparent control has no edge to read against. They get an
+   opaque surface so they look like controls rather than floating text. */
+.notes-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #171614;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  color: #F7F4F3;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.notes-control:hover:not(:disabled) {
+  background: #211F1C;
+  border-color: #4A433E;
+}
+
+.notes-control:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.notes-control:focus {
+  outline: none;
+  border-color: var(--border-active);
+}
+
+/* The one filled button in the slice: the empty-state CTA, which is the only
+   thing on screen when a user has no notes yet. */
+.notes-btn-primary {
+  background: #F7F4F3;
+  color: #0B0A09;
+  border: 1px solid #F7F4F3;
+  border-radius: 4px;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: background-color 120ms ease;
+}
+
+.notes-btn-primary:hover:not(:disabled) {
+  background: #E2DCD7;
+}
+
+.notes-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Right drawer width toggle.
+
+   Lives in the tab rail, above the tabs, because it acts on the drawer rather
+   than on whatever panel happens to be open.
+
+   Shares the tabs' surface deliberately — same translucent panel, blur, border
+   and left-rounded corners — so it reads as part of the same physical rail and
+   travels with it. What keeps it from reading as a *tab* is its shape: tabs are
+   112px tall with vertical text, this is a 30px horizontal icon. Same material,
+   different object. */
+.right-drawer-expand-btn {
+  width: 40px;
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 200ms, background 200ms;
+}
+
+.right-drawer-expand-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  color: rgba(255, 255, 255, 0.9);
+}
+

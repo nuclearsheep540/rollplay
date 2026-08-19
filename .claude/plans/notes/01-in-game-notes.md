@@ -35,10 +35,14 @@ tags, folders, templates, per-session pages, export.
    returns `[]` and shows an empty state with a "New note" button. 100% user-initiated.
 8. **Titles derive from the first line when unset.** `title` is nullable; null renders as the
    document's first line. Renaming sets the column. No "name your note before you can type" gate.
-9. **Editor is TipTap**, hand-picked extensions. See §4.
+9. **Editor is TipTap**, hand-picked extensions — never StarterKit. See §4.
 10. **Autosave is debounce + ceiling, no save button, no local mirror.** See §7.
 11. **api-game, MongoDB, the ETL, WebSocket events and `shared_contracts` are all uninvolved.**
     See §2.
+12. **The install list is the feature list.** Formatting shipped: headings (H2/H3), bold, italic,
+    strike, highlight, bullet + numbered lists, font family, hard break. Excluded on purpose:
+    **images** (storage cost) and **links** (malicious-URL risk, no real payoff), plus
+    subscript/superscript as toolbar bloat. See §4.
 
 ## 2. Why this never touches the game service
 
@@ -123,17 +127,55 @@ Never hand-written.
 `@tiptap/react` **3.30.2**, MIT, peer `react ^17 || ^18 || ^19` (we are on React 18.2). Verified
 against the npm registry 2026-08-19.
 
+### Extension set (final, agreed 2026-08-19)
+
+TipTap is **opt-in**: every capability is a separate package that must be installed *and*
+registered. There is no feature to "turn off" — an extension we never install simply does not
+exist. And because ProseMirror parses pasted content against the registered schema, **anything
+with no matching node or mark is silently dropped on paste**. Pasting an image yields nothing
+because no image node exists to hold it. That is a structural guarantee, not a sanitiser we
+maintain.
+
 ```
-@tiptap/react @tiptap/core @tiptap/pm @tiptap/extension-text-style
-extensions: [Document, Paragraph, Text, Bold, Italic,
-             Heading.configure({ levels: [2, 3] }), TextStyle, FontFamily]
+npm packages:
+  @tiptap/react @tiptap/core @tiptap/pm
+  @tiptap/extension-document @tiptap/extension-paragraph @tiptap/extension-text
+  @tiptap/extension-bold @tiptap/extension-italic @tiptap/extension-strike
+  @tiptap/extension-highlight @tiptap/extension-heading @tiptap/extension-hard-break
+  @tiptap/extension-list @tiptap/extension-text-style @tiptap/extensions
+
+extensions: [
+  Document, Paragraph, Text, HardBreak,             // skeleton — not user-facing
+  Bold, Italic, Strike, Highlight,                  // marks
+  Heading.configure({ levels: [2, 3] }),            // blocks
+  BulletList, OrderedList, ListItem,                // from @tiptap/extension-list
+  TextStyle, FontFamily,                            // font dropdown (TextStyle is its carrier)
+  UndoRedo, Placeholder, CharacterCount,            // from @tiptap/extensions
+]
 ```
+
+Toolbar is nine controls: H2, H3, bold, italic, strike, highlight, bullet list, numbered list,
+font family. That is about the ceiling for a 280px column.
 
 `FontFamily` ships inside `@tiptap/extension-text-style` (verified in its type definitions).
+`UndoRedo`, `Placeholder` and `CharacterCount` all ship inside `@tiptap/extensions` (verified
+against the monorepo). `CharacterCount` is not decoration — it enforces the per-note size cap in
+the editor so the user is stopped before the server has to 422 them.
 
-**Do not use `@tiptap/starter-kit`** — measured at 125.8 KB gzip vs 95.4 KB for the hand-picked
-set. That is 30 KB for lists, blockquote, strike, underline, link, code blocks and HR that we
-explicitly do not want.
+**Deliberately excluded, with reasons** (decision 12):
+- **Images / audio / youtube / twitch / file-handler** — five separate packages, all uninstalled.
+  This is the storage-cost surface and none of it can reach us.
+- **Link** — the href-protocol sanitisation burden and malicious-URL sharing risk are real; the
+  payoff is a clickable URL nobody needs. URLs written as plain text cost nothing and cannot be
+  weaponised.
+- **Subscript / superscript** — redundant for prose notes and they only widen the toolbar.
+- Also out: tables, mentions, emoji, code/code blocks, blockquote, horizontal rule, details,
+  text-align, color, typography, find-and-replace, drag handles, collaboration (paid).
+
+**Do not use `@tiptap/starter-kit`** — measured at 125.8 KB gzip vs 95.4 KB for a hand-picked set.
+Verified against the registry, it bundles 20 extensions including **Link**, Underline, Code,
+CodeBlock, Blockquote and HorizontalRule. Explicit installs are noisier but they are the whole
+point: the install list *is* the feature list.
 
 **Why TipTap over Quill**, having measured both: Quill is smaller (58.8 KB + 3.8 KB CSS vs 95.4 KB
 gzip), but the editor is lazy-loaded behind a drawer tab and off the initial route, so 36 KB is not
@@ -150,6 +192,28 @@ documents are priced."* Self-hosted with our own Postgres costs nothing.
 
 **SSR:** TipTap is DOM-based. Load it via `dynamic(() => import('./NoteEditor'), { ssr: false })`
 and set `immediatelyRender: false` on the editor as belt-and-braces against hydration mismatch.
+
+### Undo/redo — two build requirements
+
+`UndoRedo` wraps ProseMirror's `history` plugin (a real document-level stack, not the browser's
+contenteditable undo). Registering it binds `Mod-Z` / `Shift-Mod-Z` / `Mod-Y` automatically, with
+`depth: 100` and `newGroupDelay: 500` (a burst of typing collapses into one undo step). Commands
+are `editor.commands.undo()/.redo()`, gated by `editor.can().undo()` for toolbar buttons.
+
+1. **⚠️ Hydrate at creation, never after — this is a data-loss path.** If the editor is created
+   empty and the fetched note is pushed in afterwards, that insertion lands on the undo stack. One
+   Ctrl+Z blanks the note and **autosave then persists the blank**. Gate rendering the editor on
+   the note having been fetched and pass it as the `content` option at creation. Costs nothing
+   (the editor is lazy-loaded anyway) but must be deliberate — it looks fine in dev against a fast
+   local API.
+2. **Undo history dies on unmount — accepted.** The stack is in-memory per editor instance, so
+   switching drawer tabs or closing the drawer loses it while the text stays saved. Keeping the
+   editor mounted-but-hidden would preserve it; **we are taking the hit for now** (Matt's call). A
+   reopened note reasonably reads as a fresh session.
+
+One known leak: `TextStyle`/`FontFamily` parse `style="font-family: …"` off pasted HTML, so a paste
+from Google Docs can carry in a font outside our dropdown. Cosmetic only. Configure a strict
+whitelist if it ever grates.
 
 ## 5. API
 
@@ -285,8 +349,9 @@ against a modified client.
    @tiptap/extension-text-style`) **and** on the host so `package.json` / lockfile are committed —
    or rebuild the image and recreate the volume. Also note HMR is unreliable in this container; a
    `.next` clear + restart may be needed to see changes.
-2. `NoteEditor` (dynamic, `ssr: false`, `immediatelyRender: false`), toolbar: H2, H3, bold, italic,
-   font-family (one proportional, one monospace).
+2. `NoteEditor` (dynamic, `ssr: false`, `immediatelyRender: false`), extension set per §4, toolbar:
+   H2, H3, bold, italic, strike, highlight, bullet list, numbered list, font-family (one
+   proportional, one monospace). Editor renders only once the note is fetched (see §4 undo).
 3. `useNotes` (TanStack) + `useNoteAutosave` (§7) + save-status indicator.
 4. `NotePicker` — Dropdown of titles, "n / 100", New note, rename, delete via `ConfirmDialog`.
 5. `NotesPanel` composition; `EmptyState` when the list is empty.
