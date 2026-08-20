@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useQueryClient } from '@tanstack/react-query'
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons'
@@ -63,12 +63,11 @@ export default function NotesWorkspace({
 }) {
   const queryClient = useQueryClient()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [isRenaming, setIsRenaming] = useState(false)
-  const [draftTitle, setDraftTitle] = useState('')
-  const renameInputRef = useRef(null)
-
   const notesList = useNotesList(campaignId)
-  const notes = notesList.data || []
+  // Memoised because `|| []` mints a new array identity on every render, and this
+  // sits in two effect dependency arrays below — without it they re-run on every
+  // render for nothing.
+  const notes = useMemo(() => notesList.data || [], [notesList.data])
 
   const createNote = useCreateNote(campaignId)
   const renameNote = useRenameNote(campaignId)
@@ -89,14 +88,6 @@ export default function NotesWorkspace({
       onSelectNote(notes[0]?.id ?? null)
     }
   }, [notes, activeNoteId, notesList.isLoading, onSelectNote])
-
-  useEffect(() => {
-    setIsRenaming(false)
-  }, [activeNoteId])
-
-  useEffect(() => {
-    if (isRenaming) renameInputRef.current?.focus()
-  }, [isRenaming])
 
   const activeNoteQuery = useNote(activeNoteId)
   const activeNote = activeNoteQuery.data
@@ -173,11 +164,6 @@ export default function NotesWorkspace({
     await deleteNote.mutateAsync(activeNoteId)
     setConfirmingDelete(false)
     onSelectNote(null)
-  }
-
-  const commitRename = () => {
-    setIsRenaming(false)
-    renameNote.mutate({ noteId: activeNoteId, title: draftTitle })
   }
 
   return (

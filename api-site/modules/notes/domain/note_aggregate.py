@@ -19,9 +19,21 @@ MAX_CONTENT_BYTES = 256 * 1024
 # Longest derived title we will hand back when the user hasn't named a note.
 DERIVED_TITLE_MAX_CHARS = 80
 
-# What an empty ProseMirror document looks like. A doc with no content at all is
-# invalid to the editor, so a new note starts with one empty paragraph.
-EMPTY_DOCUMENT: Dict[str, Any] = {"type": "doc", "content": [{"type": "paragraph"}]}
+
+def empty_document() -> Dict[str, Any]:
+    """A fresh empty ProseMirror document.
+
+    A function rather than a module constant, deliberately. As a constant this
+    was handed to every new note as a shallow ``dict()`` copy, which duplicates
+    the outer dict but shares the nested content list — so one in-place mutation
+    of any note's document would rewrite what every subsequent new note was born
+    with, for the life of the worker process. Building it fresh each call makes
+    that class of bug unreachable rather than merely avoided.
+
+    A doc with no content at all is invalid to the editor, so it carries one
+    empty paragraph.
+    """
+    return {"type": "doc", "content": [{"type": "paragraph"}]}
 
 
 def utc_now() -> datetime:
@@ -76,7 +88,7 @@ class NoteAggregate:
             campaign_id=campaign_id,
             campaign_name=campaign_name.strip(),
             title=None,
-            content_delta=dict(EMPTY_DOCUMENT),
+            content_delta=empty_document(),
             content_text="",
             rev=0,
             created_at=now,

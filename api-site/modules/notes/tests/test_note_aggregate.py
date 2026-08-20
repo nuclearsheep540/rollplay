@@ -126,3 +126,62 @@ class TestOwnership:
 
     def test_anyone_else_is_not(self):
         assert make_note(user_id=uuid4()).is_owned_by(uuid4()) is False
+
+
+class TestNewNotesAreIndependent:
+    """Every new note must own its document outright.
+
+    A new note is seeded from a single empty-document shape. If that shape were a
+    module-level object handed out by reference — or copied only shallowly — every
+    note created in the process would share the same nested list, and one in-place
+    mutation would silently rewrite what every *subsequent* new note starts with.
+    It survives until the worker restarts, so it would present as notes born with
+    someone else's content and vanish the moment anyone tried to reproduce it.
+
+    Nothing mutates content_delta in place today; these tests exist so that stays
+    harmless if anything ever does.
+
+    ``test_seeded_documents_are_distinct_objects`` is the definitive check: it
+    detects sharing by identity without mutating anything, so it stands alone and
+    does not depend on what any other test did first. The two mutation tests below
+    describe the same defect in terms of consequence.
+    """
+
+    def test_two_new_notes_do_not_share_their_document_tree(self):
+        first = make_note()
+        second = make_note()
+
+        first.content_delta["content"].append({"type": "paragraph"})
+
+        assert len(second.content_delta["content"]) == 1
+
+    def test_mutating_one_notes_paragraph_does_not_reach_another(self):
+        first = make_note()
+        second = make_note()
+
+        # One level deeper than the list — a shallow copy of the outer dict
+        # leaves this shared too.
+        first.content_delta["content"][0]["type"] = "heading"
+
+        assert second.content_delta["content"][0]["type"] == "paragraph"
+
+    def test_seeded_documents_are_distinct_objects(self):
+        first = make_note()
+        second = make_note()
+
+        assert first.content_delta is not second.content_delta
+        assert first.content_delta["content"] is not second.content_delta["content"]
+        assert first.content_delta["content"][0] is not second.content_delta["content"][0]
+
+    def test_a_new_note_starts_with_exactly_one_empty_paragraph(self):
+        """The seed shape itself: an editor cannot render a doc with no content.
+
+        A regression guard on the shape, NOT evidence of independence — run alone
+        against the shared-object bug this passes, because nothing has polluted
+        the shared seed yet. Verified by experiment, 2026-08-20. Do not cite it
+        as proof of the fix; that is what the identity test above is for.
+        """
+        assert make_note().content_delta == {
+            "type": "doc",
+            "content": [{"type": "paragraph"}],
+        }

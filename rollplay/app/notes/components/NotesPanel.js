@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useQueryClient } from '@tanstack/react-query'
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons'
@@ -55,7 +55,10 @@ export default function NotesPanel({ campaignId }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const notesList = useNotesList(campaignId)
-  const notes = notesList.data || []
+  // Memoised because `|| []` mints a new array identity on every render, and this
+  // sits in two effect dependency arrays below — without it they re-run on every
+  // render for nothing.
+  const notes = useMemo(() => notesList.data || [], [notesList.data])
 
   const createNote = useCreateNote(campaignId)
   const renameNote = useRenameNote(campaignId)

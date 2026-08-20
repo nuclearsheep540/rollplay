@@ -565,6 +565,62 @@ events = SessionEvents.session_created(campaign_player_ids=[str(pid) for pid in 
 # ... then inside: user_id=UUID(player_id)  # pointless round-trip
 ```
 
+### Testing — every test owns its own state
+
+**The rule: a test must create everything it touches, and touch nothing it did not create.**
+
+Order-independence is not the rule — it is how you *detect* whether you followed the rule. If tests
+pass in one order and fail in another, that is the symptom; the disease is shared setup. Chasing the
+symptom (adding sleeps, pinning order, renaming tests so they sort favourably) leaves the disease in
+place.
+
+**What "shared state" means here.** It is much wider than a fixture two tests both use:
+
+- Module-level mutable objects — a `dict`/`list` constant, a default argument, a seed structure.
+- Class attributes on the test class, or anything assigned to `self` in one test and read in another.
+- Module singletons: registries, caches, connection pools, in-memory stores.
+- Session- or module-scoped pytest fixtures (`scope="session"`), which exist precisely to be shared.
+- The database, when a test commits and does not roll back.
+- **State inside the code under test.** This is the one that bites, because no amount of careful
+  fixture design prevents it — if the production code hands every caller the same object, a test
+  mutating "its own" result is writing to a global.
+
+**Practices:**
+
+- **Build inputs per test, via a factory.** `make_note(**overrides)` returning a fresh object each
+  call — not a module-level object that tests mutate in place. Function-scoped fixtures by default;
+  reach for a wider scope only for genuinely read-only, expensive setup, and then never mutate it.
+- **Prefer assertions that observe over assertions that mutate.** `a.thing is not b.thing` detects
+  shared state while changing nothing, so it cannot leak into another test. Use a mutation-based
+  assertion when the *consequence* is what deserves describing — and understand it writes to
+  whatever the code under test shares.
+- **Assert only on objects the test created.** Asserting on a module constant, or on anything a
+  previous test could have touched, makes the result a function of the whole run.
+- **Leave nothing behind.** If a test must mutate shared state, restore it in teardown — but treat
+  needing that as a smell worth removing rather than managing.
+
+**Verify a new test actually proves what you claim.** Run it alone against the *unfixed* code:
+
+```bash
+docker exec api-site-dev python -m pytest "path::TestClass::test_name" -q
+```
+
+If it passes there, it does not prove the bug — whatever it does in a full run. Temporarily
+reintroducing the bug to run this experiment is cheap and worth it (copy the file first, restore
+after). **Never cite a collateral failure as evidence**: a test that fails only as a knock-on from an
+earlier test's side effects proves nothing, and presenting it as proof is worse than not having it.
+
+**Test-driven fixes:** write the test, run it, **show it failing**, then fix, then show it passing. A
+test written after a fix proves only that the code does what it does.
+
+**Why this is here (2026-08-20, notes).** Four tests were written to prove a shared-mutable-default
+bug: `EMPTY_DOCUMENT` was a module constant copied with `dict()`, which duplicates the outer dict but
+shares the nested list, so every new note in the process was handed the same `content` list. All four
+tests failed in a full run and that was reported as proof. Run individually, **three failed and one
+passed** — the fourth had only failed because earlier tests had already corrupted the shared constant.
+The fixtures were fine; the leak was through production module state. Its docstring now says outright
+that it is a shape regression guard and not evidence of independence.
+
 ### Anti-Patterns (Removed During Refactor)
 - No separate `adapters/` layer — repositories handle ORM translation directly
 - No separate `mappers.py` — repositories call `Aggregate.from_persistence()` directly
