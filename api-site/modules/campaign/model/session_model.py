@@ -51,7 +51,7 @@ class Session(Base):
     name = Column(String(100), nullable=True)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey('campaigns.id'), nullable=False)
     host_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
-    status = Column(String(20), default='INACTIVE', nullable=False)
+    status = Column(String(20), default='inactive', nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     started_at = Column(DateTime(timezone=True))
     stopped_at = Column(DateTime(timezone=True))
