@@ -35,6 +35,7 @@ import {
   faRightFromBracket,
   faUserShield,
   faFolderOpen,
+  faNoteSticky,
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
@@ -1878,6 +1879,19 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                               >
                                 <FontAwesomeIcon icon={faFolderOpen} className="h-4 w-4" />
                                 <span className="text-sm font-medium">View Assets</span>
+                              </button>
+
+                              {/* Notes — this user's private notebook for the
+                                  campaign. Not DM-gated: every member keeps
+                                  their own notes, and the server authorises by
+                                  ownership rather than membership. */}
+                              <button
+                                onClick={() => router.push(`/notes?campaign_id=${campaign.id}`)}
+                                className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
+                                style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
+                              >
+                                <FontAwesomeIcon icon={faNoteSticky} className="h-4 w-4" />
+                                <span className="text-sm font-medium">Notes</span>
                               </button>
 
                               {/* Delete */}

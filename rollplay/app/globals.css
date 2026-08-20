@@ -370,9 +370,24 @@ body {
   --panel-width-addition: 180px;
 }
 
+/* Expanded right drawer: double whatever the UI-scale setting makes it, capped at
+   half the viewport so it never overwhelms the board on a small screen. Nothing
+   here is a fixed pixel guess — it tracks --panel-width-addition, so all four UI
+   scales double correctly. */
+.game-interface[data-right-drawer-expanded="true"] {
+  --right-drawer-width: min(calc(2 * (380px + var(--panel-width-addition))), 50vw);
+}
+
 /* Game Interface Layout
    ========================================================================== */
 .game-interface {
+  /* Single source of truth for the right drawer's width. Both .right-drawer and
+     MapSafeArea read this — the map insets itself by the drawer's width so the
+     board is never covered, and before this variable existed the formula was
+     duplicated as a JS string in MapSafeArea.js. Two copies, one of which would
+     silently stop matching the moment the drawer could resize. */
+  --right-drawer-width: calc(380px + var(--panel-width-addition));
+
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #1a1a2e;
   color: var(--content-on-dark);
@@ -756,9 +771,9 @@ body {
   right: 0;
   top: var(--nav-height, calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px)));
   bottom: 0;
-  width: calc(380px + var(--panel-width-addition));
+  width: var(--right-drawer-width);
   z-index: 30;
-  transition: transform 300ms ease;
+  transition: transform 300ms ease, width 300ms ease;
   background: linear-gradient(270deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
@@ -1346,4 +1361,424 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   cursor: pointer;
   border-radius: 2px;
   border: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Notes — editor chrome, shared by the in-game drawer and the /notes workspace
+
+   Design contract: .claude/plans/notes/design-mock.html
+
+   One ground, two hairlines. The identity bar, the formatting bar and the
+   writing canvas all sit on onyx and are separated only by 1px rules — no card,
+   no inner border, nothing that reads as floating. In the drawer that also
+   solves the translucency: an opaque full-bleed surface covers the backdrop
+   blur, so body copy is never set over a moving background.
+
+   Colours are literal rather than tokenised on purpose. The token palette is
+   authored for the LIGHT dashboard background (--content-primary is #1F1F1F),
+   so using it here paints near-black text onto a dark surface.
+   --------------------------------------------------------------------------- */
+.notes-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #0B0A09;
+  color: #F7F4F3;
+}
+
+/* Escapes .drawer-content's padding so the surface meets the drawer's edges.
+   Matches the padding exactly — see .drawer-content. */
+.notes-surface--bleed {
+  margin: calc(-20px * var(--ui-scale)) calc(-16px * var(--ui-scale));
+  min-height: calc(100% + (40px * var(--ui-scale)));
+}
+
+/* ── identity row ─────────────────────────────────────────────────────────── */
+.notes-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #37322F;
+  flex-shrink: 0;
+}
+
+.notes-topbar__picker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #F7F4F3;
+  transition: background-color 120ms ease;
+}
+
+.notes-topbar__picker:hover { background: rgba(255, 255, 255, 0.07); }
+
+.notes-topbar__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-topbar__caret { width: 9px; flex-shrink: 0; opacity: 0.5; }
+
+.notes-topbar__rename {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid #37322F;
+  border-radius: 4px;
+  background: #171614;
+  color: #F7F4F3;
+  font-size: 0.875rem;
+}
+
+.notes-topbar__rename:focus { outline: none; border-color: #B5ADA6; }
+
+.notes-topbar__spacer { flex: 1; min-width: 0; }
+
+.notes-topbar__status {
+  font-size: 0.68rem;
+  color: #B5ADA6;
+  white-space: nowrap;
+}
+
+.notes-topbar__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  color: #B5ADA6;
+  font-size: 0.75rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.notes-topbar__icon:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #F7F4F3; }
+.notes-topbar__icon:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.notes-topbar__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #37322F;
+  border-radius: 4px;
+  color: #B5ADA6;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.notes-topbar__new:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #F7F4F3; }
+.notes-topbar__new:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── formatting row ───────────────────────────────────────────────────────── */
+.notes-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #37322F;
+  flex-shrink: 0;
+}
+
+.notes-toolbar__divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 5px;
+  background: #37322F;
+  flex-shrink: 0;
+}
+
+.notes-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: #B5ADA6;
+  font-size: 0.75rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.notes-tool:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #F7F4F3; }
+.notes-tool:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Active marks invert rather than tint — at this size a tint is easy to miss. */
+.notes-tool.is-active { background: #F7F4F3; color: #0B0A09; }
+
+.notes-tool__label { font-weight: 600; font-size: 0.78rem; }
+.notes-tool__caret { width: 8px; opacity: 0.55; }
+.notes-tool--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 0 8px; }
+
+/* ── canvas ───────────────────────────────────────────────────────────────── */
+.notes-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--notes-canvas-pad, 18px 16px 48px);
+}
+
+/* Reading measure — only where there is room to give it away. The drawer runs
+   full width; at 280-560px a measure would just make the column narrower. */
+.notes-measure {
+  max-width: 62ch;
+  margin: 0 auto;
+}
+
+.notes-canvas__count {
+  margin-top: 12px;
+  font-size: 0.68rem;
+  color: #B5ADA6;
+}
+
+/* ── document ─────────────────────────────────────────────────────────────── */
+.notes-prose {
+  color: #E8E3DE;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.notes-prose h1 {
+  font-size: 1.7em;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 1.6em 0 0.45em;
+}
+
+.notes-prose h2 {
+  font-size: 1.35em;
+  line-height: 1.25;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 1.5em 0 0.4em;
+}
+
+.notes-prose h3 {
+  font-size: 1.12em;
+  line-height: 1.3;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 1.3em 0 0.35em;
+}
+
+.notes-prose > :first-child { margin-top: 0; }
+
+.notes-prose p { margin: 0 0 0.85em; }
+
+.notes-prose ul,
+.notes-prose ol {
+  margin: 0 0 0.85em;
+  padding-left: 1.3em;
+}
+
+.notes-prose ul { list-style: disc; }
+.notes-prose ol { list-style: decimal; }
+.notes-prose li { margin: 0.2em 0; }
+.notes-prose li > p { margin: 0; }
+
+/* Muted olive rather than a bright amber — a highlight should mark a line, not
+   shout over the text it is marking. */
+.notes-prose mark {
+  background: #8A7A2A;
+  color: #0B0A09;
+  padding: 0 0.18em;
+  border-radius: 2px;
+}
+
+.notes-prose s { opacity: 0.55; }
+.notes-prose u { text-decoration: underline; text-underline-offset: 2px; }
+
+.notes-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #B5ADA6;
+  opacity: 0.55;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   /notes workspace — the full-page, two-pane view
+   --------------------------------------------------------------------------- */
+.notes-workspace {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: #0B0A09;
+  color: #F7F4F3;
+  /* The page has room, so the canvas breathes and the measure centres in it. */
+  --notes-canvas-pad: 30px 24px 80px;
+}
+
+.notes-workspace__sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid #37322F;
+  background: #0F0E0D;
+}
+
+.notes-workspace__sidebar-head {
+  padding: 16px;
+  border-bottom: 1px solid #37322F;
+}
+
+.notes-workspace__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 0.72rem;
+  color: #B5ADA6;
+  transition: color 120ms ease;
+}
+
+.notes-workspace__back:hover { color: #F7F4F3; }
+
+.notes-workspace__campaign {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #F7F4F3;
+  word-break: break-word;
+}
+
+.notes-workspace__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.notes-workspace__empty {
+  padding: 12px 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #B5ADA6;
+}
+
+.notes-workspace__row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.notes-workspace__row:hover { background: rgba(255, 255, 255, 0.05); }
+.notes-workspace__row.is-active { background: #211F1C; border-color: #37322F; }
+
+.notes-workspace__row-title {
+  font-size: 0.8rem;
+  color: #F7F4F3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-workspace__row-date { font-size: 0.65rem; color: #B5ADA6; }
+
+.notes-workspace__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.notes-workspace__placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: #B5ADA6;
+}
+
+.notes-workspace__conflict,
+.notes-workspace__locked {
+  margin: 10px 16px 0;
+  border: 1px solid var(--feedback-warning);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--feedback-warning);
+}
+
+/* The read-only notice offers the route into the game, because locking without
+   naming the alternative leaves the user staring at a dead editor. */
+.notes-workspace__locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notes-btn-primary {
+  background: #F7F4F3;
+  color: #0B0A09;
+  border-radius: 4px;
+  padding: 7px 14px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 120ms ease;
+}
+
+.notes-btn-primary:hover:not(:disabled) { background: #E2DCD7; }
+.notes-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------------------
+   Right drawer width toggle
+
+   Lives in the tab rail, above the tabs, because it acts on the drawer rather
+   than on whatever panel happens to be open.
+
+   Shares the tabs' surface deliberately — same translucent panel, blur, border
+   and left-rounded corners — so it reads as part of the same physical rail and
+   travels with it. What keeps it from reading as a *tab* is its shape: tabs are
+   112px tall with vertical text, this is a 30px horizontal icon. Same material,
+   different object.
+   --------------------------------------------------------------------------- */
+.right-drawer-expand-btn {
+  width: 40px;
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 200ms, background 200ms;
+}
+
+.right-drawer-expand-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  color: rgba(255, 255, 255, 0.9);
 }

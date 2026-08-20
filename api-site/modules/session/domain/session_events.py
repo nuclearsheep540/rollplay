@@ -30,7 +30,7 @@ class SessionEvents:
 
     @staticmethod
     def session_created(
-        campaign_player_ids: List[UUID],
+        non_dm_member_ids: List[UUID],
         session_id: UUID,
         session_name: str,
         campaign_id: UUID,
@@ -39,14 +39,14 @@ class SessionEvents:
         host_screen_name: str
     ) -> List[EventConfig]:
         """
-        Event: Campaign host created a new session (silent state update for players)
+        Event: Campaign host created a new session (silent state update for members)
 
         Pure state update - no toast notification, no persistent notification.
         Only triggers frontend state refresh (session list update).
-        Recipients: All campaign members (player_ids, excludes host)
+        Recipients: All campaign members except the DM, who created it
 
         Args:
-            campaign_player_ids: List of campaign member user IDs
+            non_dm_member_ids: Campaign members other than the DM (who is the creator)
             session_id: Session ID
             session_name: Session name
             campaign_id: Campaign ID
@@ -59,9 +59,9 @@ class SessionEvents:
         """
         events = []
 
-        for player_id in campaign_player_ids:
+        for member_id in non_dm_member_ids:
             events.append(EventConfig(
-                user_id=player_id,
+                user_id=member_id,
                 event_type="session_created",
                 data={
                     "session_id": str(session_id),
@@ -78,12 +78,12 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_started(campaign_player_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, active_game_id: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
+    def session_started(campaign_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, active_game_id: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
         """
-        Event: Host started a session (notifies all campaign players)
+        Event: Host started a session (notifies every campaign member)
 
         Args:
-            campaign_player_ids: List of all campaign member user IDs
+            campaign_member_ids: Every active campaign member, DM included
             session_id: Session ID
             session_name: Session name
             campaign_id: Campaign ID
@@ -93,12 +93,12 @@ class SessionEvents:
             host_screen_name: Host display name
 
         Returns:
-            List[EventConfig] (one per player)
+            List[EventConfig] (one per campaign member)
         """
         events = []
-        for player_id in campaign_player_ids:
+        for member_id in campaign_member_ids:
             events.append(EventConfig(
-                user_id=player_id,
+                user_id=member_id,
                 event_type="session_started",
                 data={
                     "session_id": str(session_id),
@@ -115,15 +115,16 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_paused(active_participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[EventConfig]:
+    def session_paused(campaign_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[EventConfig]:
         """
-        Event: Session paused (silent state update to active participants)
+        Event: Session paused (silent state update to every campaign member)
 
         Pure state update - no toast notification, no persistent notification.
         Only triggers frontend state refresh (session list update).
 
         Args:
-            active_participant_ids: List of user IDs who were in the session
+            campaign_member_ids: Every active campaign member, DM included —
+                NOT only those who were in the session
             session_id: Session ID
             session_name: Session name
             campaign_id: Campaign ID
@@ -131,12 +132,12 @@ class SessionEvents:
             paused_by_screen_name: Display name of user who paused
 
         Returns:
-            List[EventConfig] (one per participant)
+            List[EventConfig] (one per campaign member)
         """
         events = []
-        for participant_id in active_participant_ids:
+        for member_id in campaign_member_ids:
             events.append(EventConfig(
-                user_id=participant_id,
+                user_id=member_id,
                 event_type="session_paused",
                 data={
                     "session_id": str(session_id),
@@ -151,25 +152,25 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_finished(dm_id: UUID, participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID) -> List[EventConfig]:
+    def session_finished(dm_id: UUID, non_dm_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID) -> List[EventConfig]:
         """
-        Event: Session marked as finished/completed (silent state update to DM and participants)
+        Event: Session marked as finished/completed (silent state update to every campaign member)
 
         Pure state update - no toast notification, no persistent notification.
         Only triggers frontend state refresh (session list update).
 
         Args:
             dm_id: Campaign DM user ID
-            participant_ids: List of player user IDs
+            non_dm_member_ids: Campaign members other than the DM
             session_id: Session ID
             session_name: Session name
             campaign_id: Campaign ID
 
         Returns:
-            List[EventConfig] (DM + all participants)
+            List[EventConfig] (DM + every other campaign member)
         """
         events = []
-        all_recipients = [dm_id] + participant_ids
+        all_recipients = [dm_id] + non_dm_member_ids
 
         for recipient_id in all_recipients:
             events.append(EventConfig(

@@ -130,7 +130,7 @@ class CreateSession:
         non_dm_members = [uid for uid in campaign.get_all_member_ids() if uid != host_id]
         if non_dm_members:
             events = SessionEvents.session_created(
-                campaign_player_ids=non_dm_members,
+                non_dm_member_ids=non_dm_members,
                 session_id=session.id,
                 session_name=session.name,
                 campaign_id=campaign_id,
@@ -764,7 +764,7 @@ class StartSession:
                 all_recipients = campaign.get_all_member_ids()
 
                 events = SessionEvents.session_started(
-                    campaign_player_ids=all_recipients,
+                    campaign_member_ids=all_recipients,
                     session_id=session.id,
                     session_name=session.name,
                     campaign_id=session.campaign_id,
@@ -1112,7 +1112,7 @@ class PauseSession:
             all_recipients = campaign.get_all_member_ids()
 
             events = SessionEvents.session_paused(
-                active_participant_ids=all_recipients,
+                campaign_member_ids=all_recipients,
                 session_id=session.id,
                 session_name=session.name,
                 campaign_id=session.campaign_id,
@@ -1189,7 +1189,7 @@ class FinishSession:
 
                 events = SessionEvents.session_finished(
                     dm_id=campaign.dm_id,
-                    participant_ids=[uid for uid in campaign.get_all_member_ids() if uid != campaign.dm_id],
+                    non_dm_member_ids=[uid for uid in campaign.get_all_member_ids() if uid != campaign.dm_id],
                     session_id=session.id,
                     session_name=session.name,
                     campaign_id=session.campaign_id
@@ -1249,7 +1249,7 @@ class FinishSession:
 
             events = SessionEvents.session_finished(
                 dm_id=campaign.dm_id,
-                participant_ids=[uid for uid in all_recipients if uid != campaign.dm_id],
+                non_dm_member_ids=[uid for uid in all_recipients if uid != campaign.dm_id],
                 session_id=session.id,
                 session_name=session.name,
                 campaign_id=session.campaign_id

@@ -36,13 +36,14 @@ import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../f
 import { useMapTokens, MapTokenChipList, MapTokenCreator, PlayerTokenSizeControl } from '../map_tokens';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge, faAnglesLeft, faAnglesRight } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
 import PerfOverlay from '@/app/shared/components/PerfOverlay';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
+import { NotesPanel } from '../notes';
 import SessionCountdown from './components/SessionCountdown';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 import { useAssetProgress, useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
@@ -60,6 +61,9 @@ const LEFT_DRAWER_TABS = [
 
 // Tab configuration for right drawer - role filtering applied at render time
 const RIGHT_DRAWER_TABS = [
+  // Private per-user notes — the only tab on this side available to everyone,
+  // players and DMs alike, so it leads.
+  { id: 'notes', label: 'NOTES', dmOnly: false },
   { id: 'moderator', label: 'MOD', dmOnly: false },
   { id: 'audio', label: 'AUDIO', dmOnly: true },
   { id: 'map', label: 'MAP', dmOnly: true },
@@ -240,6 +244,19 @@ export default function GameContent() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('rollplay.perfOverlay', showPerfOverlay ? '1' : '0');
   }, [showPerfOverlay]);
+  // Right drawer expand toggle. Doubles the drawer's width (capped at 50vw in CSS)
+  // for panels that want the room — notes especially. Persisted because it is a
+  // per-user working preference, not session state; same localStorage convention
+  // as the perf overlay above. Note uiScale itself is NOT persisted today.
+  const [rightDrawerExpanded, setRightDrawerExpanded] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('rollplay.rightDrawerExpanded') === '1';
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('rollplay.rightDrawerExpanded', rightDrawerExpanded ? '1' : '0');
+  }, [rightDrawerExpanded]);
+
   useRenderTracker('GameContent');
   const volumeRef = useRef(null);
   const scaleRef = useRef(null);
@@ -1904,7 +1921,11 @@ export default function GameContent() {
 
   // MAIN RENDER
   return (
-    <div className="game-interface" data-ui-scale={uiScale}>
+    <div
+      className="game-interface"
+      data-ui-scale={uiScale}
+      data-right-drawer-expanded={rightDrawerExpanded ? 'true' : 'false'}
+    >
       {/* Top Command Bar — flex column so spectator banner extends the nav height */}
       <div ref={navRef} className="top-nav">
         <div className="top-nav-bar">
@@ -2268,6 +2289,20 @@ export default function GameContent() {
             {/* Scrollable tab strip — centers when tabs fit, scrolls when they overflow */}
             <div className="right-drawer-tab-strip">
               <div className="right-drawer-tab-strip-inner">
+                {/* Width toggle. Lives in the rail above the tabs rather than in the
+                    panel body — it acts on the drawer, not on whatever tab is open —
+                    and is deliberately styled unlike a tab so it does not read as one. */}
+                <button
+                  type="button"
+                  className="right-drawer-expand-btn"
+                  onClick={() => setRightDrawerExpanded((expanded) => !expanded)}
+                  title={rightDrawerExpanded ? 'Shrink panel' : 'Widen panel'}
+                  aria-label={rightDrawerExpanded ? 'Shrink panel' : 'Widen panel'}
+                  aria-pressed={rightDrawerExpanded}
+                >
+                  <FontAwesomeIcon icon={rightDrawerExpanded ? faAnglesRight : faAnglesLeft} />
+                </button>
+
                 {visibleRightTabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -2281,6 +2316,10 @@ export default function GameContent() {
             </div>
 
             <div className="drawer-content">
+              {activeRightDrawer === 'notes' && campaignId && (
+                <NotesPanel campaignId={campaignId} />
+              )}
+
               {activeRightDrawer === 'moderator' && canUseModeratorTools && (
                 <ModeratorControls
                   isModerator={isModerator}

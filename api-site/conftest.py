@@ -58,6 +58,7 @@ from modules.library.model.sfx_asset_model import SfxAssetModel as _SfxAssetMode
 from modules.library.model.image_asset_model import ImageAssetModel as _ImageAssetModel  # noqa: F401
 from modules.library.model.collection_model import AssetCollectionModel as _AssetCollectionModel  # noqa: F401
 from modules.events.model.notification_model import Notification as _Notification  # noqa: F401
+from modules.notes.model.note_model import Note as _Note  # noqa: F401
 from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.characters.repositories.character_repository import CharacterRepository

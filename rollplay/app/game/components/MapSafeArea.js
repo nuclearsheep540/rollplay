@@ -8,8 +8,10 @@ import React from 'react';
 // Matches the CSS for .party-drawer and .right-drawer
 const DRAWER_W = 'calc(380px + var(--panel-width-addition))';
 // Tabs protrude 40px to the left of the drawer body and are always visible at the right edge
-// (translateX(100%) moves the body off-screen but tabs still show 40px from the right)
-const DRAWER_W_WITH_TABS = 'calc(380px + var(--panel-width-addition) + 40px)';
+// (translateX(100%) moves the body off-screen but tabs still show 40px from the right).
+// Reads the same variable .right-drawer sizes itself from, so the expand toggle
+// moves the map's inset with it rather than letting the drawer cover the board.
+const DRAWER_W_WITH_TABS = 'calc(var(--right-drawer-width) + 40px)';
 // Matches the CSS for .bottom-mixer-drawer
 const MIXER_H = 'max(50vh, 300px)';
 
