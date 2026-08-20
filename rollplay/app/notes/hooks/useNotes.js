@@ -75,10 +75,20 @@ export function useNote(noteId) {
     queryKey: QK.note(noteId),
     queryFn: () => call(`/api/notes/${noteId}`),
     enabled: Boolean(noteId),
-    // The editor owns the text once mounted; refetching behind it would only ever
-    // fight the user.
+    // Two rules that look contradictory and aren't.
+    //
+    // `staleTime: Infinity` + no focus refetch: once an editor is mounted it owns
+    // the text, and a background refetch arriving mid-edit would hand the autosave
+    // hook a newer revision while the editor still held older content — the one
+    // path in this design that can silently overwrite newer work.
+    //
+    // `refetchOnMount: 'always'`: a *fresh mount* has no editor to disturb, so
+    // serving it a cached copy buys nothing and costs correctness. Trusting the
+    // cache here is what let the game drawer open on a stale revision after the
+    // same note had been edited elsewhere, and then 409 on the first keystroke.
     staleTime: Infinity,
     refetchOnWindowFocus: false,
+    refetchOnMount: 'always',
   })
 }
 
@@ -153,6 +163,25 @@ export function saveNoteContentBeacon(noteId, { contentDelta, contentText, rev }
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content_delta: contentDelta, content_text: contentText, rev }),
   }).catch(() => {})
+}
+
+/**
+ * Pull a note back from the server, discarding the cached copy.
+ *
+ * Needed when something *other than this editor* has moved the note on — the
+ * in-game drawer writing during a live session, for instance. `useNote` holds
+ * `staleTime: Infinity` deliberately (a background refetch could otherwise
+ * overwrite our revision mid-edit and let a stale document clobber newer work),
+ * so refreshing has to be an explicit act.
+ *
+ * Returns a promise: callers remount the editor only once the new content has
+ * actually landed, or they would remount onto the copy they are replacing.
+ */
+export function refetchNote(queryClient, campaignId, noteId) {
+  return Promise.all([
+    queryClient.refetchQueries({ queryKey: QK.note(noteId) }),
+    queryClient.invalidateQueries({ queryKey: QK.list(campaignId) }),
+  ])
 }
 
 /**

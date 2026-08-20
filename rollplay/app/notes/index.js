@@ -4,3 +4,4 @@
  */
 
 export { default as NotesPanel } from './components/NotesPanel'
+export { default as NotesWorkspace } from './components/NotesWorkspace'

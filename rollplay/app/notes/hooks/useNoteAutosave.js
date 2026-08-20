@@ -42,8 +42,17 @@ export const SaveStatus = {
  * @param {string|null} noteId      note being edited (null disables the hook)
  * @param {number} initialRev       revision the note was loaded at
  * @param {Function} onSaved        called with the server's note after each save
+ * @param {Function} [onConflict]   called when the server rejects a save as stale.
+ *                                  The surface is expected to reload from server
+ *                                  truth; there is nothing else useful to do with
+ *                                  a document built on a revision that no longer
+ *                                  exists.
+ * @param {number} resetToken       bump to declare "this document was reloaded
+ *                                  from the server" — clears our revision so the
+ *                                  next save builds on the new one, not the one
+ *                                  we last wrote
  */
-export function useNoteAutosave(noteId, initialRev, onSaved) {
+export function useNoteAutosave(noteId, initialRev, onSaved, resetToken = 0, onConflict) {
   const [status, setStatus] = useState(SaveStatus.IDLE)
 
   const pendingRef = useRef(null)
@@ -56,9 +65,11 @@ export function useNoteAutosave(noteId, initialRev, onSaved) {
   const conflictRef = useRef(false)
   const hasSavedRef = useRef(false)
   const onSavedRef = useRef(onSaved)
+  const onConflictRef = useRef(onConflict)
 
   // Refreshed every render so a flush never calls into a stale closure.
   onSavedRef.current = onSaved
+  onConflictRef.current = onConflict
 
   // Switching notes resets everything — a new note is a new document, a new
   // revision line and a clean slate for the conflict flag.
@@ -75,7 +86,7 @@ export function useNoteAutosave(noteId, initialRev, onSaved) {
     lastSentRef.current = null
     setStatus(SaveStatus.IDLE)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteId])
+  }, [noteId, resetToken])
 
   // Adopt a revision from the server only until we have written one ourselves.
   // Before the note has loaded the caller passes 0, so this is how the real
@@ -112,10 +123,13 @@ export function useNoteAutosave(noteId, initialRev, onSaved) {
       onSavedRef.current?.(saved)
     } catch (error) {
       if (error instanceof NoteConflictError) {
-        // Another tab or device wrote first. Stop saving rather than fight it —
-        // the panel prompts the user to reload.
+        // Another surface wrote first, so this document is built on a revision
+        // that no longer exists. Stop saving, and tell the surface to reload —
+        // a 409 is the one moment we know for certain the server has moved on,
+        // and leaving the user in a dead editor is worse than the reload.
         conflictRef.current = true
         setStatus(SaveStatus.CONFLICT)
+        onConflictRef.current?.()
       } else {
         // Put the work back so the next tick retries it.
         pendingRef.current = payload

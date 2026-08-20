@@ -1423,7 +1423,9 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 
 .notes-editor__body {
   padding: 10px 12px;
-  max-height: 48vh;
+  /* Overridable: the drawer wants a short editor that leaves the picker visible,
+     the full-page workspace wants it to fill the page. */
+  max-height: var(--notes-editor-max-h, 48vh);
   overflow-y: auto;
 }
 
@@ -1576,3 +1578,196 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   color: rgba(255, 255, 255, 0.9);
 }
 
+
+/* ---------------------------------------------------------------------------
+   Notes workspace — the full-page, two-pane view at /notes
+
+   Same editor and hooks as the in-game drawer; only the chrome differs. The
+   drawer squeezes note switching into a Dropdown because it has 280-560px; here
+   the list can simply be a list.
+   --------------------------------------------------------------------------- */
+.notes-workspace {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  /* The editor's own scroll cap. In the drawer this defaults to 48vh; here the
+     editor should fill the page instead of stopping half way down. */
+  --notes-editor-max-h: calc(100vh - 230px);
+}
+
+.notes-workspace__sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border-default);
+  background: #0F0E0D;
+}
+
+.notes-workspace__sidebar-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.notes-workspace__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #B5ADA6;
+  margin-bottom: 12px;
+  transition: color 120ms ease;
+}
+
+.notes-workspace__back:hover {
+  color: #F7F4F3;
+}
+
+.notes-workspace__campaign {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #F7F4F3;
+  margin-bottom: 12px;
+  word-break: break-word;
+}
+
+.notes-workspace__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.7rem;
+  color: #B5ADA6;
+}
+
+.notes-workspace__limit {
+  margin-top: 8px;
+  font-size: 0.7rem;
+  color: var(--feedback-warning);
+}
+
+.notes-workspace__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.notes-workspace__empty {
+  padding: 12px 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #B5ADA6;
+}
+
+.notes-workspace__row {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.notes-workspace__row:hover {
+  background: #1A1917;
+}
+
+.notes-workspace__row.is-active {
+  background: #211F1C;
+  border-color: var(--border-default);
+}
+
+.notes-workspace__row-title {
+  font-size: 0.8rem;
+  color: #F7F4F3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-workspace__row-date {
+  font-size: 0.65rem;
+  color: #B5ADA6;
+}
+
+.notes-workspace__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.notes-workspace__main-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notes-workspace__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  /* Dark, not light: this pane is on the light dashboard background, unlike the
+     sidebar and the editor panel which bring their own dark surfaces. */
+  color: var(--content-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-workspace__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.notes-workspace__status {
+  font-size: 0.7rem;
+  color: #37322F;
+  min-width: 7rem;
+  text-align: right;
+}
+
+.notes-workspace__conflict {
+  border: 1px solid var(--feedback-warning);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  color: var(--feedback-warning);
+}
+
+.notes-workspace__placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #37322F;
+  font-size: 0.85rem;
+}
+
+/* Read-only notice shown on /notes while a session is live for the campaign.
+   The route into the game matters: locking without offering the alternative
+   leaves the user staring at a dead editor wondering where their notes went. */
+.notes-workspace__locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #37322F;
+  background: #EFE9E4;
+}

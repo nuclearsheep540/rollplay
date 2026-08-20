@@ -44,6 +44,16 @@ tags, folders, templates, per-session pages, export.
     **images** (storage cost) and **links** (malicious-URL risk, no real payoff), plus
     subscript/superscript as toolbar bloat. See §4.
 
+13. **The dashboard surface shipped in v1 after all** (2026-08-20). Originally v2; Matt pulled it
+    into this branch as MVP. A dedicated `/notes` route, not a modal and not a top-level nav item —
+    same pattern as the workshop tools. The Home page remains a later problem (§11).
+14. **`/notes` is read-only while a session is live for that campaign.** The game runtime is where
+    notes get written during play, so the same note can never be open for editing on two surfaces
+    at once. See §12.
+15. **Multi-device conflict is accepted, not solved.** Two browsers or two devices editing one note
+    still relies on the `rev` guard. See §12 for why that is the right trade and what would change
+    the answer.
+
 ## 2. Why this never touches the game service
 
 The CLAUDE.md server-authoritative and atomic-update principles are scoped to **active game
@@ -372,17 +382,154 @@ against a modified client.
 
 ## 11. v2 and out of scope
 
-**v2 — notes outside the game.** A notes button in the campaign drawer on the dashboard. The
-backend above already supports it unchanged (campaign-scoped, ownership-gated, no session
-involvement) — v2 is purely frontend. Orphaned notes need a home that is not inside a campaign, and
-the intended answer is the parked **Home** landing page
-(`.claude/plans/TODO-home-landing-page.md`). **v2 must not depend on Home shipping**: worst case it
-lands in the campaign drawer alone and the archive waits. At ~7 production users, the interim
-answer for an orphaned note is a direct PostgreSQL query.
+**v2 — notes outside the game: SHIPPED in this branch (2026-08-20), see §14.** The prediction here
+held exactly: the backend needed no changes at all, so it was purely frontend. What is *not* shipped
+is the archive for orphaned notes, which still waits on the **Home** landing page
+(`.claude/plans/TODO-home-landing-page.md`) — deliberately, since notes whose campaign is deleted
+need a home that is not inside a campaign. At ~7 production users the interim answer for an orphaned
+note remains a direct PostgreSQL query.
 
 **Open / deferred:**
 - Full-text search over `content_text` (column exists, endpoint does not).
-- Expand/fullscreen affordance for the drawer — the 280–560px column may prove too narrow in real
-  use. Decide from QA, not in advance.
+- ~~Expand/fullscreen affordance for the drawer~~ — **done 2026-08-19**, see §13.
 - Export (markdown/PDF).
 - Whether the picker outgrows `Dropdown` and needs `Combobox`. Let usage decide.
+- **Collaborative editing / shared session docs** — see §12.
+
+## 12. Concurrent editing: what we did and did not solve
+
+Two surfaces now exist (the in-game drawer and `/notes`), so one user can open the same note twice.
+
+**The guard that always applies: the `rev` check.** A save carrying a stale revision is refused with
+409 rather than clobbering the other copy. No version of this ever silently destroys work that was
+already saved.
+
+**The guard added 2026-08-20: `/notes` locks while a session is live.** The page derives
+`lockedBySession` from the campaigns query — no new endpoint, no event subscription, no latch,
+because `session_started` / `session_paused` / `session_finished` all already call
+`invalidateCampaigns` (`useAuthenticatedEvents.js:108-122`), so it recomputes the instant a DM
+starts or ends a session. Statuses are **lowercase** off the wire and "live" spans the ETL on both
+sides, so the predicate is `['active','starting','stopping']`, mirroring `CampaignManager.js:1385`.
+
+Three details that matter to anyone changing this:
+- **Locking must not unmount the editor.** `editable={false}` keeps `pendingRef` and the autosave
+  timers alive, so the last edit still commits. Remounting would drop it. The lock also calls
+  `flush()` so the commit is immediate rather than sitting in the debounce while the editor is
+  already read-only.
+- **`editable` is read at editor creation**, so `NoteEditor` applies it via `editor.setEditable()`
+  in an effect. Passing the prop alone does nothing to an already-mounted editor.
+- Only *content* is locked. Create / rename / delete stay available; they are single-shot and not
+  the thing that conflicts.
+
+**What remains unsolved, deliberately:** two browsers or two devices on the same note outside a live
+session. Reaching it needs one person deliberately editing one note in two places. The `rev` guard
+means the outcome is a refused save, not lost saved work — but the on-screen unsaved text is still
+lost if the user reloads, which is what the conflict banner suggests.
+
+**What would change the answer: notes becoming shareable.** Party-visible notes, DM handouts, a
+shared campaign wiki — or Matt's idea of aggregating notes into an LLM-built shared knowledge base
+for a campaign. At that point there are genuinely concurrent authors, the rev guard stops being a
+rare-edge-case backstop and becomes a constant obstruction, and collaborative editing earns its
+cost.
+
+That path is real and fully MIT: `@tiptap/extension-collaboration` (3.30.2), `yjs` (13.6.32),
+`@hocuspocus/server` (4.6.0), `y-websocket` (3.1.0) — all verified 2026-08-20, all GPL-compatible.
+Y.js sends small binary CRDT deltas, so **bandwidth would go down**, not up — it is lighter than
+PUTting the whole document every 1.5s. The real costs are structural: a fourth backend service that
+is *stateful*, a storage format change from ProseMirror JSON to Y.Doc binary updates (taking
+`content_text` with it), and losing `UndoRedo` — the extension is explicitly incompatible with
+collaboration and you move to Y.js's own undo manager.
+
+Open product question if that day comes, raised by Matt and not resolved: some users will want notes
+that stay private. Shared-by-default and private-by-default are different products, and a shared
+knowledge base built from private notes needs consent, not just plumbing.
+
+## 13. Right-drawer expand toggle (added 2026-08-19, outside the original plan)
+
+Not part of the notes plan as written — Matt asked for it mid-build once the 280–560px column proved
+tight in QA, which also answers §11's open question about an expand affordance.
+
+- **Drawer-level, not notes-level.** A chevron in the tab rail above the tabs, on every right-hand
+  panel. It shares the tabs' surface (translucent panel, blur, border, left-rounded corners) so it
+  reads as part of the rail, but is 30px and horizontal rather than 112px and vertical, so it does
+  not read as another tab.
+- **Width:** `min(calc(2 * (380px + var(--panel-width-addition))), 50vw)` — doubles whatever the UI
+  scale produces, capped at half the viewport. No fixed pixel guess; all four scales double.
+- **Persisted** as `rollplay.rightDrawerExpanded`, matching the perf-overlay convention. Note that
+  `uiScale` itself is *not* persisted (`useState('medium')`), despite feeling like a sibling setting.
+- **The load-bearing part:** `--right-drawer-width` is now a single CSS variable on `.game-interface`
+  read by both `.right-drawer` and `MapSafeArea`. `MapSafeArea.js` previously hard-copied the width
+  formula as a JS string with a comment saying it "matches the CSS" — two copies that would have
+  diverged the moment the drawer could resize, leaving the expanded drawer covering the board.
+
+
+## 14. The dashboard surface (PR 3, built 2026-08-20)
+
+Pulled forward from v2 as MVP for this branch. **Zero backend changes** — the ownership-based,
+campaign-scoped API written in PR 1 supported it unmodified, which was the whole point of §11's
+prediction.
+
+**Route: `/notes?campaign_id=<id>&note=<id>`** at `app/(authenticated)/notes/page.js`. A dedicated
+view, not a modal and not a top-level nav item — the same shape as the workshop tools, where chrome
+(header, auth gate, WebSocket, Suspense) comes from the `(authenticated)` group's layout and the
+page renders bare. Rejected alternatives: a modal (fine, but a dedicated view uses the space
+properly) and inline expansion inside the campaign drawer (its min-height is driven imperatively by
+`gsap.set` on resize/scroll — injecting a variable-height editor into that is a layout-bug farm).
+
+**URL is the source of truth for selection**, matching the workshop tools: a refresh or a pasted
+link lands on the same note. Note switching uses `router.replace` so flicking through notes stays
+out of history; "back" pushes an explicit destination rather than `router.back()`, because history
+depth varies with how the user arrived.
+
+**Two-pane layout** (`NotesWorkspace`): list left, editor right. The in-game `Dropdown` picker exists
+only because that column is 280–560px; given room, a list should be a list. Both surfaces share the
+same hooks and the same `NoteEditor` — the only genuinely new component is the chrome.
+
+`--notes-editor-max-h` was introduced so the editor's scroll cap differs by context (48vh in the
+drawer, near-full-height in the workspace) without forking the component.
+
+**Entry point:** a Notes button in the campaign drawer's action row, beside *View Assets*
+(`CampaignManager.js`). Not DM-gated — that row has no `isDM` checks at all and the server
+authorises by ownership.
+
+**`/notes` added to middleware `PROTECTED_ROUTES`.** Worth knowing the codebase is inconsistent here:
+`/account` and `/character` are also `(authenticated)` pages but are *not* in that list, relying on
+the layout's client-side gate. `/notes` follows `/workshop` instead, so it 307s before any JS runs.
+
+### Bugs found in QA and fixed
+
+- **Stale note cache on switch.** Saves refreshed the list cache but not `['note', id]`, which holds
+  `staleTime: Infinity`. Switching notes and back re-mounted the editor from the copy fetched at
+  load, so a note looked empty despite being saved. `patchNoteInCaches` now writes both. The stale
+  entry also carried an old `rev`, which would have tripped a spurious conflict on the next save.
+- **Invisible text.** The token palette is authored for the *light* page background
+  (`--content-primary` is `#1F1F1F`, `--content-bold` is `#0B0A09`); using it for body copy on the
+  dark drawer painted near-black on near-black. The editor now owns an opaque surface with literal
+  colours pinned to it. The `/notes` main pane is the one part that genuinely sits on the light
+  dashboard background, so it uses the tokens correctly.
+- **A stale cache caused spurious 409s, and the recovery advice was wrong.** `useNote` held
+  `staleTime: Infinity`, so a *fresh mount* was served a cached copy with a stale `rev` — the game
+  drawer would open on an old revision after the same note had been edited elsewhere and 409 on the
+  first keystroke. Worse, the banner said "reopen the tab", which remounted onto the same cache and
+  conflicted again; only a full page reload built a new QueryClient. Fixed with
+  `refetchOnMount: 'always'` (a fresh mount has no editor to disturb, so the reason for the infinite
+  stale time doesn't apply to it) and by gating the editor on `isFetching` rather than `isLoading` —
+  with cached data present `isLoading` is already false, so the editor would otherwise mount on the
+  stale document while the refetch was still in flight.
+  **Rejected: auto-forking a "conflicted copy" note.** It would have made the residual case lossless,
+  but it allocates a note against the 100-per-campaign cap — so it fails precisely when a user is at
+  the limit, which is a worse failure than the one it fixes (Matt's call).
+
+- **Stale content after a session ended.** `/notes` locked correctly while a session ran, but when
+  it unlocked it still showed the copy loaded before the session — everything written in-game was
+  invisible. Three pieces were needed, because the editor takes its content only at creation:
+  `refetchNote()` pulls server truth, a `reloadToken` re-keys the editor so it remounts, and the
+  token is also passed to `useNoteAutosave` so its revision resets — otherwise the first save after
+  a reload carries the pre-reload rev and 409s. Order matters: refetch resolves *before* the token
+  bumps, or the remount lands on the copy being replaced. Remounting is safe here only because the
+  editor was locked (read-only, already flushed), so there is no unsaved text to lose.
+
+- **Autosave dropped pending edits on rename.** The reset effect was keyed on `[noteId, initialRev]`;
+  a rename writes the server's note back, changing `initialRev` and re-firing the "new note, clean
+  slate" reset — clearing `pendingRef` mid-edit. Now keyed on `noteId` alone, with a separate effect
+  that adopts a server revision only until we have written one ourselves (`hasSavedRef`).

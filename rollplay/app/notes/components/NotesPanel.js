@@ -19,6 +19,7 @@ import NotePicker from './NotePicker'
 import { SaveStatus, useNoteAutosave } from '../hooks/useNoteAutosave'
 import {
   patchNoteInCaches,
+  refetchNote,
   useCreateNote,
   useDeleteNote,
   useNote,
@@ -39,7 +40,7 @@ const STATUS_LABEL = {
   [SaveStatus.SAVING]: 'Saving…',
   [SaveStatus.SAVED]: 'Saved',
   [SaveStatus.ERROR]: 'Could not save — retrying',
-  [SaveStatus.CONFLICT]: 'Edited elsewhere',
+  [SaveStatus.CONFLICT]: 'Reloading newer version…',
 }
 
 /**
@@ -78,13 +79,41 @@ export default function NotesPanel({ campaignId }) {
   const activeNoteQuery = useNote(activeNoteId)
   const activeNote = activeNoteQuery.data
 
+  const [reloadToken, setReloadToken] = useState(0)
+  const [conflictReloaded, setConflictReloaded] = useState(false)
+
   const handleSaved = useCallback(
-    (saved) => patchNoteInCaches(queryClient, campaignId, saved),
+    (saved) => {
+      setConflictReloaded(false)
+      patchNoteInCaches(queryClient, campaignId, saved)
+    },
     [queryClient, campaignId]
   )
 
+  // Self-heal on conflict. A 409 means this document is built on a revision the
+  // server has moved past, so the only useful response is to take server truth:
+  // refetch, then re-key the editor (content is read at creation, nothing else
+  // would update it). The reset token also clears the hook's conflict flag, so
+  // saving resumes by itself.
+  //
+  // This does replace whatever was typed into the stale copy — it could never be
+  // saved, that is what the 409 said — so the notice below stays up to say so
+  // rather than letting it vanish silently.
+  const handleConflict = useCallback(() => {
+    if (!activeNoteId) return
+    refetchNote(queryClient, campaignId, activeNoteId).then(() => {
+      setReloadToken((token) => token + 1)
+      setConflictReloaded(true)
+    })
+  }, [queryClient, campaignId, activeNoteId])
 
-  const { status, queueSave } = useNoteAutosave(activeNoteId, activeNote?.rev ?? 0, handleSaved)
+  const { status, queueSave } = useNoteAutosave(
+    activeNoteId,
+    activeNote?.rev ?? 0,
+    handleSaved,
+    reloadToken,
+    handleConflict
+  )
 
   const handleCreate = async () => {
     const created = await createNote.mutateAsync()
@@ -139,21 +168,28 @@ export default function NotesPanel({ campaignId }) {
         isCreating={createNote.isPending}
       />
 
-      {status === SaveStatus.CONFLICT && (
+      {conflictReloaded && (
         <p className="mb-2 rounded-sm border border-feedback-warning px-2 py-1 text-xs text-feedback-warning">
-          This note was edited somewhere else, so saving has stopped to avoid
-          overwriting it. Reopen the tab to load the newer version.
+          This note was updated somewhere else, so it has been reloaded to the newer
+          version. Anything typed here that hadn&apos;t saved was replaced.
         </p>
       )}
 
       {/* The editor mounts only once its note has loaded, and is keyed by note id.
           Both matter: content handed in after creation lands on the undo stack,
-          where one Ctrl+Z blanks the note and autosave persists the blank. */}
-      {activeNoteQuery.isLoading || !activeNote ? (
+          where one Ctrl+Z blanks the note and autosave persists the blank.
+
+          Gated on isFetching, not isLoading: with a cached copy present isLoading
+          is already false, so the editor would mount on the stale document while
+          the mount refetch was still in flight — which is exactly how the drawer
+          used to open on a stale revision and 409 on the first keystroke. The
+          only refetches that can fire are mount and an explicit reload, so this
+          never yanks a live editor away mid-edit. */}
+      {activeNoteQuery.isFetching || !activeNote ? (
         <Spinner />
       ) : (
         <NoteEditor
-          key={activeNote.id}
+          key={`${activeNote.id}:${reloadToken}`}
           initialContent={activeNote.content_delta}
           onChange={queueSave}
         />

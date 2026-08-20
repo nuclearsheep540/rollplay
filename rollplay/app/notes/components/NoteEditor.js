@@ -5,6 +5,7 @@
 
 'use client'
 
+import { useEffect } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import Bold from '@tiptap/extension-bold'
 import Document from '@tiptap/extension-document'
@@ -83,6 +84,13 @@ export default function NoteEditor({ initialContent, onChange, editable = true }
     },
   })
 
+  // `editable` is read when the editor is created, so a lock that engages after
+  // mount (a DM starting a session while this page is open) needs applying
+  // explicitly. Remounting instead would drop unsaved text.
+  useEffect(() => {
+    editor?.setEditable(editable)
+  }, [editor, editable])
+
   if (!editor) return null
 
   const characters = editor.storage.characterCount?.characters?.() ?? 0
@@ -93,7 +101,7 @@ export default function NoteEditor({ initialContent, onChange, editable = true }
 
   return (
     <div className="notes-editor">
-      <div className="notes-editor__toolbar">
+      {editable && <div className="notes-editor__toolbar">
         <ToolbarButton
           label="H2"
           isActive={editor.isActive('heading', { level: 2 })}
@@ -159,7 +167,7 @@ export default function NoteEditor({ initialContent, onChange, editable = true }
             else chain.setFontFamily(MONOSPACE_STACK).run()
           }}
         />
-      </div>
+      </div>}
 
       {/* Bounded height of its own: the drawer body is already a scroll container,
           and letting the editor grow into it means the picker header scrolls away
