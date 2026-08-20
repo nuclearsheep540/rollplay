@@ -16,18 +16,30 @@ import Italic from '@tiptap/extension-italic'
 import Paragraph from '@tiptap/extension-paragraph'
 import Strike from '@tiptap/extension-strike'
 import Text from '@tiptap/extension-text'
+import TextAlign from '@tiptap/extension-text-align'
+import Underline from '@tiptap/extension-underline'
 import { BulletList, ListItem, ListKeymap, OrderedList } from '@tiptap/extension-list'
 import { FontFamily, TextStyle } from '@tiptap/extension-text-style'
 import { CharacterCount, Placeholder, UndoRedo } from '@tiptap/extensions'
 import {
+  faAlignCenter,
+  faAlignLeft,
+  faAlignRight,
   faBold,
+  faCheck,
+  faChevronDown,
+  faHighlighter,
   faItalic,
   faListOl,
   faListUl,
-  faHighlighter,
+  faRotateLeft,
+  faRotateRight,
   faStrikethrough,
+  faUnderline,
 } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+
+import Dropdown from '@/app/shared/components/Dropdown'
 
 // Characters, not bytes — the server's real ceiling is 256KB of serialised JSON.
 // 60k characters is far more than a campaign's worth of notes and lands well
@@ -36,20 +48,26 @@ const CHARACTER_LIMIT = 60000
 
 const MONOSPACE_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 
+const ALIGNMENTS = [
+  { value: 'left', label: 'Align left', icon: faAlignLeft },
+  { value: 'center', label: 'Align centre', icon: faAlignCenter },
+  { value: 'right', label: 'Align right', icon: faAlignRight },
+]
+
 /**
- * The note editor.
+ * The note editor: formatting bar plus writing canvas.
  *
- * The extension list IS the feature list: TipTap ships nothing you do not
- * register, and ProseMirror drops anything from a paste that has no matching node
- * or mark. So images, links, tables and code blocks cannot enter a note even by
- * paste — there is no schema for them to land in.
+ * The extension list IS the feature list. TipTap ships nothing you do not
+ * register, and ProseMirror drops anything from a paste that has no matching
+ * node or mark — so images, links, tables and code blocks cannot enter a note
+ * even by paste. There is no schema for them to land in.
  *
- * MUST be mounted only once its note has loaded, and keyed by note id. Content is
- * handed over at creation via `content`; pushing it into a live editor afterwards
- * would put the insertion on the undo stack, where a single Ctrl+Z blanks the note
- * and autosave then persists the blank.
+ * MUST be mounted only once its note has loaded, and keyed by note id. Content
+ * is handed over at creation via `content`; pushing it into a live editor
+ * afterwards would put the insertion on the undo stack, where a single Ctrl+Z
+ * blanks the note and autosave then persists the blank.
  */
-export default function NoteEditor({ initialContent, onChange, editable = true }) {
+export default function NoteEditor({ initialContent, onChange, editable = true, measured = false }) {
   const editor = useEditor({
     immediatelyRender: false,
     editable,
@@ -61,13 +79,15 @@ export default function NoteEditor({ initialContent, onChange, editable = true }
       HardBreak,
       Bold,
       Italic,
+      Underline,
       Strike,
       Highlight,
-      Heading.configure({ levels: [2, 3] }),
+      Heading.configure({ levels: [1, 2, 3] }),
       BulletList,
       OrderedList,
       ListItem,
       ListKeymap,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyle,
       FontFamily,
       UndoRedo,
@@ -75,9 +95,7 @@ export default function NoteEditor({ initialContent, onChange, editable = true }
       CharacterCount.configure({ limit: CHARACTER_LIMIT }),
     ],
     editorProps: {
-      attributes: {
-        class: 'notes-prose focus:outline-none min-h-[8rem]',
-      },
+      attributes: { class: 'notes-prose focus:outline-none' },
     },
     onUpdate: ({ editor: instance }) => {
       onChange?.(instance.getJSON(), instance.getText())
@@ -96,108 +114,186 @@ export default function NoteEditor({ initialContent, onChange, editable = true }
   const characters = editor.storage.characterCount?.characters?.() ?? 0
   const nearLimit = characters > CHARACTER_LIMIT * 0.9
 
-  const activeFont = editor.getAttributes('textStyle')?.fontFamily
-  const isMonospace = activeFont === MONOSPACE_STACK
+  const isMonospace = editor.getAttributes('textStyle')?.fontFamily === MONOSPACE_STACK
+
+  // One control that reports the current block rather than two toggles that
+  // never showed which one you were already in.
+  const headingLabel = editor.isActive('heading', { level: 1 })
+    ? 'H1'
+    : editor.isActive('heading', { level: 2 })
+      ? 'H2'
+      : editor.isActive('heading', { level: 3 })
+        ? 'H3'
+        : 'Body'
+
+  const headingItems = [
+    {
+      label: 'Heading 1',
+      icon: editor.isActive('heading', { level: 1 }) ? faCheck : undefined,
+      onClick: () => editor.chain().focus().setNode('heading', { level: 1 }).run(),
+    },
+    {
+      label: 'Heading 2',
+      icon: editor.isActive('heading', { level: 2 }) ? faCheck : undefined,
+      onClick: () => editor.chain().focus().setNode('heading', { level: 2 }).run(),
+    },
+    {
+      label: 'Heading 3',
+      icon: editor.isActive('heading', { level: 3 }) ? faCheck : undefined,
+      onClick: () => editor.chain().focus().setNode('heading', { level: 3 }).run(),
+    },
+    {
+      label: 'Body',
+      icon: editor.isActive('paragraph') ? faCheck : undefined,
+      onClick: () => editor.chain().focus().setParagraph().run(),
+    },
+  ]
+
+  const activeAlignment =
+    ALIGNMENTS.find((option) => editor.isActive({ textAlign: option.value })) || ALIGNMENTS[0]
+
+  const alignmentItems = ALIGNMENTS.map((option) => ({
+    label: option.label,
+    icon: activeAlignment.value === option.value ? faCheck : undefined,
+    onClick: () => editor.chain().focus().setTextAlign(option.value).run(),
+  }))
 
   return (
-    <div className="notes-editor">
-      {editable && <div className="notes-editor__toolbar">
-        <ToolbarButton
-          label="H2"
-          isActive={editor.isActive('heading', { level: 2 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        />
-        <ToolbarButton
-          label="H3"
-          isActive={editor.isActive('heading', { level: 3 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        />
+    <>
+      {editable && (
+        <div className="notes-toolbar">
+          <ToolButton
+            icon={faRotateLeft}
+            title="Undo"
+            disabled={!editor.can().undo()}
+            onClick={() => editor.chain().focus().undo().run()}
+          />
+          <ToolButton
+            icon={faRotateRight}
+            title="Redo"
+            disabled={!editor.can().redo()}
+            onClick={() => editor.chain().focus().redo().run()}
+          />
 
-        <ToolbarDivider />
+          <ToolDivider />
 
-        <ToolbarButton
-          icon={faBold}
-          title="Bold"
-          isActive={editor.isActive('bold')}
-          onClick={() => editor.chain().focus().toggleBold().run()}
-        />
-        <ToolbarButton
-          icon={faItalic}
-          title="Italic"
-          isActive={editor.isActive('italic')}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-        />
-        <ToolbarButton
-          icon={faStrikethrough}
-          title="Strikethrough"
-          isActive={editor.isActive('strike')}
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-        />
-        <ToolbarButton
-          icon={faHighlighter}
-          title="Highlight"
-          isActive={editor.isActive('highlight')}
-          onClick={() => editor.chain().focus().toggleHighlight().run()}
-        />
+          <Dropdown
+            align="left"
+            items={headingItems}
+            trigger={
+              <button type="button" className="notes-tool" title="Heading level">
+                <span className="notes-tool__label">{headingLabel}</span>
+                <FontAwesomeIcon icon={faChevronDown} className="notes-tool__caret" />
+              </button>
+            }
+          />
+          <ToolButton
+            icon={faListUl}
+            title="Bullet list"
+            isActive={editor.isActive('bulletList')}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+          />
+          <ToolButton
+            icon={faListOl}
+            title="Numbered list"
+            isActive={editor.isActive('orderedList')}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          />
 
-        <ToolbarDivider />
+          <ToolDivider />
 
-        <ToolbarButton
-          icon={faListUl}
-          title="Bullet list"
-          isActive={editor.isActive('bulletList')}
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-        />
-        <ToolbarButton
-          icon={faListOl}
-          title="Numbered list"
-          isActive={editor.isActive('orderedList')}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        />
+          <ToolButton
+            icon={faBold}
+            title="Bold"
+            isActive={editor.isActive('bold')}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+          />
+          <ToolButton
+            icon={faItalic}
+            title="Italic"
+            isActive={editor.isActive('italic')}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+          />
+          <ToolButton
+            icon={faUnderline}
+            title="Underline"
+            isActive={editor.isActive('underline')}
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+          />
+          <ToolButton
+            icon={faStrikethrough}
+            title="Strikethrough"
+            isActive={editor.isActive('strike')}
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+          />
+          <ToolButton
+            icon={faHighlighter}
+            title="Highlight"
+            isActive={editor.isActive('highlight')}
+            onClick={() => editor.chain().focus().toggleHighlight().run()}
+          />
 
-        <ToolbarDivider />
+          <ToolDivider />
 
-        <ToolbarButton
-          label="Mono"
-          title="Monospace"
-          isActive={isMonospace}
-          onClick={() => {
-            const chain = editor.chain().focus()
-            if (isMonospace) chain.unsetFontFamily().run()
-            else chain.setFontFamily(MONOSPACE_STACK).run()
-          }}
-        />
-      </div>}
+          <Dropdown
+            align="left"
+            items={alignmentItems}
+            trigger={
+              <button type="button" className="notes-tool" title="Alignment">
+                <FontAwesomeIcon icon={activeAlignment.icon} />
+                <FontAwesomeIcon icon={faChevronDown} className="notes-tool__caret" />
+              </button>
+            }
+          />
 
-      {/* Bounded height of its own: the drawer body is already a scroll container,
-          and letting the editor grow into it means the picker header scrolls away
-          while you type. */}
-      <div className="notes-editor__body">
-        <EditorContent editor={editor} />
+          <ToolDivider />
 
-        {nearLimit && (
-          <p className="mt-2 text-xs" style={{ color: '#B5ADA6' }}>
-            {characters.toLocaleString()} / {CHARACTER_LIMIT.toLocaleString()} characters
-          </p>
-        )}
+          <button
+            type="button"
+            title="Monospace"
+            className={`notes-tool notes-tool--mono ${isMonospace ? 'is-active' : ''}`}
+            onClick={() => {
+              const chain = editor.chain().focus()
+              if (isMonospace) chain.unsetFontFamily().run()
+              else chain.setFontFamily(MONOSPACE_STACK).run()
+            }}
+          >
+            Aa
+          </button>
+        </div>
+      )}
+
+      <div className="notes-canvas">
+        <div className={measured ? 'notes-measure' : undefined}>
+          <EditorContent editor={editor} />
+
+          {nearLimit && (
+            <p className="notes-canvas__count">
+              {characters.toLocaleString()} / {CHARACTER_LIMIT.toLocaleString()} characters
+            </p>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
-function ToolbarDivider() {
-  return <span className="notes-toolbar-divider" aria-hidden="true" />
+function ToolDivider() {
+  return <span className="notes-toolbar__divider" aria-hidden="true" />
 }
 
-function ToolbarButton({ icon, label, title, isActive, onClick }) {
+function ToolButton({ icon, title, isActive, disabled, onClick }) {
   return (
     <button
       type="button"
-      title={title || label}
+      title={title}
+      aria-label={title}
+      aria-pressed={isActive}
+      disabled={disabled}
       onClick={onClick}
-      className={`notes-toolbar-btn ${isActive ? 'is-active' : ''}`}
+      className={`notes-tool ${isActive ? 'is-active' : ''}`}
     >
-      {icon ? <FontAwesomeIcon icon={icon} className="w-3" /> : label}
+      <FontAwesomeIcon icon={icon} />
     </button>
   )
 }

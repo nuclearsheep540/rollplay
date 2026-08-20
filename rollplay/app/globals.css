@@ -1364,123 +1364,243 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 }
 
 /* ---------------------------------------------------------------------------
-   Notes editor (TipTap)
+   Notes — editor chrome, shared by the in-game drawer and the /notes workspace
 
-   TipTap ships no stylesheet — the schema is all it provides, so every node needs
-   a rule here or it renders as unstyled text. Lists in particular need their
-   markers restored: Tailwind's preflight strips them globally.
+   Design contract: .claude/plans/notes/design-mock.html
 
-   Colours are written literally rather than through the app tokens on purpose.
-   The token palette is authored for the LIGHT page background (--content-primary
-   is #1F1F1F, --content-bold is #0B0A09), so using it here paints near-black text
-   onto a dark panel and the note looks empty. The editor owns an opaque surface
-   of its own — the drawer's translucent backdrop is unreadable behind body copy —
-   so its foreground colours are fixed to that surface, not inherited.
+   One ground, two hairlines. The identity bar, the formatting bar and the
+   writing canvas all sit on onyx and are separated only by 1px rules — no card,
+   no inner border, nothing that reads as floating. In the drawer that also
+   solves the translucency: an opaque full-bleed surface covers the backdrop
+   blur, so body copy is never set over a moving background.
+
+   Colours are literal rather than tokenised on purpose. The token palette is
+   authored for the LIGHT dashboard background (--content-primary is #1F1F1F),
+   so using it here paints near-black text onto a dark surface.
    --------------------------------------------------------------------------- */
-.notes-editor {
-  background: #171614;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.notes-editor__toolbar {
+.notes-surface {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-  padding: 6px;
+  flex-direction: column;
+  min-height: 0;
   background: #0B0A09;
-  border-bottom: 1px solid var(--border-default);
+  color: #F7F4F3;
 }
 
-.notes-toolbar-btn {
-  border-radius: 3px;
-  padding: 4px 7px;
-  font-size: 0.7rem;
-  line-height: 1.2;
+/* Escapes .drawer-content's padding so the surface meets the drawer's edges.
+   Matches the padding exactly — see .drawer-content. */
+.notes-surface--bleed {
+  margin: calc(-20px * var(--ui-scale)) calc(-16px * var(--ui-scale));
+  min-height: calc(100% + (40px * var(--ui-scale)));
+}
+
+/* ── identity row ─────────────────────────────────────────────────────────── */
+.notes-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #37322F;
+  flex-shrink: 0;
+}
+
+.notes-topbar__picker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #F7F4F3;
+  transition: background-color 120ms ease;
+}
+
+.notes-topbar__picker:hover { background: rgba(255, 255, 255, 0.07); }
+
+.notes-topbar__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-topbar__caret { width: 9px; flex-shrink: 0; opacity: 0.5; }
+
+.notes-topbar__rename {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid #37322F;
+  border-radius: 4px;
+  background: #171614;
+  color: #F7F4F3;
+  font-size: 0.875rem;
+}
+
+.notes-topbar__rename:focus { outline: none; border-color: #B5ADA6; }
+
+.notes-topbar__spacer { flex: 1; min-width: 0; }
+
+.notes-topbar__status {
+  font-size: 0.68rem;
   color: #B5ADA6;
-  background: transparent;
+  white-space: nowrap;
+}
+
+.notes-topbar__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  color: #B5ADA6;
+  font-size: 0.75rem;
   transition: background-color 120ms ease, color 120ms ease;
 }
 
-.notes-toolbar-btn:hover {
-  background: #37322F;
-  color: #F7F4F3;
+.notes-topbar__icon:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #F7F4F3; }
+.notes-topbar__icon:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.notes-topbar__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #37322F;
+  border-radius: 4px;
+  color: #B5ADA6;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
-.notes-toolbar-btn.is-active {
-  background: #F7F4F3;
-  color: #0B0A09;
+.notes-topbar__new:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #F7F4F3; }
+.notes-topbar__new:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── formatting row ───────────────────────────────────────────────────────── */
+.notes-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #37322F;
+  flex-shrink: 0;
 }
 
-.notes-toolbar-divider {
+.notes-toolbar__divider {
   width: 1px;
-  height: 14px;
-  margin: 0 4px;
-  background: var(--border-default);
+  height: 16px;
+  margin: 0 5px;
+  background: #37322F;
+  flex-shrink: 0;
 }
 
-.notes-editor__body {
-  padding: 10px 12px;
-  /* Overridable: the drawer wants a short editor that leaves the picker visible,
-     the full-page workspace wants it to fill the page. */
-  max-height: var(--notes-editor-max-h, 48vh);
+.notes-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: #B5ADA6;
+  font-size: 0.75rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.notes-tool:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #F7F4F3; }
+.notes-tool:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Active marks invert rather than tint — at this size a tint is easy to miss. */
+.notes-tool.is-active { background: #F7F4F3; color: #0B0A09; }
+
+.notes-tool__label { font-weight: 600; font-size: 0.78rem; }
+.notes-tool__caret { width: 8px; opacity: 0.55; }
+.notes-tool--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 0 8px; }
+
+/* ── canvas ───────────────────────────────────────────────────────────────── */
+.notes-canvas {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  padding: var(--notes-canvas-pad, 18px 16px 48px);
 }
 
+/* Reading measure — only where there is room to give it away. The drawer runs
+   full width; at 280-560px a measure would just make the column narrower. */
+.notes-measure {
+  max-width: 62ch;
+  margin: 0 auto;
+}
+
+.notes-canvas__count {
+  margin-top: 12px;
+  font-size: 0.68rem;
+  color: #B5ADA6;
+}
+
+/* ── document ─────────────────────────────────────────────────────────────── */
 .notes-prose {
-  color: #F7F4F3;
-  font-size: 0.875rem;
-  line-height: 1.6;
+  color: #E8E3DE;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.notes-prose h1 {
+  font-size: 1.7em;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 1.6em 0 0.45em;
 }
 
 .notes-prose h2 {
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: 1.35em;
+  line-height: 1.25;
+  font-weight: 700;
   color: #FFFFFF;
-  margin: 0.9rem 0 0.35rem;
+  margin: 1.5em 0 0.4em;
 }
 
 .notes-prose h3 {
-  font-size: 0.95rem;
+  font-size: 1.12em;
+  line-height: 1.3;
   font-weight: 600;
   color: #FFFFFF;
-  margin: 0.75rem 0 0.3rem;
+  margin: 1.3em 0 0.35em;
 }
 
-.notes-prose h2:first-child,
-.notes-prose h3:first-child {
-  margin-top: 0;
-}
+.notes-prose > :first-child { margin-top: 0; }
 
-.notes-prose p {
-  margin: 0 0 0.5rem;
-}
+.notes-prose p { margin: 0 0 0.85em; }
 
 .notes-prose ul,
 .notes-prose ol {
-  margin: 0 0 0.5rem;
-  padding-left: 1.25rem;
+  margin: 0 0 0.85em;
+  padding-left: 1.3em;
 }
 
 .notes-prose ul { list-style: disc; }
 .notes-prose ol { list-style: decimal; }
-
-.notes-prose li { margin: 0.15rem 0; }
+.notes-prose li { margin: 0.2em 0; }
 .notes-prose li > p { margin: 0; }
 
+/* Muted olive rather than a bright amber — a highlight should mark a line, not
+   shout over the text it is marking. */
 .notes-prose mark {
-  background: #E0A82E;
+  background: #8A7A2A;
   color: #0B0A09;
-  padding: 0 0.15em;
+  padding: 0 0.18em;
   border-radius: 2px;
 }
 
-.notes-prose s { opacity: 0.6; }
+.notes-prose s { opacity: 0.55; }
+.notes-prose u { text-decoration: underline; text-underline-offset: 2px; }
 
-/* Placeholder: the extension writes data-placeholder onto the empty first node
-   and there is nothing to see until we render it. */
 .notes-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: #B5ADA6;
@@ -1490,61 +1610,145 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   pointer-events: none;
 }
 
-/* Notes chrome — the picker, its actions and the empty-state CTA.
-   Same reasoning as .notes-editor above: these sit on the drawer's translucent
-   backdrop, where a transparent control has no edge to read against. They get an
-   opaque surface so they look like controls rather than floating text. */
-.notes-control {
+/* ---------------------------------------------------------------------------
+   /notes workspace — the full-page, two-pane view
+   --------------------------------------------------------------------------- */
+.notes-workspace {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: #0B0A09;
+  color: #F7F4F3;
+  /* The page has room, so the canvas breathes and the measure centres in it. */
+  --notes-canvas-pad: 30px 24px 80px;
+}
+
+.notes-workspace__sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid #37322F;
+  background: #0F0E0D;
+}
+
+.notes-workspace__sidebar-head {
+  padding: 16px;
+  border-bottom: 1px solid #37322F;
+}
+
+.notes-workspace__back {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: #171614;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  padding: 5px 8px;
-  font-size: 0.8rem;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 0.72rem;
+  color: #B5ADA6;
+  transition: color 120ms ease;
+}
+
+.notes-workspace__back:hover { color: #F7F4F3; }
+
+.notes-workspace__campaign {
+  font-size: 0.95rem;
+  font-weight: 600;
   color: #F7F4F3;
+  word-break: break-word;
+}
+
+.notes-workspace__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.notes-workspace__empty {
+  padding: 12px 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #B5ADA6;
+}
+
+.notes-workspace__row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.notes-control:hover:not(:disabled) {
-  background: #211F1C;
-  border-color: #4A433E;
+.notes-workspace__row:hover { background: rgba(255, 255, 255, 0.05); }
+.notes-workspace__row.is-active { background: #211F1C; border-color: #37322F; }
+
+.notes-workspace__row-title {
+  font-size: 0.8rem;
+  color: #F7F4F3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.notes-control:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.notes-workspace__row-date { font-size: 0.65rem; color: #B5ADA6; }
+
+.notes-workspace__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.notes-control:focus {
-  outline: none;
-  border-color: var(--border-active);
+.notes-workspace__placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: #B5ADA6;
 }
 
-/* The one filled button in the slice: the empty-state CTA, which is the only
-   thing on screen when a user has no notes yet. */
+.notes-workspace__conflict,
+.notes-workspace__locked {
+  margin: 10px 16px 0;
+  border: 1px solid var(--feedback-warning);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--feedback-warning);
+}
+
+/* The read-only notice offers the route into the game, because locking without
+   naming the alternative leaves the user staring at a dead editor. */
+.notes-workspace__locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .notes-btn-primary {
   background: #F7F4F3;
   color: #0B0A09;
-  border: 1px solid #F7F4F3;
   border-radius: 4px;
   padding: 7px 14px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 500;
+  white-space: nowrap;
   transition: background-color 120ms ease;
 }
 
-.notes-btn-primary:hover:not(:disabled) {
-  background: #E2DCD7;
-}
+.notes-btn-primary:hover:not(:disabled) { background: #E2DCD7; }
+.notes-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.notes-btn-primary:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* Right drawer width toggle.
+/* ---------------------------------------------------------------------------
+   Right drawer width toggle
 
    Lives in the tab rail, above the tabs, because it acts on the drawer rather
    than on whatever panel happens to be open.
@@ -1553,7 +1757,8 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
    and left-rounded corners — so it reads as part of the same physical rail and
    travels with it. What keeps it from reading as a *tab* is its shape: tabs are
    112px tall with vertical text, this is a 30px horizontal icon. Same material,
-   different object. */
+   different object.
+   --------------------------------------------------------------------------- */
 .right-drawer-expand-btn {
   width: 40px;
   height: 30px;
@@ -1576,198 +1781,4 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 .right-drawer-expand-btn:hover {
   background: rgba(0, 0, 0, 0.85);
   color: rgba(255, 255, 255, 0.9);
-}
-
-
-/* ---------------------------------------------------------------------------
-   Notes workspace — the full-page, two-pane view at /notes
-
-   Same editor and hooks as the in-game drawer; only the chrome differs. The
-   drawer squeezes note switching into a Dropdown because it has 280-560px; here
-   the list can simply be a list.
-   --------------------------------------------------------------------------- */
-.notes-workspace {
-  display: flex;
-  height: 100%;
-  min-height: 0;
-  /* The editor's own scroll cap. In the drawer this defaults to 48vh; here the
-     editor should fill the page instead of stopping half way down. */
-  --notes-editor-max-h: calc(100vh - 230px);
-}
-
-.notes-workspace__sidebar {
-  width: 280px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-right: 1px solid var(--border-default);
-  background: #0F0E0D;
-}
-
-.notes-workspace__sidebar-head {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-default);
-}
-
-.notes-workspace__back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: #B5ADA6;
-  margin-bottom: 12px;
-  transition: color 120ms ease;
-}
-
-.notes-workspace__back:hover {
-  color: #F7F4F3;
-}
-
-.notes-workspace__campaign {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #F7F4F3;
-  margin-bottom: 12px;
-  word-break: break-word;
-}
-
-.notes-workspace__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.7rem;
-  color: #B5ADA6;
-}
-
-.notes-workspace__limit {
-  margin-top: 8px;
-  font-size: 0.7rem;
-  color: var(--feedback-warning);
-}
-
-.notes-workspace__list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.notes-workspace__empty {
-  padding: 12px 8px;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: #B5ADA6;
-}
-
-.notes-workspace__row {
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.notes-workspace__row:hover {
-  background: #1A1917;
-}
-
-.notes-workspace__row.is-active {
-  background: #211F1C;
-  border-color: var(--border-default);
-}
-
-.notes-workspace__row-title {
-  font-size: 0.8rem;
-  color: #F7F4F3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.notes-workspace__row-date {
-  font-size: 0.65rem;
-  color: #B5ADA6;
-}
-
-.notes-workspace__main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 16px 20px;
-  gap: 12px;
-  overflow-y: auto;
-}
-
-.notes-workspace__main-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.notes-workspace__title {
-  flex: 1;
-  min-width: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  /* Dark, not light: this pane is on the light dashboard background, unlike the
-     sidebar and the editor panel which bring their own dark surfaces. */
-  color: var(--content-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.notes-workspace__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.notes-workspace__status {
-  font-size: 0.7rem;
-  color: #37322F;
-  min-width: 7rem;
-  text-align: right;
-}
-
-.notes-workspace__conflict {
-  border: 1px solid var(--feedback-warning);
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 0.75rem;
-  color: var(--feedback-warning);
-}
-
-.notes-workspace__placeholder {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #37322F;
-  font-size: 0.85rem;
-}
-
-/* Read-only notice shown on /notes while a session is live for the campaign.
-   The route into the game matters: locking without offering the alternative
-   leaves the user staring at a dead editor wondering where their notes went. */
-.notes-workspace__locked {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  padding: 10px 12px;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: #37322F;
-  background: #EFE9E4;
 }

@@ -8,16 +8,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useQueryClient } from '@tanstack/react-query'
-import { faArrowLeft, faPen, faPlus, faTrash } from '@fortawesome/free-solid-svg-icons'
+import { faArrowLeft } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import dayjs from 'dayjs'
 
 import ConfirmDialog from '@/app/shared/components/ConfirmDialog'
 import Spinner from '@/app/shared/components/Spinner'
 
+import NoteTopBar from './NoteTopBar'
+
 import { SaveStatus, useNoteAutosave } from '../hooks/useNoteAutosave'
 import {
-  MAX_NOTES_PER_CAMPAIGN,
   patchNoteInCaches,
   refetchNote,
   useCreateNote,
@@ -163,8 +164,6 @@ export default function NotesWorkspace({
     }
   }, [lockedBySession, activeNoteId, campaignId, queryClient])
 
-  const atLimit = notes.length >= MAX_NOTES_PER_CAMPAIGN
-
   const handleCreate = async () => {
     const created = await createNote.mutateAsync()
     onSelectNote(created.id)
@@ -190,30 +189,6 @@ export default function NotesWorkspace({
             <span>Campaigns</span>
           </button>
           <h1 className="notes-workspace__campaign">{campaignTitle || 'Campaign notes'}</h1>
-          <div className="notes-workspace__meta">
-            <span>
-              {notes.length} / {MAX_NOTES_PER_CAMPAIGN} notes
-            </span>
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={atLimit || createNote.isPending}
-              title={
-                atLimit
-                  ? `${MAX_NOTES_PER_CAMPAIGN} note limit reached — delete a note to make room.`
-                  : 'Start a new note'
-              }
-              className="notes-control text-xs"
-            >
-              <FontAwesomeIcon icon={faPlus} className="w-3" />
-              New note
-            </button>
-          </div>
-          {atLimit && (
-            <p className="notes-workspace__limit">
-              {MAX_NOTES_PER_CAMPAIGN} note limit reached — delete a note to make room.
-            </p>
-          )}
         </div>
 
         <ul className="notes-workspace__list">
@@ -242,57 +217,25 @@ export default function NotesWorkspace({
       </aside>
 
       <section className="notes-workspace__main">
+        {/* The top bar renders even with no note open — otherwise an empty
+            notebook has no way to create its first one. */}
+        <NoteTopBar
+          notes={notes}
+          activeNote={activeNote}
+          statusLabel={STATUS_LABEL[status] || ''}
+          onSelect={onSelectNote}
+          onCreate={handleCreate}
+          onRename={(title) => renameNote.mutate({ noteId: activeNoteId, title })}
+          onDelete={() => setConfirmingDelete(true)}
+          isCreating={createNote.isPending}
+        />
+
         {!activeNoteId ? (
           <div className="notes-workspace__placeholder">
             <p>Select a note, or create one to get started.</p>
           </div>
         ) : (
           <>
-            <header className="notes-workspace__main-head">
-              {isRenaming ? (
-                <input
-                  ref={renameInputRef}
-                  value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') commitRename()
-                    if (event.key === 'Escape') setIsRenaming(false)
-                  }}
-                  placeholder="Name this note"
-                  maxLength={200}
-                  className="notes-control flex-1"
-                />
-              ) : (
-                <h2 className="notes-workspace__title">{activeNote?.title || '…'}</h2>
-              )}
-
-              <div className="notes-workspace__actions">
-                <span className="notes-workspace__status">{STATUS_LABEL[status] || ''}</span>
-                <button
-                  type="button"
-                  className="notes-control"
-                  title="Rename"
-                  onClick={() => {
-                    setDraftTitle(
-                      activeNote?.title === 'Untitled note' ? '' : activeNote?.title || ''
-                    )
-                    setIsRenaming(true)
-                  }}
-                >
-                  <FontAwesomeIcon icon={faPen} className="w-3" />
-                </button>
-                <button
-                  type="button"
-                  className="notes-control"
-                  title="Delete"
-                  onClick={() => setConfirmingDelete(true)}
-                >
-                  <FontAwesomeIcon icon={faTrash} className="w-3" />
-                </button>
-              </div>
-            </header>
-
             {lockedBySession && (
               <div className="notes-workspace__locked">
                 <span>
@@ -322,6 +265,7 @@ export default function NotesWorkspace({
               <Spinner />
             ) : (
               <NoteEditor
+                measured
                 key={`${activeNote.id}:${reloadToken}`}
                 initialContent={activeNote.content_delta}
                 onChange={queueSave}

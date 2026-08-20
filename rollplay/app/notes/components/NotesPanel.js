@@ -15,7 +15,7 @@ import ConfirmDialog from '@/app/shared/components/ConfirmDialog'
 import EmptyState from '@/app/shared/components/EmptyState'
 import Spinner from '@/app/shared/components/Spinner'
 
-import NotePicker from './NotePicker'
+import NoteTopBar from './NoteTopBar'
 import { SaveStatus, useNoteAutosave } from '../hooks/useNoteAutosave'
 import {
   patchNoteInCaches,
@@ -157,10 +157,12 @@ export default function NotesPanel({ campaignId }) {
   }
 
   return (
-    <div className="flex flex-col">
-      <NotePicker
+    <div className="notes-surface notes-surface--bleed">
+      <NoteTopBar
+        compact
         notes={notes}
         activeNote={activeNote}
+        statusLabel={STATUS_LABEL[status] || ''}
         onSelect={setActiveNoteId}
         onCreate={handleCreate}
         onRename={(title) => renameNote.mutate({ noteId: activeNoteId, title })}
@@ -194,8 +196,6 @@ export default function NotesPanel({ campaignId }) {
           onChange={queueSave}
         />
       )}
-
-      <p className="mt-2 text-xs text-content-secondary">{STATUS_LABEL[status] || ''}</p>
 
       <ConfirmDialog
         show={confirmingDelete}
