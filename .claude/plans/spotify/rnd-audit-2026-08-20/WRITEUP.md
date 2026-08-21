@@ -175,7 +175,7 @@ the point of the diagnostic layer — it converts her next session into the answ
 ## 6. What shipped (this session)
 
 **New: `rollplay/app/audio_management/hooks/spotifyDiagnostics.js`**
-- `diagReport` (always-on failure evidence) / `diagVerbose` (runtime flag:
+- `spotifyDxLog` (always-on failure evidence) / `diagVerbose` (runtime flag:
   `localStorage.setItem('tt_spotify_debug', '1')` — works on any production client, no
   deploy; replaces the compile-time `SPOTIFY_DEBUG` const nobody could flip).
 - `probeEme()` — Widevine/FairPlay/ClearKey audio-only probe with `createMediaKeys()`

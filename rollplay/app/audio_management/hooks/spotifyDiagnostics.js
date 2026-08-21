@@ -16,7 +16,7 @@
  * decisive.
  *
  * Two output channels:
- *  - diagReport(): ALWAYS ON. Failure evidence + one-line boot summaries. Low
+ *  - spotifyDxLog(): ALWAYS ON. Failure evidence + one-line boot summaries. Low
  *    volume by design — it only speaks when something is wrong or once at boot.
  *  - diagVerbose(): gated by localStorage('tt_spotify_debug' = '1'). The full
  *    event/timing stream (successor of the old compile-time SPOTIFY_DEBUG
@@ -57,7 +57,7 @@ export function diagVerbose(...args) {
  * Always-on report line. `level` is 'log' | 'warn' | 'error'.
  * Reserved for failure evidence and one-shot summaries — keep it quiet.
  */
-export function diagReport(level, ...args) {
+export function spotifyDxLog(level, ...args) {
   // eslint-disable-next-line no-console
   const emit = console[level] || console.log;
   emit(PREFIX, stamp(), ...args);
@@ -213,6 +213,10 @@ export function classifyProfileOutcome(httpStatus, body) {
     if (upstreamStatus != null) {
       return { code: 'upstream_error', explanation: `Spotify API error ${upstreamStatus}: ${upstreamError || '(no body)'}` };
     }
+    if (upstreamError) {
+      // No status but an error body = the backend couldn't reach Spotify at all.
+      return { code: 'network_error', explanation: `could not reach Spotify (${upstreamError}) — transient network problem, not an account problem` };
+    }
     return { code: 'not_linked', explanation: 'no Spotify account linked for this user' };
   }
   const product = body.profile?.product;
@@ -293,7 +297,7 @@ export function installSdkEnvironmentTaps() {
 
   const onCspViolation = (event) => {
     if (typeof event.blockedURI === 'string' && event.blockedURI.includes('sdk.scdn.co')) {
-      diagReport('error', 'CSP blocked a Spotify SDK resource:', {
+      spotifyDxLog('error', 'CSP blocked a Spotify SDK resource:', {
         blockedURI: event.blockedURI,
         directive: event.effectiveDirective,
       }, '— the SDK iframe/script cannot load; audio is impossible until the policy allows sdk.scdn.co');
@@ -326,15 +330,15 @@ export async function logBootReport({ status, profileHttpStatus, profileBody }) 
 
   // eslint-disable-next-line no-console
   console.groupCollapsed(`${PREFIX} Spotify boot report — status: ${status} | profile: ${profileDiagnosis.code} | DRM: ${emeSummary.ok ? 'OK' : 'PROBLEM'}`);
-  diagReport('log', 'userAgent:', typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a');
-  diagReport('log', 'secureContext:', typeof window !== 'undefined' ? window.isSecureContext : 'n/a', '| userActivation:', activation, '| autoplayPolicy(FF):', autoplayPolicy());
-  diagReport('log', 'profile diagnosis:', profileDiagnosis.code, '—', profileDiagnosis.explanation);
-  diagReport('log', 'raw profile response:', profileHttpStatus, profileBody);
-  diagReport(emeSummary.ok ? 'log' : 'error', 'DRM probe:', emeSummary.headline);
-  if (!emeSummary.ok || isDiagEnabled()) diagReport('log', 'raw DRM probe:', emeProbe);
-  diagReport('log', 'SDK iframe:', iframe);
+  spotifyDxLog('log', 'userAgent:', typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a');
+  spotifyDxLog('log', 'secureContext:', typeof window !== 'undefined' ? window.isSecureContext : 'n/a', '| userActivation:', activation, '| autoplayPolicy(FF):', autoplayPolicy());
+  spotifyDxLog('log', 'profile diagnosis:', profileDiagnosis.code, '—', profileDiagnosis.explanation);
+  spotifyDxLog('log', 'raw profile response:', profileHttpStatus, profileBody);
+  spotifyDxLog(emeSummary.ok ? 'log' : 'error', 'DRM probe:', emeSummary.headline);
+  if (!emeSummary.ok || isDiagEnabled()) spotifyDxLog('log', 'raw DRM probe:', emeProbe);
+  spotifyDxLog('log', 'SDK iframe:', iframe);
   // Self-documenting toggle — so nobody has to remember the flag commands.
-  diagReport('log', "type localStorage.setItem('tt_spotify_debug', '1') to turn on advanced spotify logging\ntype localStorage.removeItem('tt_spotify_debug') to turn off advanced spotify logging");
+  spotifyDxLog('log', "type localStorage.setItem('tt_spotify_debug', '1') to turn on advanced spotify logging\ntype localStorage.removeItem('tt_spotify_debug') to turn off advanced spotify logging");
   // eslint-disable-next-line no-console
   console.groupEnd();
 

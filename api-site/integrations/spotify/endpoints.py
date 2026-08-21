@@ -201,6 +201,16 @@ async def profile(
             upstream_status=upstream_status,
             upstream_error=upstream_error,
         )
+    except httpx.RequestError as e:
+        # Spotify unreachable (timeout/DNS/connection reset) — a transient
+        # network problem, not an account problem. No upstream_status (there was
+        # no response); the error text lets the client classify this as
+        # network_error instead of misreading it as "never linked" or a 500.
+        logger.warning("Spotify profile fetch network failure for user %s: %s", user_id, e)
+        return SpotifyProfileResponse(
+            connected=False,
+            upstream_error=f"network: {str(e)[:250]}",
+        )
 
     return SpotifyProfileResponse(connected=True, profile=_map_profile(me))
 
@@ -259,6 +269,15 @@ async def token(
         raise HTTPException(
             status_code=502,
             detail=f"Could not obtain a Spotify token (upstream {upstream_status}: {upstream_error})",
+        )
+    except httpx.RequestError as e:
+        # Network failure reaching Spotify — surface it as a structured 502 so
+        # the SDK's getOAuthToken failure log carries the actual reason instead
+        # of an unhandled 500.
+        logger.warning("Spotify token refresh network failure for user %s: %s", user_id, e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach Spotify (network): {str(e)[:250]}",
         )
 
     now = datetime.now(timezone.utc)

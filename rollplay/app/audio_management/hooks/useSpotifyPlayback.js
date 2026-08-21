@@ -8,7 +8,7 @@ import { authFetch } from '@/app/shared/utils/authFetch';
 import { isIOSNonSafari } from '@/app/shared/utils/platform';
 import {
   diagVerbose,
-  diagReport,
+  spotifyDxLog,
   logBootReport,
   classifyPlayFailure,
   verifyPlaybackProgress,
@@ -65,7 +65,7 @@ async function fetchAccessToken() {
 
 // Verbose timing/event stream — runtime-enableable on ANY client (production
 // included) via localStorage.setItem('tt_spotify_debug', '1'); no deploy needed.
-// Failure evidence does NOT go through this: diagReport lines are always on.
+// Failure evidence does NOT go through this: spotifyDxLog lines are always on.
 // (Replaces the old compile-time SPOTIFY_DEBUG const, which no real user could flip.)
 const dbg = diagVerbose;
 
@@ -157,6 +157,7 @@ export function useSpotifyPlayback({
   const readyTimeoutRef = useRef(null);       // connect()→'ready' watchdog
   const envTapsUninstallRef = useRef(null);   // CSP-violation / SDK-message taps teardown
   const verifyRunningRef = useRef(false);     // one playback verification at a time
+  const verifyTimeoutRef = useRef(null);      // pending verification timer — cleared on teardown
   const silentSessionReportedRef = useRef(false); // one-shot "session plays but you can't" breadcrumb
 
   useEffect(() => { statusRef.current = status; }, [status]);
@@ -215,7 +216,7 @@ export function useSpotifyPlayback({
         // release the guard so a later gesture can retry, and surface the failure
         // instead of sitting on 'connecting' forever.
         connectStartedRef.current = false;
-        diagReport('error', 'Spotify connect refused (resolved false) — bad token, blocked SDK script, or non-HTTPS origin.',
+        spotifyDxLog('error', 'Spotify connect refused (resolved false) — bad token, blocked SDK script, or non-HTTPS origin.',
           { iframe: findSdkIframe() });
         setStatus('error');
         return;
@@ -228,14 +229,14 @@ export function useSpotifyPlayback({
       readyTimeoutRef.current = setTimeout(() => {
         readyTimeoutRef.current = null;
         if (readyRef.current) return;
-        diagReport('error', 'Spotify connect() succeeded but no ready event arrived within 10s — the device never registered with Spotify Connect.',
+        spotifyDxLog('error', 'Spotify connect() succeeded but no ready event arrived within 10s — the device never registered with Spotify Connect.',
           { iframe: findSdkIframe(), activation: activationState() });
         setStatus('error');
       }, 10000);
       try { await player.activateElement(); } catch { /* activation retried on next gesture */ }
     } catch (e) {
       connectStartedRef.current = false;
-      diagReport('error', 'Spotify connect failed:', String(e));
+      spotifyDxLog('error', 'Spotify connect failed:', String(e));
     }
   }, []);
 
@@ -358,13 +359,13 @@ export function useSpotifyPlayback({
         // The raw body is the discriminator: PREMIUM_REQUIRED vs allowlist 403
         // vs device 404 vs 429 each mean a different fix — classify it inline.
         const failure = classifyPlayFailure(resp.status, bodyText);
-        diagReport('error', `Spotify play failed: HTTP ${resp.status}`, bodyText.slice(0, 200),
+        spotifyDxLog('error', `Spotify play failed: HTTP ${resp.status}`, bodyText.slice(0, 200),
           `→ ${failure.code}: ${failure.explanation}`);
       } else {
         dbg('play OK');
       }
     } catch (e) {
-      diagReport('error', 'Spotify play failed:', String(e));
+      spotifyDxLog('error', 'Spotify play failed:', String(e));
     }
   }, [transferToDevice, waitForDevice, reconcileDevice]);
 
@@ -438,18 +439,23 @@ export function useSpotifyPlayback({
     if (verifyRunningRef.current) return;
     verifyRunningRef.current = true;
     // Initial delay covers playBody's transfer/404 retry ladder on cold starts.
-    setTimeout(async () => {
+    // Timer handle kept in a ref so teardown can cancel a pending verification
+    // (otherwise it could fire against a torn-down player and arm a ghost pill).
+    verifyTimeoutRef.current = setTimeout(async () => {
+      verifyTimeoutRef.current = null;
       try {
         const outcome = await verifyPlaybackProgress(() => playerRef.current?.getCurrentState?.() ?? Promise.resolve(null));
+        // The sample gap awaits ~2s — the player can be torn down mid-flight.
+        if (!playerRef.current) { dbg('playback verify skipped — player torn down'); return; }
         if (nowPlayingRef.current?.playback_state !== 'playing') { dbg('playback verify skipped — snapshot no longer playing'); return; }
         if (outcome.verdict === 'advancing') { dbg('playback verified:', outcome.detail); return; }
-        diagReport('warn', `Playback verification: ${outcome.verdict} — ${outcome.detail}`, {
+        spotifyDxLog('warn', `Playback verification: ${outcome.verdict} — ${outcome.detail}`, {
           first: outcome.first ? { paused: outcome.first.paused, position: outcome.first.position } : null,
           second: outcome.second ? { paused: outcome.second.paused, position: outcome.second.position } : null,
         });
         if ((outcome.verdict === 'paused' || outcome.verdict === 'no-state')
           && statusRef.current === 'ready' && !isLeaderRef.current) {
-          diagReport('warn', 'Arming blocked-recovery: playback was commanded but never started (silent autoplay block — no autoplay_failed event fired).');
+          spotifyDxLog('warn', 'Arming blocked-recovery: playback was commanded but never started (silent autoplay block — no autoplay_failed event fired).');
           lastPlaybackSigRef.current = null; // let recovery re-apply the same snapshot
           setStatus('blocked');
         }
@@ -492,13 +498,13 @@ export function useSpotifyPlayback({
         player.seek(positionMs).then(() => player.resume()).catch((resumeError) => {
           // A rejected resume here is almost always NotAllowedError (autoplay) —
           // don't swallow it: arm the existing blocked-recovery machinery.
-          diagReport('warn', 'Spotify resume rejected:', String(resumeError), '— arming blocked-recovery.');
+          spotifyDxLog('warn', 'Spotify resume rejected:', String(resumeError), '— arming blocked-recovery.');
           lastPlaybackSigRef.current = null;
           setStatus('blocked');
         });
       } else {
         if (sameTrack && !liveState) {
-          diagReport('log', 'Phantom-resume guard: track was recorded during a pause but never loaded on this device — issuing a full play command instead of resume.');
+          spotifyDxLog('log', 'Phantom-resume guard: track was recorded during a pause but never loaded on this device — issuing a full play command instead of resume.');
         }
         playTrackAt(snap.track_uri, positionMs);
       }
@@ -519,7 +525,7 @@ export function useSpotifyPlayback({
       && !silentSessionReportedRef.current
       && ['not_connected', 'not_premium', 'unsupported_browser', 'error'].includes(statusRef.current)) {
       silentSessionReportedRef.current = true;
-      diagReport('warn', `This session is playing Spotify but this client cannot hear it: status "${statusRef.current}" — see the Spotify boot report above for the raw reason.`);
+      spotifyDxLog('warn', `This session is playing Spotify but this client cannot hear it: status "${statusRef.current}" — see the Spotify boot report above for the raw reason.`);
     }
     // Remember the playing context across reload/late-join so the leader reports it back
     // (the SDK's own context.uri is unreliable). Restored before the leader's early return.
@@ -563,7 +569,7 @@ export function useSpotifyPlayback({
           // client ID, gating on it would silently disable every user at once —
           // so proceed and let the SDK's account_error (the authoritative
           // entitlement verdict) reject non-Premium accounts instead.
-          diagReport('warn', 'Spotify /v1/me returned NO product field (Feb-2026 dev-mode removal) — skipping the profile premium gate; the SDK account_error event is now the entitlement authority.');
+          spotifyDxLog('warn', 'Spotify /v1/me returned NO product field (Feb-2026 dev-mode removal) — skipping the profile premium gate; the SDK account_error event is now the entitlement authority.');
         } else if (product !== 'premium') {
           setStatus('not_premium');
           return;
@@ -572,7 +578,7 @@ export function useSpotifyPlayback({
         setShouldInit(true);
       } catch (profileError) {
         if (!cancelled) {
-          diagReport('error', 'Spotify profile check failed before reaching Spotify:', String(profileError));
+          spotifyDxLog('error', 'Spotify profile check failed before reaching Spotify:', String(profileError));
           setStatus('error');
         }
       }
@@ -613,6 +619,8 @@ export function useSpotifyPlayback({
         currentTrackRef.current = null;
         activationMissingRef.current = false;
         if (readyTimeoutRef.current) { clearTimeout(readyTimeoutRef.current); readyTimeoutRef.current = null; }
+        if (verifyTimeoutRef.current) { clearTimeout(verifyTimeoutRef.current); verifyTimeoutRef.current = null; }
+        verifyRunningRef.current = false;
         envTapsUninstallRef.current?.();
         envTapsUninstallRef.current = null;
         setSdkPlayerCreated(false);
@@ -647,7 +655,7 @@ export function useSpotifyPlayback({
               })
               .catch((tokenError) => {
                 tokenFailStreakRef.current += 1;
-                diagReport('error', `getOAuthToken #${seq} FAILED (consecutive: ${tokenFailStreakRef.current}):`, String(tokenError),
+                spotifyDxLog('error', `getOAuthToken #${seq} FAILED (consecutive: ${tokenFailStreakRef.current}):`, String(tokenError),
                   '— repeated bursts of this line mean the SDK is starving for a token.');
                 if (lastGoodTokenRef.current) {
                   cb(lastGoodTokenRef.current);
@@ -687,29 +695,29 @@ export function useSpotifyPlayback({
         // verbatim with the event name; that pair is the SDK's whole diagnosis.
         player.addListener('initialization_error', ({ message }) => {
           setLastError({ event: 'initialization_error', message, ts: Date.now() });
-          diagReport('error', 'SDK initialization_error:', message,
+          spotifyDxLog('error', 'SDK initialization_error:', message,
             '— the environment cannot instantiate a player (most likely missing/disabled DRM; see the DRM probe in the boot report).',
             { iframe: findSdkIframe() });
           setStatus('error');
         });
         player.addListener('authentication_error', ({ message }) => {
           setLastError({ event: 'authentication_error', message, ts: Date.now() });
-          diagReport('error', 'SDK authentication_error:', message, '— the token handed to the SDK was rejected (expired/invalid/scope).');
+          spotifyDxLog('error', 'SDK authentication_error:', message, '— the token handed to the SDK was rejected (expired/invalid/scope).');
           setStatus('error');
         });
         player.addListener('account_error', ({ message }) => {
           setLastError({ event: 'account_error', message, ts: Date.now() });
-          diagReport('error', 'SDK account_error:', message,
+          spotifyDxLog('error', 'SDK account_error:', message,
             '— Spotify says this account is NOT Premium-entitled for streaming. This is the authoritative verdict and overrides whatever the profile product field said.');
           setStatus('not_premium');
         });
         player.addListener('playback_error', ({ message }) => {
           setLastError({ event: 'playback_error', message, ts: Date.now() });
-          diagReport('error', 'SDK playback_error:', message, '— loading/playing the current track failed (status stays as-is; repeated lines here with silence = decode/DRM/track problem).');
+          spotifyDxLog('error', 'SDK playback_error:', message, '— loading/playing the current track failed (status stays as-is; repeated lines here with silence = decode/DRM/track problem).');
         });
         player.addListener('autoplay_failed', () => {
           setLastError({ event: 'autoplay_failed', message: null, ts: Date.now() });
-          diagReport('warn', 'SDK autoplay_failed — the browser blocked audio; next interaction (or the unlock pill) recovers it.',
+          spotifyDxLog('warn', 'SDK autoplay_failed — the browser blocked audio; next interaction (or the unlock pill) recovers it.',
             { activation: activationState() });
           setStatus('blocked');
         });
@@ -747,7 +755,7 @@ export function useSpotifyPlayback({
         }
       } catch (e) {
         creatingRef.current = false;
-        diagReport('error', 'Spotify SDK setup failed:', String(e),
+        spotifyDxLog('error', 'Spotify SDK setup failed:', String(e),
           '— the SDK script did not load or the player could not be constructed.', { iframe: findSdkIframe() });
         setStatus('error');
       }
