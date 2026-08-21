@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { authFetch } from '@/app/shared/utils/authFetch'
+import { spotifyDxLog } from '@/app/audio_management/hooks/spotifyDiagnostics'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCopy, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
@@ -45,6 +46,13 @@ export default function ProfileManager({ user, onUserUpdate }) {
       const response = await authFetch('/api/spotify/profile', { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
+        if (!data.connected && data.upstream_status != null) {
+          // Spotify rejected us for a LINKED account (allowlist 403, dead refresh
+          // token, quota…) — log the raw evidence so a console screenshot of this
+          // page is diagnostic. "Not connected" alone hides which failure it was.
+          spotifyDxLog('warn', 'Spotify shows as not connected because Spotify rejected the request:',
+            `HTTP ${data.upstream_status}`, data.upstream_error || '(no body)')
+        }
         setSpotify({ loading: false, connected: data.connected, profile: data.profile || null })
       } else {
         setSpotify({ loading: false, connected: false, profile: null })

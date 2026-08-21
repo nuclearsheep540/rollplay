@@ -21,9 +21,18 @@ class SpotifyProfile(BaseModel):
 
 
 class SpotifyProfileResponse(BaseModel):
-    """What the account page fetches: connected flag + (live) profile if linked."""
+    """What the account page fetches: connected flag + (live) profile if linked.
+
+    upstream_status/upstream_error carry the raw Spotify failure through when
+    connected is False because Spotify rejected us (allowlist 403, dead refresh
+    token, quota 429, …) rather than because no account is linked. The frontend
+    diagnostics classify on them — without these, every distinct failure is
+    indistinguishable from "never linked" (2026-08-20 audit).
+    """
     connected: bool
     profile: Optional[SpotifyProfile] = None
+    upstream_status: Optional[int] = None
+    upstream_error: Optional[str] = None
 
 
 # --- Phase 2: game-runtime BGM ---

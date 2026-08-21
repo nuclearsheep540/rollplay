@@ -183,10 +183,34 @@ async def profile(
         access_token = await _ensure_access_token(account, repo, client)
         me = await client.get_me(access_token)
     except httpx.HTTPStatusError as e:
-        # Token likely revoked or unrecoverable — surface as disconnected so the
-        # UI offers a reconnect rather than erroring.
-        logger.warning("Spotify profile fetch failed for user %s: %s", user_id, e)
-        return SpotifyProfileResponse(connected=False)
+        # Several DIFFERENT upstream failures land here — allowlist 403 ("User
+        # not registered in the Developer Dashboard"), refresh invalid_grant
+        # (revoked / >6-month-old token), quota 429, geo/entitlement 403s — and
+        # each needs a different fix. The exception repr omits the response
+        # body, which is the only discriminator, so log it and pass it through.
+        # Still connected:False (the UI keeps offering reconnect), but the
+        # evidence is no longer destroyed at the first hop.
+        upstream_status = e.response.status_code if e.response is not None else None
+        upstream_error = (e.response.text or "")[:300] if e.response is not None else str(e)
+        logger.warning(
+            "Spotify profile fetch failed for user %s (upstream %s: %s)",
+            user_id, upstream_status, upstream_error,
+        )
+        return SpotifyProfileResponse(
+            connected=False,
+            upstream_status=upstream_status,
+            upstream_error=upstream_error,
+        )
+    except httpx.RequestError as e:
+        # Spotify unreachable (timeout/DNS/connection reset) — a transient
+        # network problem, not an account problem. No upstream_status (there was
+        # no response); the error text lets the client classify this as
+        # network_error instead of misreading it as "never linked" or a 500.
+        logger.warning("Spotify profile fetch network failure for user %s: %s", user_id, e)
+        return SpotifyProfileResponse(
+            connected=False,
+            upstream_error=f"network: {str(e)[:250]}",
+        )
 
     return SpotifyProfileResponse(connected=True, profile=_map_profile(me))
 
@@ -232,8 +256,29 @@ async def token(
     try:
         access_token = await _ensure_access_token(account, repo, client)
     except httpx.HTTPStatusError as e:
-        logger.warning("Spotify token refresh failed for user %s: %s", user_id, e)
-        raise HTTPException(status_code=502, detail="Could not obtain a Spotify token")
+        # A failure here starves the SDK's getOAuthToken callback on the client.
+        # invalid_grant means the refresh token is DEAD (revoked or past the
+        # 6-month lifetime) and only a fresh OAuth link fixes it — the body is
+        # the discriminator, so log it and put it in the detail the client logs.
+        upstream_status = e.response.status_code if e.response is not None else None
+        upstream_error = (e.response.text or "")[:300] if e.response is not None else str(e)
+        logger.warning(
+            "Spotify token refresh failed for user %s (upstream %s: %s)",
+            user_id, upstream_status, upstream_error,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not obtain a Spotify token (upstream {upstream_status}: {upstream_error})",
+        )
+    except httpx.RequestError as e:
+        # Network failure reaching Spotify — surface it as a structured 502 so
+        # the SDK's getOAuthToken failure log carries the actual reason instead
+        # of an unhandled 500.
+        logger.warning("Spotify token refresh network failure for user %s: %s", user_id, e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach Spotify (network): {str(e)[:250]}",
+        )
 
     now = datetime.now(timezone.utc)
     expires_at = account.expires_at
