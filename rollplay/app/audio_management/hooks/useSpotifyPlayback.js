@@ -6,6 +6,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import { isIOSNonSafari } from '@/app/shared/utils/platform';
+import {
+  diagVerbose,
+  diagReport,
+  logBootReport,
+  classifyPlayFailure,
+  verifyPlaybackProgress,
+  installSdkEnvironmentTaps,
+  activationState,
+  findSdkIframe,
+} from './spotifyDiagnostics';
 
 const SDK_SRC = 'https://sdk.scdn.co/spotify-player.js';
 const PLAYER_NAME = 'Tabletop Tavern'; // the SDK device name — used to find our device in Spotify's list
@@ -43,21 +53,21 @@ function loadSpotifySDK() {
 
 async function fetchAccessToken() {
   const r = await authFetch('/api/spotify/token', { credentials: 'include' });
-  if (!r.ok) throw new Error(`token ${r.status}`);
+  if (!r.ok) {
+    // Surface the backend's error body — it carries the discriminator (e.g. an
+    // upstream invalid_grant vs a transient 5xx) that a bare status hides.
+    const bodyText = await r.text().catch(() => '');
+    throw new Error(`token ${r.status} ${bodyText.slice(0, 200)}`);
+  }
   const j = await r.json();
   return j.access_token;
 }
 
-// --- TEMPORARY device-race instrumentation. Flip off (or delete) once the first-entry ---
-// --- "Device not found" timing is nailed down. Timestamps are ms since page/module load. ---
-const SPOTIFY_DEBUG = false;
-const _dbgT0 = (typeof performance !== 'undefined') ? performance.now() : 0;
-function dbg(...args) {
-  if (!SPOTIFY_DEBUG) return;
-  const t = ((typeof performance !== 'undefined' ? performance.now() : 0) - _dbgT0).toFixed(0);
-  // eslint-disable-next-line no-console
-  console.log(`🎛️[+${t}ms]`, ...args);
-}
+// Verbose timing/event stream — runtime-enableable on ANY client (production
+// included) via localStorage.setItem('tt_spotify_debug', '1'); no deploy needed.
+// Failure evidence does NOT go through this: diagReport lines are always on.
+// (Replaces the old compile-time SPOTIFY_DEBUG const, which no real user could flip.)
+const dbg = diagVerbose;
 
 /**
  * In-browser Spotify SDK player for the game-runtime BGM bed.
@@ -113,6 +123,9 @@ export function useSpotifyPlayback({
   const [nowPlaying, setNowPlaying] = useState(null); // last broadcast snapshot (UI)
   const [playbackState, setPlaybackState] = useState(null); // leader's live SDK state (for the seek bar)
   const [shouldInit, setShouldInit] = useState(false);
+  // Last raw SDK error event — {event, message, ts}. The message string is the
+  // ONLY discriminator the SDK provides (no error codes), so keep it verbatim.
+  const [lastError, setLastError] = useState(null);
   // Spotify.Player object constructed (NOT yet connected — connect is gesture-deferred).
   // "sdkPlayer", never "player", outside this hook: in Rollplay "player" means a human.
   const [sdkPlayerCreated, setSdkPlayerCreated] = useState(false);
@@ -136,7 +149,17 @@ export function useSpotifyPlayback({
   const lastReportKeyRef = useRef(null);
   const lastPlaybackSigRef = useRef(null);
   const currentContextRef = useRef(null); // playlist/album we're playing — tracked ourselves; the SDK's context.uri is unreliable
+  // --- Diagnostics plumbing (see spotifyDiagnostics.js + the 2026-08-20 audit) ---
+  const statusRef = useRef('idle');           // status mirror for async diagnostics callbacks
+  const tokenRequestSeqRef = useRef(0);       // getOAuthToken invocation counter (retry bursts are diagnostic)
+  const tokenFailStreakRef = useRef(0);       // consecutive token-fetch failures
+  const lastGoodTokenRef = useRef(null);      // starvation fallback: last token we successfully handed the SDK
+  const readyTimeoutRef = useRef(null);       // connect()→'ready' watchdog
+  const envTapsUninstallRef = useRef(null);   // CSP-violation / SDK-message taps teardown
+  const verifyRunningRef = useRef(false);     // one playback verification at a time
+  const silentSessionReportedRef = useRef(false); // one-shot "session plays but you can't" breadcrumb
 
+  useEffect(() => { statusRef.current = status; }, [status]);
   useEffect(() => { dbg('isLeader ->', isLeader); isLeaderRef.current = isLeader; }, [isLeader]);
   useEffect(() => { onLeaderStateRef.current = onLeaderState; }, [onLeaderState]);
   useEffect(() => { onChannelLevelRef.current = onChannelLevel; }, [onChannelLevel]);
@@ -186,20 +209,33 @@ export function useSpotifyPlayback({
     connectStartedRef.current = true;
     try {
       const ok = await player.connect();
-      dbg('connect ->', ok, 'activation=', typeof navigator !== 'undefined' && navigator.userActivation?.isActive);
+      dbg('connect ->', ok, 'activation=', activationState());
       if (!ok) {
         // connect() resolves false instead of throwing (auth/network/token failures) —
         // release the guard so a later gesture can retry, and surface the failure
         // instead of sitting on 'connecting' forever.
         connectStartedRef.current = false;
-        console.error('Spotify connect refused (resolved false)');
+        diagReport('error', 'Spotify connect refused (resolved false) — bad token, blocked SDK script, or non-HTTPS origin.',
+          { iframe: findSdkIframe() });
         setStatus('error');
         return;
       }
+      // Watchdog: connect()===true only means the SDK bootstrapped — device
+      // registration can still fail with NO event (Spotify 5xx, entitlement
+      // rejection the SDK swallows). Without this, a follower pins on
+      // 'connecting' forever with zero console evidence.
+      if (readyTimeoutRef.current) clearTimeout(readyTimeoutRef.current);
+      readyTimeoutRef.current = setTimeout(() => {
+        readyTimeoutRef.current = null;
+        if (readyRef.current) return;
+        diagReport('error', 'Spotify connect() succeeded but no ready event arrived within 10s — the device never registered with Spotify Connect.',
+          { iframe: findSdkIframe(), activation: activationState() });
+        setStatus('error');
+      }, 10000);
       try { await player.activateElement(); } catch { /* activation retried on next gesture */ }
     } catch (e) {
       connectStartedRef.current = false;
-      console.error('Spotify connect failed:', e);
+      diagReport('error', 'Spotify connect failed:', String(e));
     }
   }, []);
 
@@ -318,13 +354,17 @@ export function useSpotifyPlayback({
         dbg(`play retry#${attempt + 1} ->`, resp.status);
       }
       if (!resp.ok) {
-        const t = await resp.text().catch(() => '');
-        console.error(`🎵 Spotify play failed: ${resp.status} ${t.slice(0, 200)}`);
+        const bodyText = await resp.text().catch(() => '');
+        // The raw body is the discriminator: PREMIUM_REQUIRED vs allowlist 403
+        // vs device 404 vs 429 each mean a different fix — classify it inline.
+        const failure = classifyPlayFailure(resp.status, bodyText);
+        diagReport('error', `Spotify play failed: HTTP ${resp.status}`, bodyText.slice(0, 200),
+          `→ ${failure.code}: ${failure.explanation}`);
       } else {
         dbg('play OK');
       }
     } catch (e) {
-      console.error('Spotify play failed:', e);
+      diagReport('error', 'Spotify play failed:', String(e));
     }
   }, [transferToDevice, waitForDevice, reconcileDevice]);
 
@@ -387,6 +427,38 @@ export function useSpotifyPlayback({
   // The SDK's live playback state (local, no network) — poll this for a real playhead.
   const getCurrentState = useCallback(() => playerRef.current?.getCurrentState?.() ?? Promise.resolve(null), []);
 
+  // After commanding playback, verify the SDK actually plays. The docs describe
+  // a SILENT failure mode: un-activated playback arrives in PAUSED state with no
+  // autoplay_failed event — status would stay 'ready' while the user hears
+  // nothing, forever (the snapshot dedup swallows identical re-broadcasts).
+  // Sampling getCurrentState() twice is the one decisive disambiguator: paused →
+  // arm the existing 'blocked' recovery; frozen playhead → license/decode stall
+  // (DRM-broken class); advancing → the SDK is fine and silence is below JS.
+  const scheduleVerifyPlayback = useCallback(() => {
+    if (verifyRunningRef.current) return;
+    verifyRunningRef.current = true;
+    // Initial delay covers playBody's transfer/404 retry ladder on cold starts.
+    setTimeout(async () => {
+      try {
+        const outcome = await verifyPlaybackProgress(() => playerRef.current?.getCurrentState?.() ?? Promise.resolve(null));
+        if (nowPlayingRef.current?.playback_state !== 'playing') { dbg('playback verify skipped — snapshot no longer playing'); return; }
+        if (outcome.verdict === 'advancing') { dbg('playback verified:', outcome.detail); return; }
+        diagReport('warn', `Playback verification: ${outcome.verdict} — ${outcome.detail}`, {
+          first: outcome.first ? { paused: outcome.first.paused, position: outcome.first.position } : null,
+          second: outcome.second ? { paused: outcome.second.paused, position: outcome.second.position } : null,
+        });
+        if ((outcome.verdict === 'paused' || outcome.verdict === 'no-state')
+          && statusRef.current === 'ready' && !isLeaderRef.current) {
+          diagReport('warn', 'Arming blocked-recovery: playback was commanded but never started (silent autoplay block — no autoplay_failed event fired).');
+          lastPlaybackSigRef.current = null; // let recovery re-apply the same snapshot
+          setStatus('blocked');
+        }
+      } finally {
+        verifyRunningRef.current = false;
+      }
+    }, 2500);
+  }, []);
+
   // Follower: reconcile the SDK to a broadcast anchor snapshot.
   const applyToSDK = useCallback((snap) => {
     const player = playerRef.current;
@@ -396,19 +468,43 @@ export function useSpotifyPlayback({
     const sameTrack = currentTrackRef.current === snap.track_uri;
     dbg('applyToSDK state=', state, 'sameTrack=', sameTrack);
     if (state === 'stopped') { player.pause().catch(() => {}); return; }
-    const positionMs = computePositionMs(snap, durationMs);
     if (state === 'paused') {
-      // Already on this track → just seek + pause. Otherwise DON'T load audio just to pause it:
-      // on a fresh entry there's been no user gesture, so the device isn't activated and the
-      // load 404s "Device not found". Record the track; it loads when it actually plays.
-      if (sameTrack) player.seek(positionMs).then(() => player.pause()).catch(() => {});
-      else currentTrackRef.current = snap.track_uri;
+      // DON'T load audio just to pause it: on a fresh entry there's been no user
+      // gesture, so the device isn't activated and the load 404s "Device not
+      // found". Record the track; it loads when it actually plays.
+      if (!sameTrack) { currentTrackRef.current = snap.track_uri; return; }
+      // Same track → seek + pause, but only if something is ACTUALLY loaded:
+      // currentTrackRef alone doesn't prove it (the record-without-load path
+      // above). getCurrentState() null = nothing loaded on this device.
+      player.getCurrentState().then((liveState) => {
+        if (liveState) player.seek(computePositionMs(snap, durationMs)).then(() => player.pause()).catch(() => {});
+      }).catch(() => {});
       return;
     }
-    // playing
-    if (sameTrack) player.seek(positionMs).then(() => player.resume()).catch(() => {});
-    else playTrackAt(snap.track_uri, positionMs);
-  }, [playTrackAt]);
+    // playing — PHANTOM-RESUME GUARD: a follower who joined during a pause has
+    // currentTrackRef recorded but NOTHING loaded; seek/resume on an empty
+    // player silently no-ops (seek/resume are transport commands — only the
+    // Web-API play body actually loads a track). Probe the SDK instead of
+    // trusting the ref: null state → full load path.
+    player.getCurrentState().then((liveState) => {
+      const positionMs = computePositionMs(snap, durationMs); // recompute post-await: wall-clock anchored
+      if (sameTrack && liveState) {
+        player.seek(positionMs).then(() => player.resume()).catch((resumeError) => {
+          // A rejected resume here is almost always NotAllowedError (autoplay) —
+          // don't swallow it: arm the existing blocked-recovery machinery.
+          diagReport('warn', 'Spotify resume rejected:', String(resumeError), '— arming blocked-recovery.');
+          lastPlaybackSigRef.current = null;
+          setStatus('blocked');
+        });
+      } else {
+        if (sameTrack && !liveState) {
+          diagReport('log', 'Phantom-resume guard: track was recorded during a pause but never loaded on this device — issuing a full play command instead of resume.');
+        }
+        playTrackAt(snap.track_uri, positionMs);
+      }
+      scheduleVerifyPlayback();
+    }).catch(() => {});
+  }, [playTrackAt, scheduleVerifyPlayback]);
   useEffect(() => { applyToSDKRef.current = applyToSDK; }, [applyToSDK]);
 
   // Called for every `spotify_state` broadcast + the initial_state snapshot.
@@ -416,6 +512,15 @@ export function useSpotifyPlayback({
     dbg('applySnapshot isLeader=', isLeaderRef.current, 'track=', snap?.track_uri?.slice(14, 26), 'state=', snap?.playback_state, 'ready=', readyRef.current);
     setNowPlaying(snap || null);
     nowPlayingRef.current = snap || null;
+    // Decisive breadcrumb for silent followers: the session is actively playing
+    // Spotify but this client is in a state that can never produce audio. One
+    // shot per page load — the boot report above it carries the raw evidence.
+    if (!isLeaderRef.current && snap?.playback_state === 'playing'
+      && !silentSessionReportedRef.current
+      && ['not_connected', 'not_premium', 'unsupported_browser', 'error'].includes(statusRef.current)) {
+      silentSessionReportedRef.current = true;
+      diagReport('warn', `This session is playing Spotify but this client cannot hear it: status "${statusRef.current}" — see the Spotify boot report above for the raw reason.`);
+    }
     // Remember the playing context across reload/late-join so the leader reports it back
     // (the SDK's own context.uri is unreliable). Restored before the leader's early return.
     if (snap?.context_uri) currentContextRef.current = snap.context_uri;
@@ -444,16 +549,32 @@ export function useSpotifyPlayback({
       try {
         const res = await authFetch('/api/spotify/profile', { credentials: 'include' });
         if (cancelled) return;
-        if (!res.ok) { setStatus('not_connected'); return; }
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         if (cancelled) return;
-        if (!data.connected) { setStatus('not_connected'); return; }
+        // Always-on boot report: raw profile response + DRM/EME probe + environment.
+        // Fire-and-forget — the EME probe can take seconds and must not delay boot.
+        logBootReport({ status: 'profile-checked', profileHttpStatus: res.status, profileBody: data }).catch(() => {});
+        if (!res.ok || !data || !data.connected) { setStatus('not_connected'); return; }
         setProfile(data.profile || null);
-        if (data.profile?.product !== 'premium') { setStatus('not_premium'); return; }
+        const product = data.profile?.product;
+        if (product == null) {
+          // Feb-2026 dev-mode rules document this field as REMOVED, with no
+          // replacement for premium detection. When enforcement reaches our
+          // client ID, gating on it would silently disable every user at once —
+          // so proceed and let the SDK's account_error (the authoritative
+          // entitlement verdict) reject non-Premium accounts instead.
+          diagReport('warn', 'Spotify /v1/me returned NO product field (Feb-2026 dev-mode removal) — skipping the profile premium gate; the SDK account_error event is now the entitlement authority.');
+        } else if (product !== 'premium') {
+          setStatus('not_premium');
+          return;
+        }
         setStatus('connecting');
         setShouldInit(true);
-      } catch {
-        if (!cancelled) setStatus('error');
+      } catch (profileError) {
+        if (!cancelled) {
+          diagReport('error', 'Spotify profile check failed before reaching Spotify:', String(profileError));
+          setStatus('error');
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -471,6 +592,10 @@ export function useSpotifyPlayback({
     // still here, so cancel it and keep the existing player + device.
     if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
 
+    // Passive diagnostics: catch CSP blocks of sdk.scdn.co (fatal, otherwise
+    // invisible to us) and mirror SDK iframe messages on the verbose stream.
+    if (!envTapsUninstallRef.current) envTapsUninstallRef.current = installSdkEnvironmentTaps();
+
     // Real unmount: no re-run cancels this, so after the grace window we truly disconnect.
     // Spotify also reaps the device when the socket drops — this is just prompt cleanup.
     const scheduleTeardown = () => {
@@ -487,6 +612,9 @@ export function useSpotifyPlayback({
         deviceIdRef.current = null;
         currentTrackRef.current = null;
         activationMissingRef.current = false;
+        if (readyTimeoutRef.current) { clearTimeout(readyTimeoutRef.current); readyTimeoutRef.current = null; }
+        envTapsUninstallRef.current?.();
+        envTapsUninstallRef.current = null;
         setSdkPlayerCreated(false);
       }, 2000);
     };
@@ -501,12 +629,39 @@ export function useSpotifyPlayback({
         if (playerRef.current) { creatingRef.current = false; return; } // a concurrent invoke won
         const player = new Spotify.Player({
           name: PLAYER_NAME,
-          getOAuthToken: (cb) => { fetchAccessToken().then(cb).catch((e) => console.error('Spotify token error', e)); },
+          // STARVATION GUARD: if cb is never invoked the SDK emits NO event and
+          // no timeout — it silently re-invokes this callback forever while the
+          // user pins on 'connecting'. So cb is ALWAYS eventually answered:
+          // with the fresh token, with the last good one (may still be valid),
+          // or — after repeated failures — with '' to force the SDK's VISIBLE
+          // authentication_error instead of an invisible hang.
+          getOAuthToken: (cb) => {
+            tokenRequestSeqRef.current += 1;
+            const seq = tokenRequestSeqRef.current;
+            dbg('getOAuthToken #', seq);
+            fetchAccessToken()
+              .then((token) => {
+                tokenFailStreakRef.current = 0;
+                lastGoodTokenRef.current = token;
+                cb(token);
+              })
+              .catch((tokenError) => {
+                tokenFailStreakRef.current += 1;
+                diagReport('error', `getOAuthToken #${seq} FAILED (consecutive: ${tokenFailStreakRef.current}):`, String(tokenError),
+                  '— repeated bursts of this line mean the SDK is starving for a token.');
+                if (lastGoodTokenRef.current) {
+                  cb(lastGoodTokenRef.current);
+                } else if (tokenFailStreakRef.current >= 3) {
+                  cb('');
+                }
+              });
+          },
           volume: volumeRef.current,
         });
 
         player.addListener('ready', ({ device_id }) => {
           dbg('READY device=', device_id?.slice(0, 8), 'isLeader=', isLeaderRef.current, 'pending=', !!pendingSnapshotRef.current, 'activationMissing=', activationMissingRef.current);
+          if (readyTimeoutRef.current) { clearTimeout(readyTimeoutRef.current); readyTimeoutRef.current = null; }
           deviceIdRef.current = device_id;
           readyRef.current = true;
           // 'ready' means the DEVICE registered — it says nothing about audio activation. If
@@ -528,12 +683,34 @@ export function useSpotifyPlayback({
           readyRef.current = false;
           if (deviceIdRef.current === device_id) deviceIdRef.current = null;
         });
-        player.addListener('initialization_error', ({ message }) => { console.error('Spotify init error:', message); setStatus('error'); });
-        player.addListener('authentication_error', ({ message }) => { console.error('Spotify auth error:', message); setStatus('error'); });
-        player.addListener('account_error', ({ message }) => { console.error('Spotify account error:', message); setStatus('not_premium'); });
-        player.addListener('playback_error', ({ message }) => { console.error('🎵 Spotify playback_error:', message); });
+        // Error events carry ONLY a {message} string (no codes) — log each one
+        // verbatim with the event name; that pair is the SDK's whole diagnosis.
+        player.addListener('initialization_error', ({ message }) => {
+          setLastError({ event: 'initialization_error', message, ts: Date.now() });
+          diagReport('error', 'SDK initialization_error:', message,
+            '— the environment cannot instantiate a player (most likely missing/disabled DRM; see the DRM probe in the boot report).',
+            { iframe: findSdkIframe() });
+          setStatus('error');
+        });
+        player.addListener('authentication_error', ({ message }) => {
+          setLastError({ event: 'authentication_error', message, ts: Date.now() });
+          diagReport('error', 'SDK authentication_error:', message, '— the token handed to the SDK was rejected (expired/invalid/scope).');
+          setStatus('error');
+        });
+        player.addListener('account_error', ({ message }) => {
+          setLastError({ event: 'account_error', message, ts: Date.now() });
+          diagReport('error', 'SDK account_error:', message,
+            '— Spotify says this account is NOT Premium-entitled for streaming. This is the authoritative verdict and overrides whatever the profile product field said.');
+          setStatus('not_premium');
+        });
+        player.addListener('playback_error', ({ message }) => {
+          setLastError({ event: 'playback_error', message, ts: Date.now() });
+          diagReport('error', 'SDK playback_error:', message, '— loading/playing the current track failed (status stays as-is; repeated lines here with silence = decode/DRM/track problem).');
+        });
         player.addListener('autoplay_failed', () => {
-          console.warn('🎵 Spotify autoplay blocked — next interaction (or the unlock pill) recovers it.');
+          setLastError({ event: 'autoplay_failed', message: null, ts: Date.now() });
+          diagReport('warn', 'SDK autoplay_failed — the browser blocked audio; next interaction (or the unlock pill) recovers it.',
+            { activation: activationState() });
           setStatus('blocked');
         });
 
@@ -570,7 +747,8 @@ export function useSpotifyPlayback({
         }
       } catch (e) {
         creatingRef.current = false;
-        console.error('Spotify SDK setup failed:', e);
+        diagReport('error', 'Spotify SDK setup failed:', String(e),
+          '— the SDK script did not load or the player could not be constructed.', { iframe: findSdkIframe() });
         setStatus('error');
       }
     })();
@@ -610,6 +788,7 @@ export function useSpotifyPlayback({
     profile,
     nowPlaying,
     playbackState,
+    lastError, // last raw SDK error event {event, message, ts} — verbatim, for UI/diagnosis
     gestureReady,
     applySpotifySnapshot,
     activate,
