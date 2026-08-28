@@ -8,7 +8,6 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching (changes least often)
@@ -29,9 +28,10 @@ RUN chmod +x /entrypoint.sh
 # Expose port
 EXPOSE 8082
 
-# Health check
+# Health check - python probe: no curl dependency, matching every other
+# service image; runs in-container, /health is not routed by nginx
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8082/health || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')"
 
 # Run the application (no reload in production)
 ENTRYPOINT ["/entrypoint.sh"]

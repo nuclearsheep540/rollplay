@@ -120,11 +120,7 @@ services:
         image: redis:7-alpine
         container_name: "redis-dev"
         hostname: redis
-        ports:
-        - "6379:6379"
-        command: redis-server --appendonly yes
-        volumes:
-        - redis_data:/data
+        command: ["redis-server", "--save", "", "--appendonly", "no"]
         networks:
         - default
 
@@ -160,6 +156,5 @@ networks:
 
 volumes:
   db_data:
-  redis_data:
   postgres_data:
   rollplay_node_modules:
