@@ -46,7 +46,7 @@ class MapService:
 
             # Insert or update the map (nested shape stored in MongoDB)
             map_data = map_settings.model_dump()
-            result = self.collection.replace_one(
+            self.collection.replace_one(
                 {"room_id": room_id, "map_config.filename": map_settings.map_config.filename},
                 map_data,
                 upsert=True
