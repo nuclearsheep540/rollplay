@@ -49,7 +49,7 @@ app.add_middleware(
 )
 
 
-adventure_log = AdventureLogService()
+adventure_log = AdventureLogService(mongo_service.db)
 map_service = MapService(mongo_service.db)
 image_service = ImageService(mongo_service.db)
 

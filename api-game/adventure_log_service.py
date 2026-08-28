@@ -3,56 +3,30 @@
 import time
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
-from pymongo import MongoClient
 from pymongo.collection import Collection
-from config.settings import get_settings
+from pymongo.database import Database
 import logging
 
 logger = logging.getLogger()
-CONFIG = get_settings()
 
 class AdventureLogService:
     """
     Service for managing adventure logs with per-room limits using MongoDB aggregation pipelines
     """
     
-    def __init__(self):
-        self.adventure_logs: Collection = self._get_adventure_logs()
-        
-        # Create indexes for optimal performance
-        self._ensure_indexes()
+    def __init__(self, db: Database):
+        self.adventure_logs: Collection = db.adventure_logs
+        self.create_indexes()
 
-
-    def _get_adventure_logs(self):
-        "returns the adventure logs collection"
-        username = CONFIG.get('MONGO_USER',"")
-        password = CONFIG.get('MONGO_PASS',"")
-        try: 
-            conn = MongoClient('mongodb://%s:%s@mongo' % (username, password))
-            db = conn.rollplay
-            collection = db.adventure_logs
-            logger.info("Connected successfully to mongo DB") 
-        except Exception:   
-            logger.error("Could not connect to MongoDB")
-        return collection
-    
-    def _ensure_indexes(self):
-        """Create necessary indexes for efficient querying"""
-        try:
-            # Compound index for room-based queries (most important)
-            self.adventure_logs.create_index([("room_id", 1), ("log_id", -1)])
-            
-            # Index for stamp-based queries
-            self.adventure_logs.create_index([("room_id", 1), ("timestamp", -1)])
-            
-            # Index for cleanup operations
-            self.adventure_logs.create_index("log_id")
-            
-            print("Adventure logs indexes created successfully")
-        except Exception as e:
-            print(f"Warning: Could not create indexes: {e}")
-
-    # ADD this method to your adventure_log_service.py class:
+    def create_indexes(self):
+        """
+        Creates indexes for the adventure_logs collection:
+        (room_id, log_id desc) for paginated reads and the cleanup
+        pipeline, (room_id, timestamp desc) for stat aggregations.
+        """
+        self.adventure_logs.create_index([("room_id", 1), ("log_id", -1)])
+        self.adventure_logs.create_index([("room_id", 1), ("timestamp", -1)])
+        logger.info(f"Created indexes for {self.adventure_logs.name} collection")
 
     def clear_system_messages(self, room_id: str) -> int:
         """
@@ -66,12 +40,12 @@ class AdventureLogService:
                 "type": "system"
             })
             
-            print(f"🗑️ Deleted {result.deleted_count} system messages for room {room_id}")
+            logger.info(f"Deleted {result.deleted_count} system messages for room {room_id}")
             return result.deleted_count
             
         except Exception as e:
-            print(f"❌ Error clearing system messages: {e}")
-            raise e
+            logger.error(f"Error clearing system messages: {e}")
+            raise
     
     def clear_all_messages(self, room_id: str) -> int:
         """
@@ -84,12 +58,12 @@ class AdventureLogService:
                 "room_id": room_id
             })
             
-            print(f"🗑️ Deleted {result.deleted_count} total messages for room {room_id}")
+            logger.info(f"Deleted {result.deleted_count} total messages for room {room_id}")
             return result.deleted_count
             
         except Exception as e:
-            print(f"❌ Error clearing all messages: {e}")
-            raise e
+            logger.error(f"Error clearing all messages: {e}")
+            raise
     
     def remove_log_by_prompt_id(self, room_id: str, prompt_id: str) -> int:
         """
@@ -108,12 +82,12 @@ class AdventureLogService:
                 "prompt_id": prompt_id
             })
             
-            print(f"🗑️ Removed log entry with prompt_id {prompt_id} from room {room_id}")
+            logger.info(f"Removed log entry with prompt_id {prompt_id} from room {room_id}")
             return result.deleted_count
             
         except Exception as e:
-            print(f"❌ Error removing log by prompt_id: {e}")
-            raise e
+            logger.error(f"Error removing log by prompt_id: {e}")
+            raise
     
     def add_log_entry(
         self, 
@@ -170,7 +144,7 @@ class AdventureLogService:
             return new_log
             
         except Exception as e:
-            print(f"Error adding log entry: {e}")
+            logger.error(f"Error adding log entry: {e}")
             raise
     
     def _cleanup_old_logs_pipeline(self, room_id: str, max_logs: int):
@@ -232,10 +206,10 @@ class AdventureLogService:
                     })
                     
                     if delete_result.deleted_count > 0:
-                        print(f"Cleaned up {delete_result.deleted_count} old logs for room {room_id}")
+                        logger.info(f"Cleaned up {delete_result.deleted_count} old logs for room {room_id}")
             
         except Exception as e:
-            print(f"Error during log cleanup for room {room_id}: {e}")
+            logger.error(f"Error during log cleanup for room {room_id}: {e}")
             # Don't raise here - log cleanup failure shouldn't break log insertion
     
     def restore_room_logs(self, room_id: str, entries: List[Dict]) -> int:
@@ -289,7 +263,7 @@ class AdventureLogService:
             self.adventure_logs.insert_many(docs)
             return len(docs)
         except Exception as e:
-            print(f"Error restoring logs for room {room_id}: {e}")
+            logger.error(f"Error restoring logs for room {room_id}: {e}")
             raise
 
     def get_room_logs(
@@ -323,7 +297,7 @@ class AdventureLogService:
             return logs
             
         except Exception as e:
-            print(f"Error retrieving logs for room {room_id}: {e}")
+            logger.error(f"Error retrieving logs for room {room_id}: {e}")
             return []
     
     def get_room_log_count(self, room_id: str) -> int:
@@ -331,7 +305,7 @@ class AdventureLogService:
         try:
             return self.adventure_logs.count_documents({"room_id": room_id})
         except Exception as e:
-            print(f"Error counting logs for room {room_id}: {e}")
+            logger.error(f"Error counting logs for room {room_id}: {e}")
             return 0
     
     def delete_room_logs(self, room_id: str) -> int:
@@ -343,10 +317,10 @@ class AdventureLogService:
         """
         try:
             result = self.adventure_logs.delete_many({"room_id": room_id})
-            print(f"Deleted {result.deleted_count} logs for room {room_id}")
+            logger.info(f"Deleted {result.deleted_count} logs for room {room_id}")
             return result.deleted_count
         except Exception as e:
-            print(f"Error deleting logs for room {room_id}: {e}")
+            logger.error(f"Error deleting logs for room {room_id}: {e}")
             return 0
     
     def bulk_cleanup_all_rooms(self, max_logs: int = 200):
@@ -359,7 +333,7 @@ class AdventureLogService:
             # Get all unique room IDs
             room_ids = self.adventure_logs.distinct("room_id")
             
-            print(f"Starting bulk cleanup for {len(room_ids)} rooms...")
+            logger.info(f"Starting bulk cleanup for {len(room_ids)} rooms...")
             
             total_cleaned = 0
             for room_id in room_ids:
@@ -371,10 +345,10 @@ class AdventureLogService:
                 if cleaned > 0:
                     total_cleaned += cleaned
             
-            print(f"Bulk cleanup completed. Total logs cleaned: {total_cleaned}")
+            logger.info(f"Bulk cleanup completed. Total logs cleaned: {total_cleaned}")
             
         except Exception as e:
-            print(f"Error during bulk cleanup: {e}")
+            logger.error(f"Error during bulk cleanup: {e}")
     
     def get_room_stats(self, room_id: str) -> Dict:
         """Get statistics for a room's logs"""
@@ -400,7 +374,7 @@ class AdventureLogService:
             if result:
                 stats = result[0]
                 # Remove None from players list
-                stats["players"] = [p for p in stats["players"] if p is not None]
+                stats["players"] = [player for player in stats["players"] if player is not None]
                 return stats
             else:
                 return {
@@ -412,5 +386,5 @@ class AdventureLogService:
                 }
                 
         except Exception as e:
-            print(f"Error getting stats for room {room_id}: {e}")
+            logger.error(f"Error getting stats for room {room_id}: {e}")
             return {}
