@@ -23,10 +23,9 @@ class _MongoService:
     """
 
     def __init__(self):
-        username = CONFIG.get('MONGO_USER')
-        password = CONFIG.get('MONGO_PASS')
+        self._username = CONFIG.get('MONGO_USER')
+        self._password = CONFIG.get('MONGO_PASS')
         self._db_name = CONFIG.get('MONGO_DB_NAME')
-        self._uri = f'mongodb://{username}:{password}@mongo'
         self._client = None
 
     @property
@@ -40,7 +39,12 @@ class _MongoService:
                 within the serverSelectionTimeoutMS timeout.
         """
         if self._client is None:
-            client = MongoClient(self._uri, serverSelectionTimeoutMS=5000)
+            client = MongoClient(
+                'mongodb://mongo',
+                username=self._username,
+                password=self._password,
+                serverSelectionTimeoutMS=5000,
+            )
             try:
                 client.admin.command('ping')
             except ServerSelectionTimeoutError:
