@@ -1,6 +1,8 @@
 # Ship Workflow — deploy-and-release from GitHub Actions
 
-**Status:** planned · 2026-08-28
+**Status:** built · 2026-08-28 — prerequisites (healthchecks) and both PR 2 pieces
+(`deploy.yml`, `deploy-latest.sh` version arg) in working tree; pending commit,
+merge, and dry-run dispatch of the currently-deployed version
 **Decision:** Option B — a `workflow_dispatch` GitHub Actions workflow performs the
 prod deploy AND publishes the GitHub Release, so the release doc can never claim a
 ship that didn't happen. Chosen over (A) dev-box wrapper script — invariant only
