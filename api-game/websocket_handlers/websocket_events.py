@@ -25,11 +25,12 @@ from shared_contracts.map import MapConfig
 from shared_contracts.map_token import MapToken
 from shared_contracts.audio import AudioChannelState, AudioTrackConfig, AudioEffects
 from shared_contracts.spotify import SpotifyState
+from mongo_service import mongo_service
 
 
-adventure_log = AdventureLogService()
-map_service = MapService()
-image_service = ImageService()
+adventure_log = AdventureLogService(db=mongo_service.db)
+map_service = MapService(db=mongo_service.db)
+image_service = ImageService(db=mongo_service.db)
 map_token_holds = MapTokenHolds()
 
 # Hidden tokens whose hold is (or was recently) active, keyed
