@@ -1,16 +1,14 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 from pydantic import BaseModel
-from pymongo import MongoClient
 from bson.objectid import ObjectId
-from config.settings import get_settings
+from mongo_service import mongo_service
 from map_token_ops import build_map_token_update, map_token_array_path
 import logging
 import json
 from datetime import datetime, timezone
 
 logger = logging.getLogger()
-CONFIG = get_settings()
 
 class GameSettings(BaseModel):
     "Basic settings for a game lobby"
@@ -42,17 +40,8 @@ class GameService:
 
     @staticmethod
     def _get_active_session():
-        "returns the active sessions collection"
-        username = CONFIG.get('MONGO_USER')
-        password = CONFIG.get('MONGO_PASS')
-        try:
-            conn = MongoClient(f'mongodb://{username}:{password}@mongo')
-            db = conn.rollplay
-            logger.info("Connected successfully to mongo DB")
-            return db.active_sessions
-        except Exception:
-            logger.error("Could not connect to MongoDB")
-            raise
+        "returns the active sessions collection from the shared pool"
+        return mongo_service.db.active_sessions
 
     # need to be able to generate a room_id
     # creating the room needs to update mongo with this player and basic config
@@ -65,7 +54,7 @@ class GameService:
         cursor = collection.find(filter_criteria)
 
         try:
-            result = [x for x in cursor]
+            result = [room for room in cursor]
             result = result[0] # get first record
             result["_id"] = str(result["_id"]) # cast object to str for json
             return result
@@ -143,8 +132,8 @@ class GameService:
             if invalid_users:
                 raise ValueError("Only adventurers with selected characters can sit in party seats")
 
-        print(f"🔄 Updating seat layout with filter: {filter_criteria}")
-        print(f"📝 New seat layout: {seat_layout}")
+        logger.info(f"Updating seat layout with filter: {filter_criteria}")
+        logger.info(f"New seat layout: {seat_layout}")
 
         result = collection.update_one(
             filter_criteria,
@@ -155,14 +144,14 @@ class GameService:
             }
         )
 
-        print(f"📊 Update result: matched={result.matched_count}, modified={result.modified_count}")
+        logger.info(f"Update result: matched={result.matched_count}, modified={result.modified_count}")
 
         if result.matched_count == 0:
-            print(f"❌ No document found with _id: {room_id}")
+            logger.error(f"No document found with _id: {room_id}")
             raise Exception(f"Room {room_id} not found")
 
         if result.modified_count == 0:
-            print(f"⚠️ Document found but not modified (seat layout might be the same)")
+            logger.warning(f"Document found but not modified (seat layout might be the same)")
 
         return str(result)
 
@@ -173,8 +162,8 @@ class GameService:
         
         filter_criteria = GameService.room_filter(room_id)
 
-        print(f"🔄 Updating seat count with filter: {filter_criteria}")
-        print(f"📝 New max players: {new_max}")
+        logger.info(f"Updating seat count with filter: {filter_criteria}")
+        logger.info(f"New max players: {new_max}")
         
         result = collection.update_one(
             filter_criteria,
@@ -185,10 +174,10 @@ class GameService:
             }
         )
         
-        print(f"📊 Update result: matched={result.matched_count}, modified={result.modified_count}")
+        logger.info(f"Update result: matched={result.matched_count}, modified={result.modified_count}")
         
         if result.matched_count == 0:
-            print(f"❌ No document found with _id: {room_id}")
+            logger.error(f"No document found with _id: {room_id}")
             raise Exception(f"Room {room_id} not found")
         
         return str(result)
@@ -222,7 +211,7 @@ class GameService:
         )
 
         if result.matched_count == 0:
-            print(f"❌ No document found with _id: {room_id}")
+            logger.error(f"No document found with _id: {room_id}")
             raise Exception(f"Room {room_id} not found")
 
         return str(result)
@@ -268,8 +257,8 @@ class GameService:
         the DM's user_id (ACL + per-recipient filtering), the map's board
         (target lookup, denial reconciliation), and the token image refs
         (reveal/place fragments carry the ref so players can render a newly
-        visible face). _get_active_session opens a fresh MongoClient per
-        call, so collapsing the three reads matters on the commit path.
+        visible face). One projection read instead of three keeps the
+        committed-op path cheap — it runs on every token commit.
 
         Returns (dm_user_id, board_tokens, token_images)."""
         collection = GameService._get_active_session()
