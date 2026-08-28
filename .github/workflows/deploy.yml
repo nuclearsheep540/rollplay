@@ -57,8 +57,11 @@ jobs:
           echo "tag=rollplay-$VERSION" >> "$GITHUB_OUTPUT"
 
       # Re-run of build.yml's manifest copy so this workflow is self-sufficient
-      # (covers shipping after script changes without a new cut). Idempotent.
-      - name: Sync scripts and manifest to prod
+      # (covers shipping after script/compose changes without a new cut).
+      # Idempotent. docker-compose.yml is included because prod's runtime
+      # reads it from the box — without syncing it, a ship could publish a
+      # release whose compose-level changes never applied.
+      - name: Sync scripts, manifest, and compose file to prod
         # Pinned to a commit — this action receives the prod SSH key, so a
         # mutable tag would be a supply-chain risk.
         uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
@@ -67,7 +70,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.PROD_SSH_KEY }}
           fingerprint: ${{ secrets.PROD_SSH_FINGERPRINT }}
-          source: "scripts,releases.json"
+          source: "scripts,releases.json,docker-compose.yml"
           target: "/home/ec2-user/rollplay/"
 
       - name: Deploy on prod

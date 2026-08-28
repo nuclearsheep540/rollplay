@@ -111,11 +111,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Copies scripts/ and releases.json to the prod repo root so
-      # scripts/set-release.sh can sync .env and redeploy on the host.
+      # Copies scripts/, releases.json, and docker-compose.yml to the prod
+      # repo root so scripts/set-release.sh can sync .env and redeploy on the
+      # host with the current compose definition.
       # Requires secrets: PROD_HOST (EC2 public DNS/IP), PROD_SSH_KEY (private
       # key), PROD_SSH_FINGERPRINT (host key fingerprint for MITM protection).
-      - name: Copy scripts/ and releases.json to prod
+      - name: Copy scripts, manifest, and compose file to prod
         # Pinned to the commit behind v0.1.7 — this action receives the prod
         # SSH key, so a mutable tag would be a supply-chain risk.
         uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
@@ -124,5 +125,5 @@ jobs:
           username: ec2-user
           key: ${{ secrets.PROD_SSH_KEY }}
           fingerprint: ${{ secrets.PROD_SSH_FINGERPRINT }}
-          source: "scripts,releases.json"
+          source: "scripts,releases.json,docker-compose.yml"
           target: "/home/ec2-user/rollplay/"
