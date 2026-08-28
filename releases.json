@@ -1,5 +1,5 @@
 {
-  "latest": "0.64.1",
+  "latest": "0.64.2",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -911,6 +911,21 @@
         "api_game": "0.29.1",
         "api_auth": "0.3.2",
         "nginx": "0.9.1",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.64.2": {
+      "date": "2026-08-28",
+      "commit": "b1b8343",
+      "description": "fixed the title text with process.env and had to remove old patch_notes route to avoid setting dynamic layout config setting",
+      "services": {
+        "app": "0.47.1",
+        "api_site": "0.43.0",
+        "api_game": "0.29.1",
+        "api_auth": "0.3.2",
+        "nginx": "0.9.2",
         "postgres": "0.1.10",
         "mongo": "0.4.2",
         "certbot": "0.1.4"
