@@ -20,9 +20,10 @@ COPY . .
 # Expose port
 EXPOSE 8083
 
-# Health check
+# Health check - python probe: curl is not installed in this image, and the
+# probe runs in-container so no external exposure is involved
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8083/health || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')"
 
 # Run the application
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8083"]

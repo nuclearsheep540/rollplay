@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # MONGODB (for active game sessions) - required, no defaults
     MONGO_INITDB_ROOT_USERNAME: str
     MONGO_INITDB_ROOT_PASSWORD: str
+    MONGO_INITDB_DATABASE: str
 
     # POSTGRESQL (for user/character/game data)
     POSTGRES_HOST: str
@@ -84,6 +85,7 @@ def get_settings() -> dict:
     return {
         'MONGO_USER': _settings.MONGO_INITDB_ROOT_USERNAME,
         'MONGO_PASS': _settings.MONGO_INITDB_ROOT_PASSWORD,
+        'MONGO_DB_NAME': _settings.MONGO_INITDB_DATABASE,
         'APP_NAME': _settings.APP_NAME,
         'APP_VERSION': _settings.app_version,
         'environment': _settings.ENVIRONMENT,

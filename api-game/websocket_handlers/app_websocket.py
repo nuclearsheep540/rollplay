@@ -11,10 +11,11 @@ from .connection_manager import manager, RoomManager
 from .websocket_events import WebsocketEvent
 from map_token_ops import filter_map_token_state_for_player
 from adventure_log_service import AdventureLogService
+from mongo_service import mongo_service
 from models.log_type import LogType
 
 # Initialize shared services
-adventure_log = AdventureLogService()
+adventure_log = AdventureLogService(mongo_service.db)
 
 def register_websocket_routes(app: FastAPI):
     """Register WebSocket routes with the FastAPI app"""

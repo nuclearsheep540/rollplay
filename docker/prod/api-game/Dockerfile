@@ -15,4 +15,9 @@ RUN pip install /rollplay-shared-contracts
 # Copy source code last (changes most often)
 COPY api-game /api
 
+# Health check - python probe (no curl in slim image); runs in-container,
+# /health is not routed by nginx so it has no public exposure
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"
+
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8081", "--log-config", "./config/log_conf.yaml"]

@@ -1,0 +1,168 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Ship workflow: deploys a cut release to production and, only after both
+# health gates pass, publishes the GitHub Release for it. A release doc can
+# therefore never claim a ship that didn't happen.
+# Design: .claude/plans/deploy_workflow/01-ship-workflow.md
+
+name: Deploy & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to ship (e.g. 0.64.0). Leave empty to ship 'latest' from releases.json."
+        required: false
+        type: string
+        default: ""
+
+# One ship at a time; let an in-flight ship finish rather than kill it mid-deploy.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  DOMAIN: tabletop-tavern.uk
+
+jobs:
+  ship:
+    name: Deploy to prod, then publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags needed for version validation and release notes
+
+      - name: Resolve and validate version
+        id: ver
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          if [ -n "$REQUESTED" ]; then
+            VERSION="$REQUESTED"
+            echo "Shipping explicitly requested version: $VERSION"
+          else
+            VERSION=$(jq -r '.latest' releases.json)
+            echo "No version input — resolved 'latest' from releases.json: $VERSION"
+          fi
+          jq -e --arg ver "$VERSION" '.releases[$ver]' releases.json > /dev/null \
+            || { echo "::error::version $VERSION not found in releases.json"; exit 1; }
+          git rev-parse -q --verify "refs/tags/rollplay-$VERSION" > /dev/null \
+            || { echo "::error::tag rollplay-$VERSION does not exist"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=rollplay-$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Re-run of build.yml's manifest copy so this workflow is self-sufficient
+      # (covers shipping after script/compose changes without a new cut).
+      # Idempotent. docker-compose.yml is included because prod's runtime
+      # reads it from the box — without syncing it, a ship could publish a
+      # release whose compose-level changes never applied.
+      - name: Sync scripts, manifest, and compose file to prod
+        # Pinned to a commit — this action receives the prod SSH key, so a
+        # mutable tag would be a supply-chain risk.
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ec2-user
+          key: ${{ secrets.PROD_SSH_KEY }}
+          fingerprint: ${{ secrets.PROD_SSH_FINGERPRINT }}
+          source: "scripts,releases.json,docker-compose.yml"
+          target: "/home/ec2-user/rollplay/"
+
+      - name: Deploy on prod
+        # Pinned to a commit — see note above.
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ec2-user
+          key: ${{ secrets.PROD_SSH_KEY }}
+          fingerprint: ${{ secrets.PROD_SSH_FINGERPRINT }}
+          command_timeout: 20m
+          script: |
+            set -e
+            cd /home/ec2-user/rollplay
+            ./scripts/deploy-latest.sh ${{ steps.ver.outputs.version }}
+
+      # Layer 1: are the containers up, and do their healthchecks pass?
+      # Honest signal since every service image carries a python /health probe.
+      - name: Health gate 1 — containers healthy on host
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ec2-user
+          key: ${{ secrets.PROD_SSH_KEY }}
+          fingerprint: ${{ secrets.PROD_SSH_FINGERPRINT }}
+          command_timeout: 5m
+          script: |
+            REQUIRED="nginx api-game api-site api-auth rollplay mongo redis postgres"
+            for attempt in $(seq 1 24); do
+              MISSING=""
+              for name in $REQUIRED; do
+                docker ps --format '{{.Names}}' | grep -qx "$name" || MISSING="$MISSING $name"
+              done
+              UNHEALTHY=$(docker ps --filter health=unhealthy --format '{{.Names}}' | tr '\n' ' ')
+              STARTING=$(docker ps --filter health=starting --format '{{.Names}}' | tr '\n' ' ')
+              if [ -z "$MISSING" ] && [ -z "$UNHEALTHY" ] && [ -z "$STARTING" ]; then
+                echo "All services running; all healthchecked services healthy."
+                docker ps --format 'table {{.Names}}\t{{.Status}}'
+                exit 0
+              fi
+              echo "attempt $attempt/24 — missing:$MISSING unhealthy: $UNHEALTHY starting: $STARTING"
+              sleep 5
+            done
+            echo "Health gate failed:"
+            docker ps --format 'table {{.Names}}\t{{.Status}}'
+            exit 1
+
+      # Layer 2: can the public internet actually reach the app? Pinned via
+      # --resolve so the check is DNS-free: it proves SG + nginx + TLS cert +
+      # app without depending on the domain provider's nameservers.
+      - name: Health gate 2 — publicly reachable end-to-end
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          if echo "$PROD_HOST" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            PROD_IP="$PROD_HOST"
+          else
+            PROD_IP=$(dig +short "$PROD_HOST" | grep -E '^[0-9]+\.' | head -1)
+          fi
+          if [ -z "$PROD_IP" ]; then
+            echo "::error::could not resolve PROD_HOST to an IP"
+            exit 1
+          fi
+          echo "Probing https://$DOMAIN pinned to the prod host (DNS-free)"
+          for path in "/" "/api/patch-notes-versions"; do
+            for attempt in 1 2 3; do
+              if curl --fail --silent --show-error --max-time 15 \
+                   --resolve "$DOMAIN:443:$PROD_IP" \
+                   "https://$DOMAIN$path" > /dev/null; then
+                echo "OK: $path"
+                break
+              elif [ "$attempt" = 3 ]; then
+                echo "::error::$path unreachable after 3 attempts"
+                exit 1
+              else
+                sleep 10
+              fi
+            done
+          done
+
+      # Only reached when deploy + both gates succeeded: the release doc and
+      # the Latest badge record SHIPS, not cuts. generate-notes spans back to
+      # the previous release — i.e. everything since the last ship.
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --latest
+            echo "Release $TAG already existed — re-crowned as latest (rollback/re-ship)."
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --latest
+            echo "Release $TAG published and marked latest."
+          fi

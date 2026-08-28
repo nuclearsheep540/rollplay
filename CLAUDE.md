@@ -565,6 +565,58 @@ events = SessionEvents.session_created(campaign_player_ids=[str(pid) for pid in 
 # ... then inside: user_id=UUID(player_id)  # pointless round-trip
 ```
 
+### Explicit Over Implicit — Library Behavior Must Be Visible
+
+When our code relies on behavior defined inside an external module — an exception a call can
+raise, a default parameter value, a lazy or idempotent semantic — that reliance must be written
+into our code, not left in the library's documentation. A bare library call cannot tell a reader
+"the author designed around this" from "the author had no idea it could happen".
+
+- **Anticipated exceptions**: catch the named exception class at the call site, even when the
+  design is to crash. A bare `raise` after logging is the explicit spelling of "anticipated,
+  deliberately unhandled":
+
+  ```python
+  try:
+      client.admin.command('ping')  # forces a real round-trip
+  except ServerSelectionTimeoutError:
+      logger.critical("MongoDB unreachable — refusing to start")
+      raise
+  ```
+
+  State the decision in a `Raises:` docstring section, including *why* it is unhandled, so the
+  next reader doesn't "helpfully" wrap it in a recovery path.
+- **Defaults we rely on**: pass them explicitly as kwargs (`serverSelectionTimeoutMS=5000`). If
+  the design cares about a value, an invisible library default is not allowed to supply it.
+- **Semantics we lean on**: implicit behaviors the design depends on (pymongo's lazy connect,
+  `create_index` idempotency, Mongo auto-creating collections on first write) get a one-line
+  comment at the point of reliance.
+
+**Calibration**: this applies at I/O boundaries and designed failure paths — not to every line
+(any Python line can raise; annotating everything buries the signal). The test: can a reader who
+has not read the library's docs tell what we anticipate happening at this line, and what we have
+decided to do about it?
+
+**Origin (2026-08-28)**: `client.admin.command('ping')` in api-game's `mongo_service.py` was the
+loud-crash half of boot — it raises when MongoDB is unreachable, and nothing in the code said so.
+The failure path the architecture depended on was invisible at the call site.
+
+### Variable Naming — Recognizable Words, Not Initials
+
+A name is written once and read many times; its job is at the read site, not the assignment.
+Compression may shorten a word but must keep it recognizable: `map_conf` for a map_config dict
+is fine; `mc` is not. Initialisms fail twice — ambiguous in context (`mc` could plausibly be
+map_config, mongo_client, or matched_count in the same file) and unsearchable (grepping `mc`
+is useless). Single-character loop variables fall under the same rule: `for channel_id,
+channel in ...`, never `for c in ...`.
+
+**Test**: can a reader landing mid-function, on the read site alone, tell what the variable
+holds?
+
+**Calibration**: read-distance matters. `except Exception as e:` with `{e}` used on the next
+line is conventional and stays; the same compression referenced forty lines from its
+assignment is not acceptable.
+
 ### Testing — every test owns its own state
 
 **The rule: a test must create everything it touches, and touch nothing it did not create.**

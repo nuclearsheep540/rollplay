@@ -35,6 +35,7 @@ from shared_contracts.map_token import MapToken
 from shared_contracts.image import ImageConfig
 from schemas.session_schemas import SessionEndRequest
 from datetime import datetime, timezone
+from mongo_service import mongo_service
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -48,9 +49,23 @@ app.add_middleware(
 )
 
 
-adventure_log = AdventureLogService()
-map_service = MapService()
-image_service = ImageService()
+adventure_log = AdventureLogService(mongo_service.db)
+map_service = MapService(mongo_service.db)
+image_service = ImageService(mongo_service.db)
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint — internal only.
+
+    Probed by the Docker HEALTHCHECK from inside the container; nginx
+    deliberately routes nothing here, so it is unreachable publicly
+    """
+    return {
+        "status": "healthy",
+        "service": "api-game",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def build_role_change_payload(room_id: str, action: str, target_user_id: str, changed_by: str, message: str) -> dict:
