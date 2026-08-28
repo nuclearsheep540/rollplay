@@ -16,10 +16,10 @@ class _MongoService:
     """
     Owns the process-wide MongoDB connection pool.
 
-    Dont import this class outside this module else we
-    will have multiple connection pools.
+    Don't import this class outside this module; otherwise you'll
+    create multiple connection pools.
     
-    Use mongo_service singleton instead.
+    Use the mongo_service singleton instead.
     """
 
     def __init__(self):
