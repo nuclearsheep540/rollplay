@@ -680,5 +680,5 @@ that it is a shape regression guard and not evidence of independence.
 - No frontend split — single Next.js app, not separate site/game apps
 - Minimal domain services — aggregates contain most business logic
 
-### Patch Notes
-When making patch notes, check `rollplay/patch_notes/` for naming conventions and style. Keep things simple and feature-led on the bullet points.
+### Release Notes
+Release notes are generated automatically: the ship workflow (`.github/workflows/deploy.yml`) publishes a GitHub Release with `--generate-notes` after each successful production deploy. The old in-app patch-notes feature (markdown files in `rollplay/patch_notes/` rendered at `/patch_notes`) was removed 2026-08-28 — do not reintroduce it.

@@ -183,7 +183,7 @@ export default function Home() {
           <div className="footer-links relative z-10" style={{textAlign: 'center', padding: '2rem 0'}}>
             <a href="#" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Terms of Service</a>
             <a href="#" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Privacy Policy</a>
-            <a href="/patch_notes" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Patch Notes</a>
+            <a href="https://github.com/nuclearsheep540/rollplay/releases" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Release Notes</a>
             <a href="https://github.com/users/nuclearsheep540/projects/2" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Roadmap Kanban</a>
             <a href="#" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Help Center</a>
           </div>
