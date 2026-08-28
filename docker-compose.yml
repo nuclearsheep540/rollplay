@@ -76,6 +76,8 @@ services:
     hostname: app
     env_file:
       - prod.env
+    environment:
+      - RELEASE=${RELEASE}
     container_name: "rollplay"
     image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app}
     ports:

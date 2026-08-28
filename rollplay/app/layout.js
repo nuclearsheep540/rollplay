@@ -45,9 +45,13 @@ const shareTechMono = Share_Tech_Mono({
   display: 'swap'
 })
 
-export const metadata = {
-  title: `Rollplay v${process.env.NEXT_PUBLIC_RELEASE || 'dev'}`,
-  description: 'Made for my friends',
+
+export const generateMetadata = () => {
+  const RELEASE = process.env.RELEASE || process.env.NEXT_PUBLIC_RELEASE
+  return {
+    title: `Tabletop v${RELEASE || 'DEV'}`,
+    description: 'Made for my friends',
+  }
 }
 
 // viewport-fit=cover extends rendering into notch/home-indicator zones.
