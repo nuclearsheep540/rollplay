@@ -51,7 +51,7 @@ app.add_middleware(
 
 adventure_log = AdventureLogService()
 map_service = MapService(mongo_service.db)
-image_service = ImageService()
+image_service = ImageService(mongo_service.db)
 
 
 def build_role_change_payload(room_id: str, action: str, target_user_id: str, changed_by: str, message: str) -> dict:
