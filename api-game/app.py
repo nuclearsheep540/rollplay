@@ -35,6 +35,7 @@ from shared_contracts.map_token import MapToken
 from shared_contracts.image import ImageConfig
 from schemas.session_schemas import SessionEndRequest
 from datetime import datetime, timezone
+from mongo_service import mongo_service
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -49,7 +50,7 @@ app.add_middleware(
 
 
 adventure_log = AdventureLogService()
-map_service = MapService()
+map_service = MapService(mongo_service.db)
 image_service = ImageService()
 
 

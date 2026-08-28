@@ -2,16 +2,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from pydantic import BaseModel
-from pymongo import MongoClient
-from bson.objectid import ObjectId
-from config.settings import get_settings
+from pymongo.collection import Collection
+from pymongo.database import Database
 from gameservice import GameService
 from shared_contracts.map import MapConfig
 import logging
 from typing import Optional, Dict, Any
 
+
 logger = logging.getLogger()
-CONFIG = get_settings()
 
 class MapSettings(BaseModel):
     """Map configuration for a room — composes the shared MapConfig contract."""
@@ -23,34 +22,21 @@ class MapSettings(BaseModel):
 
 class MapService:
     """Managing active maps for rooms"""
-    
-    def __init__(self):
-        username = CONFIG.get('MONGO_USER')
-        password = CONFIG.get('MONGO_PASS')
-        try:
-            self.client = MongoClient(
-                f'mongodb://{username}:{password}@mongo',
-                serverSelectionTimeoutMS=5000  # 5 second timeout
-            )
-            self.db = self.client.rollplay
-            self.collection = self.db.active_maps
-            
-            # Create indexes for efficient queries
-            self.collection.create_index("room_id")
-            self.collection.create_index([("room_id", 1), ("active", 1)])
-            logger.info("Connected successfully to MongoDB for map service")
-        except Exception as e:
-            logger.warning(f"Could not create indexes: {e}")
-            self.client = None
-            self.db = None
-            self.collection = None
+
+    def __init__(self, db: Database):
+        self.collection: Collection = db.active_maps
+        self.create_indexes()
+
+    def create_indexes(self):
+        """
+        Creates indexes for the active_maps collection
+        optimizing queries for active maps by room_id
+        """
+        self.collection.create_index([("room_id", 1), ("active", 1)])
+        logger.info(f"Created indexes for {self.collection.name} collection")
         
     def set_active_map(self, room_id: str, map_settings: MapSettings) -> bool:
         """Set the active map for a room"""
-        if self.collection is None:
-            logger.error("No database connection available")
-            return False
-
         try:
             # First, deactivate any existing active maps for this room
             self.collection.update_many(
@@ -78,10 +64,6 @@ class MapService:
     
     def get_active_map(self, room_id: str) -> Optional[Dict[str, Any]]:
         """Get the currently active map for a room"""
-        if self.collection is None:
-            logger.error("No database connection available")
-            return None
-            
         try:
             map_doc = self.collection.find_one(
                 {"room_id": room_id, "active": True}
@@ -90,10 +72,10 @@ class MapService:
             if map_doc:
                 # Convert ObjectId to string for JSON serialization
                 map_doc["_id"] = str(map_doc["_id"])
-                mc = map_doc.get('map_config', {})
-                logger.info(f"📤 Loading active map for room {room_id}: {mc.get('filename')} with grid_config: {mc.get('grid_config')}")
+                map_conf = map_doc.get('map_config', {})
+                logger.info(f"Loading active map for room {room_id}: {map_conf.get('filename')} with grid_config: {map_conf.get('grid_config')}")
             else:
-                logger.info(f"📭 No active map found for room {room_id}")
+                logger.info(f"No active map found for room {room_id}")
                 
             return map_doc
             
@@ -103,10 +85,6 @@ class MapService:
     
     def clear_active_map(self, room_id: str) -> bool:
         """Clear the active map for a room"""
-        if self.collection is None:
-            logger.error("No database connection available")
-            return False
-            
         try:
             self.collection.update_many(
                 {"room_id": room_id, "active": True},
@@ -124,10 +102,6 @@ class MapService:
                          grid_config: Optional[Dict[str, Any]] = ...,
                          map_image_config: Optional[Dict[str, Any]] = ...) -> bool:
         """Update map configuration (grid settings, image positioning, etc.)"""
-        if self.collection is None:
-            logger.error("No database connection available")
-            return False
-
         try:
             update_data = {}
 
@@ -149,18 +123,18 @@ class MapService:
             )
 
             if not existing_map:
-                logger.error(f"❌ No active map found for room {room_id}, filename {filename}")
+                logger.error(f"No active map found for room {room_id}, filename {filename}")
                 return False
 
-            mc = existing_map.get("map_config", {})
-            logger.info(f"🔍 Found existing map before update: {mc.get('filename')} with grid_config: {mc.get('grid_config')}")
+            map_conf = existing_map.get("map_config", {})
+            logger.info(f"Found existing map before update: {map_conf.get('filename')} with grid_config: {map_conf.get('grid_config')}")
 
             result = self.collection.update_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True},
                 {"$set": update_data}
             )
 
-            logger.info(f"✅ Database update result - matched: {result.matched_count}, modified: {result.modified_count}")
+            logger.info(f"Database update result - matched: {result.matched_count}, modified: {result.modified_count}")
 
             return result.matched_count > 0
 
@@ -177,16 +151,12 @@ class MapService:
         fog_config object in a single $set on `map_config.fog_config`.
         Per-region partial updates are deferred to dedicated WS events.
         """
-        if self.collection is None:
-            logger.error("No database connection available")
-            return False
-
         try:
             existing_map = self.collection.find_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True}
             )
             if not existing_map:
-                logger.error(f"❌ No active map found for room {room_id}, filename {filename}")
+                logger.error(f"No active map found for room {room_id}, filename {filename}")
                 return False
 
             # Don't log the full mask payloads — just region count + version.
@@ -195,14 +165,14 @@ class MapService:
                 f"v{fog_config.get('version')}"
                 if fog_config else "cleared"
             )
-            logger.info(f"🌫️  Updating fog_config for room {room_id} ({filename}): {meta}")
+            logger.info(f"Updating fog_config for room {room_id} ({filename}): {meta}")
 
             result = self.collection.update_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True},
                 {"$set": {"map_config.fog_config": fog_config}}
             )
 
-            logger.info(f"✅ Fog update result - matched: {result.matched_count}, modified: {result.modified_count}")
+            logger.info(f"Fog update result - matched: {result.matched_count}, modified: {result.modified_count}")
             return result.matched_count > 0
 
         except Exception as e:
@@ -211,16 +181,12 @@ class MapService:
 
     def update_complete_map(self, room_id: str, updated_map: Dict[str, Any]) -> bool:
         """Replace entire map object atomically"""
-        if self.collection is None:
-            logger.error("No database connection available")
-            return False
-
         try:
-            mc = updated_map.get("map_config", {})
-            filename = mc.get("filename")
+            map_conf = updated_map.get("map_config", {})
+            filename = map_conf.get("filename")
 
             if not filename:
-                logger.error(f"❌ No filename provided in updated map")
+                logger.error(f"No filename provided in updated map")
                 return False
 
             existing_map = self.collection.find_one(
@@ -228,10 +194,10 @@ class MapService:
             )
 
             if not existing_map:
-                logger.error(f"❌ No active map found for room {room_id}, filename {filename}")
+                logger.error(f"No active map found for room {room_id}, filename {filename}")
                 return False
 
-            logger.info(f"🔍 Found existing map before atomic update: {filename}")
+            logger.info(f"Found existing map before atomic update: {filename}")
 
             # Ensure the updated map maintains required fields
             updated_map_doc = {
@@ -246,7 +212,7 @@ class MapService:
                 updated_map_doc
             )
 
-            logger.info(f"✅ Atomic map update result - matched: {result.matched_count}, modified: {result.modified_count}")
+            logger.info(f"Atomic map update result - matched: {result.matched_count}, modified: {result.modified_count}")
 
             return result.matched_count > 0
 
@@ -256,10 +222,6 @@ class MapService:
     
     def get_room_maps(self, room_id: str) -> list:
         """Get all maps uploaded to a room (for future map management UI)"""
-        if self.collection is None:
-            logger.error("No database connection available")
-            return []
-            
         try:
             maps = list(self.collection.find(
                 {"room_id": room_id}
