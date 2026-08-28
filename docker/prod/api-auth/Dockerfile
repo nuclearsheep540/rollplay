@@ -24,5 +24,10 @@ USER appuser
 # Expose port
 EXPOSE 8083
 
+# Health check — python probe (no curl in slim image); runs in-container,
+# /health is not routed by nginx so it has no public exposure
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')"
+
 # Run the application
 CMD ["python", "app.py"]
