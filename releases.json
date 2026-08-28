@@ -1,5 +1,5 @@
 {
-  "latest": "0.64.0",
+  "latest": "0.64.1",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -895,6 +895,21 @@
         "api_site": "0.43.0",
         "api_game": "0.29.0",
         "api_auth": "0.3.1",
+        "nginx": "0.9.1",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.64.1": {
+      "date": "2026-08-28",
+      "commit": "19c70e5",
+      "description": "Cleaned up mongo connection pool and added a deploy CI action",
+      "services": {
+        "app": "0.47.0",
+        "api_site": "0.43.0",
+        "api_game": "0.29.1",
+        "api_auth": "0.3.2",
         "nginx": "0.9.1",
         "postgres": "0.1.10",
         "mongo": "0.4.2",
