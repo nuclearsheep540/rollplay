@@ -120,7 +120,8 @@ jobs:
 
       # Layer 2: can the public internet actually reach the app? Pinned via
       # --resolve so the check is DNS-free: it proves SG + nginx + TLS cert +
-      # app without depending on the domain provider's nameservers.
+      # app without depending on the domain provider's nameservers. The site
+      # root is the sole probe — it exercises the full public path end-to-end.
       - name: Health gate 2 — publicly reachable end-to-end
         env:
           PROD_HOST: ${{ secrets.PROD_HOST }}
@@ -135,7 +136,7 @@ jobs:
             exit 1
           fi
           echo "Probing https://$DOMAIN pinned to the prod host (DNS-free)"
-          for path in "/" "/api/patch-notes-versions"; do
+          for path in "/"; do
             for attempt in 1 2 3; do
               if curl --fail --silent --show-error --max-time 15 \
                    --resolve "$DOMAIN:443:$PROD_IP" \

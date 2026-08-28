@@ -79,8 +79,8 @@ optional GitHub Environment `production` for secret scoping / confirm-click):
 4. **Health gate, layer 1 (on host)** — poll `docker compose ps` until every
    service with a healthcheck reports healthy and the rest are running; timeout
    ~120s → job fails. (Prerequisite PR makes this signal real.)
-5. **Health gate, layer 2 (end-to-end)** — from the runner, curl only
-   already-public surface: the site root and the public patch-notes endpoint.
+5. **Health gate, layer 2 (end-to-end)** — from the runner, curl the site
+   root (the sole probe since the patch-notes feature was removed 2026-08-28).
    Proves users are served, not just containers up — with zero new exposure
    (these URLs are reachable by any browser today).
 6. **Publish release** — only reached if 1–5 passed:
@@ -112,8 +112,9 @@ behaviour kept for manual use.
 
 1. **No Environment approval gate** — the manual Run-workflow trigger is the
    intervention; Environments are team review ceremony we don't need.
-2. **Layer 2 targets: site root + public patch-notes endpoint** — already-public
-   URLs only; /health stays internal (see exposure note above).
+2. **Layer 2 target: site root** — already-public URL only; /health stays
+   internal (see exposure note above). (Originally site root + the patch-notes
+   endpoint; that feature was removed 2026-08-28, superseded by GitHub Releases.)
 3. **`deploy-manifest` stays in build.yml** — it keeps host scripts/manifest
    fresh at cut time; the ship workflow's re-sync is belt-and-braces for shipping
    after script changes. Two writers, same idempotent copy, different moments.
