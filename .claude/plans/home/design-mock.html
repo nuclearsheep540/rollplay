@@ -14,9 +14,23 @@
       sticky joinable pill as CONTENT (the ticker never stops) AND drives the hero's
       state — green live dot + ENTER SESSION when live, quiet status + START SESSION
       otherwise (GM perspective; role chip reads Game Master / Player per viewer)
-    - The invite stack: toggle "Invite waiting" — a hero-sized card dealt ON TOP of the
-      hero (which dims and goes inert beneath); Accept is one tap, Decline is a two-step
-      in-card confirm (nothing sent until confirmed)
+    - The invite stack (reworked 2026-08-29): the hero is NEVER occluded at rest — an
+      invite is a notification, and hiding "is my game on?" behind one inverted the
+      page's own priority. A pending invite TUCKS UNDER the hero at its bottom-right:
+      same-size card, and because both right faces lean the same 8° the exposed sliver
+      is a constant-width band along the hero's slanted face plus a strip below its
+      bottom edge. The invite's top-right corner is the exposed part, so a bare gold
+      "!" sits there (no circle, no plate — fa-solid exclamation in the real build)
+      wiggling ±20°: two full oscillations inside 1s, then 2s rest, on a 3s loop.
+      Clicking the peeking card runs the SWITCHEROO (2026-08-29): the two cards trade
+      places exactly — the invite slides into the hero's precise position while the
+      hero simultaneously slides into the tucked slot the invite vacated, now peeking
+      out underneath with its own band exposed. No dimming: the demoted card is not
+      "disabled beneath", it is waiting in the deck. Clicking the hero's peeking band
+      swaps them back (symmetric affordance); the "!" stays the invite's marker only —
+      the tucked hero never gets one. Accept is one tap, Decline is a two-step in-card
+      confirm (nothing sent until confirmed); on dismiss the hero slides home while
+      the invite card lifts away
     - The news noticeboard: the page's single light card, with frame-breaking BANNERS
       (flat — no shadow): a post can enable a top banner, a bottom banner, both, or
       neither; READ MORE always sits above the bottom banner. Both banners carry real
@@ -104,7 +118,11 @@
        2026-08-29: the plates rendered as plain rounded rects). */
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--smoke); color:var(--carbon); font-family:var(--sans); }
+  /* overflow-x:clip — the tucked invite's band overhangs main's 24px
+     gutter on ≤1410px windows; clip (not hidden — no scroll container)
+     keeps the page from ever scrolling sideways */
+  body { background:var(--smoke); color:var(--carbon); font-family:var(--sans);
+         overflow-x:clip; }
 
   /* ── chrome — mirrors SiteHeader.js + TabNav.js ─────────── */
   header.top { background:var(--carbon); border-bottom:1px solid rgba(55,50,47,.25); }
@@ -182,7 +200,20 @@
   /* slanted plate — all hero visuals clip inside this frame, so the
      invite card (a sibling, a physical dealt card) keeps its own shape
      and can spill its shadow outside */
-  .hero-frame { position:absolute; inset:0; border-radius:6px; overflow:hidden;
+  /* the deck has two SLOTS that are places, not states: primary (0,0)
+     and tucked (56px,24px). .hero-deck carries the hero's three pieces
+     as ONE physical card so the switcheroo moves a single element per
+     card — and, like .invite, the wrapper lets the tucked shadow render
+     outside .hero-frame's clip (a same-element drop-shadow is clipped).
+     Rest filter is a transparent drop-shadow, not none, so the swap
+     interpolates smoothly. */
+  .hero-deck { position:relative; z-index:2; transform:translate(0,0);
+               filter:drop-shadow(0 0 0 rgba(5,4,3,0)); cursor:default;
+               transition:transform .35s, filter .35s; }
+  body.invite-promoted .hero-deck { z-index:1; transform:translate(56px, 24px);
+               filter:drop-shadow(0 12px 18px rgba(5,4,3,.35)); cursor:pointer; }
+  /* z 2/3 order the pieces inside the deck's own stacking context */
+  .hero-frame { position:absolute; inset:0; z-index:2; border-radius:6px; overflow:hidden;
                 --run:42px; background:var(--carbon); }
   .hero-art { position:absolute; inset:0;
               background:
@@ -203,7 +234,7 @@
      owns the majority of the plate. */
   .hero-panel { position:absolute; inset:0; background:var(--carbon);
                 clip-path:polygon(0 0, calc(40% + 42px) 0, 40% 100%, 0 100%); }
-  .hero-content { position:relative; padding:44px 42px 38px; display:flex; flex-direction:column;
+  .hero-content { position:relative; z-index:3; padding:44px 42px 38px; display:flex; flex-direction:column;
                   gap:14px; min-height:300px; justify-content:flex-start; }
   .hero-meta { display:flex; align-items:center; gap:12px; font-size:13px; color:#d9d4cd; }
   /* chips are 8° parallelograms — skew the box, counter-skew the text */
@@ -223,7 +254,7 @@
   .hero-desc { max-width:460px; font-size:14.5px; line-height:1.55; color:#cfc9c2; }
   /* right offset clears the plate's leaning right face (inset ≈ 37px at
      the buttons' depth) */
-  .hero-actions { position:absolute; right:60px; bottom:36px; display:flex; gap:14px; }
+  .hero-actions { position:absolute; z-index:3; right:60px; bottom:36px; display:flex; gap:14px; }
 
   /* card CTAs are rounded parallelograms (2026-08-29) — skew the box,
      counter-skew the label */
@@ -237,22 +268,68 @@
                border:1px solid rgba(247,244,243,.35); }
   .btn-ghost:hover { border-color:rgba(247,244,243,.6); }
 
-  /* ── invite stack — a card ON a card ─────────────────────
-     Same dimensions as the hero, offset a few px on x/y so the under-card
-     edge shows; the hero dims and goes inert beneath it. */
-  .invite { position:absolute; inset:0; z-index:5; --run:42px;
-            transform:translate(12px, -12px);
+  /* ── invite stack — a card UNDER a card (reworked 2026-08-29) ──
+     The hero is never occluded at rest. The invite (hero-sized) tucks
+     BENEATH the hero's bottom-right: translate(56px, 24px) under
+     z-index 1 (hero pieces sit at 2/3). Both right faces lean the same
+     8°, so the exposed sliver is a CONSTANT-width band along the hero's
+     slant — 56 + tan(8°)·24 ≈ 59px — plus a 24px strip below its bottom
+     edge. Clicking the band promotes the card to the top of the deck. */
+  .invite { position:absolute; inset:0; z-index:1; --run:42px;
+            transform:translate(56px, 24px); cursor:pointer;
             /* box-shadow dies under clip-path, and a same-element
                drop-shadow is clipped with it — so the shadow lives here
                on the wrapper and the clip lives on .invite-plate */
-            filter:drop-shadow(0 22px 30px rgba(5,4,3,.55));
-            opacity:0; pointer-events:none; transition:opacity .35s, transform .35s; }
+            filter:drop-shadow(0 12px 18px rgba(5,4,3,.35));
+            opacity:0; pointer-events:none;
+            transition:opacity .35s, transform .35s, filter .35s; }
   /* the invite is a plate too (2026-08-29): right-face slant, same --run
      as the hero it covers — but NO inner seam */
   .invite-plate { position:absolute; inset:0; border-radius:6px; overflow:hidden;
                   background:var(--carbon); }
   body.show-invite .invite { opacity:1; pointer-events:auto; }
-  .invite.leaving { opacity:0; transform:translate(12px, -52px); }
+  /* the switcheroo (2026-08-29): promoted = the invite takes the hero's
+     EXACT position (0,0) while .hero-deck takes the tucked slot — the two
+     cards trade places. The primary slot is flat (transparent shadow, as
+     the hero is at rest); the soft shadow always belongs to whichever
+     card is tucked. z-index swaps instantly (it can't animate), so the
+     invite rides over the hero as their paths cross. */
+  body.invite-promoted .invite { z-index:2; transform:translate(0, 0);
+            filter:drop-shadow(0 0 0 rgba(5,4,3,0)); cursor:default;
+            /* the wrapper's rect isn't clipped (the shadow lives here),
+               so while promoted its hit area would swallow band clicks
+               meant for the tucked hero where the slants overlap the
+               rect — route hits through the plate, whose clip-path
+               bounds them exactly */
+            pointer-events:none; }
+  body.invite-promoted .invite-plate { pointer-events:auto; }
+  /* dismiss: the invite lifts away from the primary slot while the deck
+     (invite-promoted removed at the same moment) slides home beneath it.
+     After the promoted rule — equal specificity, source order wins. */
+  body.show-invite .invite.leaving { opacity:0; z-index:2; transform:translate(0, -40px); }
+  .invite.leaving .invite-alert { opacity:0; }   /* no "!" pop-in on the way out */
+  /* the "!" — a bare glyph, no circle, no plate (fa-solid exclamation in
+     the real build). It lives on the invite's TOP-RIGHT because that
+     corner is what the tuck exposes past the hero's edge — the wiggle on
+     the visible sliver is the "look at me". Child of the wrapper, not
+     the plate, so neither clip nor overflow can cut the swing. */
+  .invite-alert { position:absolute; top:10px; right:20px; font-size:30px;
+            font-weight:700; line-height:1; color:var(--gold);
+            transform-origin:50% 100%;   /* bell-swing from the foot */
+            animation:invite-wiggle 3s ease-in-out infinite;
+            transition:opacity .25s; }
+  body.invite-promoted .invite-alert { opacity:0; }
+  /* wiggle spec (2026-08-29): 3s cycle — the first 1s holds TWO full ±20°
+     oscillations (left, right, left, right), the remaining 2s rest */
+  @keyframes invite-wiggle {
+    0%    { transform:rotate(0deg); }
+    4.2%  { transform:rotate(20deg); }
+    12.5% { transform:rotate(-20deg); }
+    20.8% { transform:rotate(20deg); }
+    29.2% { transform:rotate(-20deg); }
+    33.3% { transform:rotate(0deg); }
+    100%  { transform:rotate(0deg); }
+  }
   .invite-art { position:absolute; inset:0;
                 background:
                   radial-gradient(90% 110% at 22% 0%, #3d5a45 0%, rgba(61,90,69,0) 55%),
@@ -271,11 +348,15 @@
   .invite.confirming .invite-confirm { display:block; }
   .invite-confirm p { font-size:14.5px; margin-bottom:14px; color:#d9d4cd; }
   .btn-danger { background:#7a2f2a; color:#f3ded9; }
-  /* hero disabled while an invite sits on it */
-  .hero-frame, .hero-content, .hero-actions { transition:opacity .35s, filter .35s; }
-  body.show-invite .hero-frame { filter:brightness(.5) saturate(.7); }
-  body.show-invite .hero-content,
-  body.show-invite .hero-actions { opacity:.35; pointer-events:none; }
+  /* no dimming (2026-08-29): the demoted hero is not "disabled beneath",
+     it is waiting in the deck — a live card whose band swaps it back.
+     Only its buttons go inert so a band click can't fire START SESSION. */
+  body.invite-promoted .hero-actions { pointer-events:none; }
+  /* while the invite is tucked, its exposed band's upper reach overlaps
+     .hero-content's transparent box (full-width block, z above the
+     invite) — drop its hit area so band clicks land; it holds no
+     interactive elements */
+  body.show-invite:not(.invite-promoted) .hero-content { pointer-events:none; }
 
   /* ── columns ────────────────────────────────────────────── */
   .grid { display:grid; grid-template-columns:2fr 3fr; gap:26px; margin-top:26px; }
@@ -370,7 +451,10 @@
      Dot clamped hard left — the pulse SOURCE. Events emit from it and age
      rightward (newest nearest the dot, older items dimmer), the hairline
      rule trails off toward the page edge. */
-  .pulse-divider { display:flex; align-items:center; gap:14px; margin:30px 0 0;
+  /* 54px top = 24px (the deck's tucked slot — reserved ALWAYS, so
+     toggling an invite never shifts the page) + the 30px hero→pulse gap
+     measured from the slot's bottom edge (2026-08-29) */
+  .pulse-divider { display:flex; align-items:center; gap:14px; margin:54px 0 0;
                    min-height:34px; padding-left:4px; }
   .pulse-divider .rule { flex:1; height:1px; min-width:40px;
                          background:linear-gradient(90deg, #D5CFC5, rgba(213,207,197,0)); }
@@ -385,7 +469,8 @@
   @media (prefers-reduced-motion: reduce) {
     .pulse-dot, .live-dot { animation:none; opacity:.85; }
     .pulse-item { transition:none; }
-    .coin, .invite { transition:none; }
+    .coin, .invite, .hero-deck { transition:none; }
+    .invite-alert { animation:none; }   /* the "!" holds still */
     .clock .colon.dim { opacity:1; }   /* no 1Hz blink */
   }
   .pulse-coins { display:flex; flex:0 0 auto; }
@@ -596,6 +681,7 @@
 
   <!-- hero + invite stack -->
   <section class="hero">
+    <div class="hero-deck" id="heroDeck">
     <div class="hero-frame">
       <div class="hero-art"></div>
       <div class="hero-panel"></div>
@@ -613,6 +699,7 @@
       <button class="btn btn-ghost"><span>NOTES</span></button>
       <button class="btn btn-ghost"><span>INVITE PLAYER</span></button>
       <button class="btn btn-gold" id="heroCta"><span>ENTER SESSION →</span></button>
+    </div>
     </div>
 
     <div class="invite" id="inviteCard">
@@ -639,6 +726,7 @@
         </div>
       </div>
       </div>
+      <div class="invite-alert" aria-hidden="true">!</div>
     </div>
   </section>
 
@@ -934,12 +1022,29 @@
   tickClock();
   setInterval(tickClock, 1000);
 
-  /* ── Invite stack: accept = one tap; decline = two-step in-card confirm ── */
+  /* ── Invite stack: tucked under the hero at rest; clicking the peeking
+     band runs the switcheroo — the two cards trade places exactly.
+     Clicking the tucked HERO's band swaps them back (symmetric).
+     Accept = one tap; decline = two-step in-card confirm. ── */
   const inviteCard = document.getElementById('inviteCard');
+  const heroDeck = document.getElementById('heroDeck');
   function toggleInvite(show) {
     inviteCard.classList.remove('leaving', 'confirming');
+    document.body.classList.remove('invite-promoted');
     document.body.classList.toggle('show-invite', show);
   }
+  inviteCard.addEventListener('click', (clickEvent) => {
+    if (clickEvent.target.closest('button')) return;
+    if (!document.body.classList.contains('invite-promoted')) {
+      document.body.classList.add('invite-promoted');
+    }
+  });
+  heroDeck.addEventListener('click', () => {
+    if (document.body.classList.contains('invite-promoted')) {
+      inviteCard.classList.remove('confirming');   /* demote resets a mid-decline face */
+      document.body.classList.remove('invite-promoted');
+    }
+  });
   /* ── characters strip: card size is FIXED by the 4-shell fill rule —
      dropping to 2 characters leaves the trailing stride empty ── */
   function setCharCount(count) {
@@ -962,9 +1067,14 @@
   function cancelDecline() { inviteCard.classList.remove('confirming'); }
   function confirmDecline() { dismissInvite(); }
   function dismissInvite() {
+    /* invite-promoted drops NOW so the hero slides home beneath the
+       lifting invite — the .leaving rule holds the invite's exit
+       transform on its own */
     inviteCard.classList.add('leaving');
+    document.body.classList.remove('invite-promoted');
     setTimeout(() => {
       document.body.classList.remove('show-invite');
+      inviteCard.classList.remove('leaving');
       document.getElementById('inviteToggle').checked = false;
     }, 380);
   }
