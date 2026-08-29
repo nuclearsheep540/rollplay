@@ -53,7 +53,13 @@
       mascot art (banner-top.png / banner-bottom.png — transparent cutouts, no plate
       behind them, overhanging the card edges). Banner art contract (2026-08-29):
       author at 21:9 — the slot is full-card-width and aspect-locked; wrong-ratio
-      sources letterbox (contain, bottom-anchored), never crop
+      sources letterbox (contain, bottom-anchored), never crop. LIKES (2026-08-29):
+      the counter IS the CTA (upvote-style — shows the value, click toggles ±1),
+      beside the date; heart fills when liked. NEW! flair lives in the UPDATES
+      section header, not on the date line (the banner images border the content and
+      would drown an in-card chip); cleared once the post is read. Backend: likes
+      table + toggle endpoint in the stage-2 news module; per-user read receipt
+      pulls a minimal slice of stage-2 PR 4 forward
     - Featured: portrait shelf card, cover-forward
     - Characters as a HAND of cards (reworked 2026-08-29, replacing the
       CharacterManager tray port): each character is a free-standing rounded 8°
@@ -78,9 +84,13 @@
       TWO-LAYER read (an art plate laid on the card); that layered shape is what makes
       the page's remaining rounded rects feel less present. The invite card takes the
       plate silhouette too (right-face slant, NO inner seam), and ALL card CTAs (hero,
-      invite, working) are rounded parallelograms. Deliberately NOT slanted: news (the other
-      species) and the pulse rule itself (a level horizon). Hero text is TOP-aligned
-      (2026-08-29).
+      invite, working) are rounded parallelograms. The FEATURED market card is a
+      NARROW RECT (settled 2026-08-29 after slant + mirrored-slant experiments): base
+      .card rounded rect cut 42px short on the right, its straight edge sitting on
+      the vertical line where the working card's slant above lands — a stepped stack,
+      not a refilled column. Deliberately NOT slanted: news (the other species), the
+      featured rect, and the pulse rule itself (a level horizon). Hero text is
+      TOP-aligned (2026-08-29).
 -->
 <!doctype html>
 <html lang="en">
@@ -502,9 +512,15 @@
   .work-btn > span { display:inline-block; transform:skewX(var(--slant)); }
   .work-btn:hover { border-color:var(--gold); color:var(--gold); }
 
-  /* featured — low-profile: shelf object left, meta beside */
-  .featured { padding:22px 26px;
-              --run:35px; /* tan(8°) × ~247px rendered height — retune if content changes */ }
+  /* featured — low-profile: shelf object left, meta beside. A NARROW
+     RECT (settled 2026-08-29 after two slant experiments): straight
+     rounded rectangle in the base .card skin, but CUT SHORT — the
+     right edge insets by the working card's 42px run, so it sits on the
+     same vertical line where the sibling's slant above lands its bottom
+     corner. The cards compose as a stepped stack: the slant carves in,
+     and the card below respects the carve instead of refilling the
+     column width. */
+  .card.featured { padding:22px 26px; margin-right:42px; }
   .featured-inner { display:flex; gap:18px; }
   .cover { flex:0 0 110px; }
   .cover-art { width:110px; height:156px; border-radius:6px; position:relative;
@@ -619,7 +635,30 @@
      card edge — the true mirror of the top banner's -26px */
   .news-art.bottom { margin:20px -28px -52px;
               background:url(banner-bottom.png) center bottom / contain no-repeat; }
+  .news-date-row { display:flex; align-items:center; gap:14px; }
   .news-date { font-size:11px; letter-spacing:.12em; color:#9a7526; font-weight:600; }
+  /* like counter — the CTA itself (2026-08-29): shows the value AND
+     takes the click, upvote-style. Sits beside the date, not in the
+     masthead or the action row — the banners border the content, so
+     in-card flair stays on the meta line. Gold family; heart fills once
+     liked; count nudges ±1. */
+  .like-btn { display:inline-flex; align-items:center; gap:6px; padding:2px 7px;
+              background:none; border:none; border-radius:6px; cursor:pointer;
+              color:#9a7526; font-family:var(--sans); font-size:12px; font-weight:600; }
+  .like-btn:hover { background:rgba(154,117,38,.1); }
+  .like-btn svg { width:15px; height:15px; fill:none; stroke:currentColor;
+                  stroke-width:1.8; stroke-linejoin:round;
+                  transition:transform .15s ease-out; }
+  .like-btn.liked svg { fill:currentColor; transform:scale(1.15); }
+  /* NEW! flair — lives in the UPDATES section header, NOT on the date
+     line (2026-08-29: the banners are visually loud images bordering
+     the content; a chip inside the card gets lost). The page's chip
+     language: rounded 8° parallelogram, gold-filled. Cleared when the
+     post is read (mock: clicking READ MORE). */
+  .new-chip { display:inline-block; margin-left:10px; padding:2.5px 8px; border-radius:4px;
+              background:var(--gold); color:#241c08; font-size:9.5px; font-weight:700;
+              letter-spacing:.1em; transform:skewX(calc(-1 * var(--slant))); }
+  .new-chip > span { display:inline-block; transform:skewX(var(--slant)); }
   .news h4 { font-family:var(--nav); font-size:22px; font-weight:400; color:#181512;
              margin:6px 0 8px; line-height:1.3; }
   .news p { font-size:13.5px; line-height:1.6; color:#4c463e; }
@@ -862,16 +901,22 @@
     <div>
       <div class="stack grow">
         <div class="section-head">
-          <h3>Updates</h3>
+          <h3>Updates<span class="new-chip" id="newChip"><span>NEW!</span></span></h3>
         </div>
         <section class="news">
         <div class="news-art"></div>
-        <div class="news-date">28 AUG 2026</div>
+        <div class="news-date-row">
+          <span class="news-date">28 AUG 2026</span>
+          <button class="like-btn" id="likeBtn" onclick="toggleLike()">
+            <svg viewBox="0 0 24 24"><path d="M12 20.5C12 20.5 4.5 15.4 4.5 10.1 4.5 7.4 6.5 5.5 8.8 5.5c1.4 0 2.6.7 3.2 1.9.6-1.2 1.8-1.9 3.2-1.9 2.3 0 4.3 1.9 4.3 4.6 0 5.3-7.5 10.4-7.5 10.4z"/></svg>
+            <span id="likeCount">12</span>
+          </button>
+        </div>
         <h4>Weather effects arrive in the Workshop</h4>
         <p>Bring your maps to life with our new dynamic weather system. Add rain, snow, fog and
            lightning directly to your scenes, with customizable intensity and direction —
            then save the mood as a preset and recall it mid-session.</p>
-        <a class="link-gold" href="#">READ MORE →</a>
+        <a class="link-gold" href="#" onclick="markNewsRead()">READ MORE →</a>
         <div class="news-art bottom"></div>
         </section>
       </div>
@@ -905,7 +950,7 @@
         <div class="section-head">
           <h3>Featured from the Market</h3>
         </div>
-        <section class="card featured cut">
+        <section class="card featured">
         <div class="featured-inner">
           <div class="cover">
             <div class="cover-art"><span>THE<br>SALT ROAD</span></div>
@@ -1175,6 +1220,20 @@
     document.getElementById('chars3').classList.toggle('active', count === 3);
   }
   setCharCount(2);   // start on the 2-character state (under review 2026-08-29)
+  /* ── news likes + read state — like = the counter itself (toggle,
+     ±1); NEW! chip clears on READ MORE (simulated read). Real build:
+     news_post_likes table + toggle endpoint; per-user read receipt
+     (a minimal slice of stage-2 PR 4 pulled forward). ── */
+  let newsLiked = false;
+  function toggleLike() {
+    newsLiked = !newsLiked;
+    document.getElementById('likeBtn').classList.toggle('liked', newsLiked);
+    document.getElementById('likeCount').textContent = newsLiked ? '13' : '12';
+  }
+  function markNewsRead() {
+    document.getElementById('newChip').style.display = 'none';
+  }
+
   /* ── user chip menu + app-select launcher (chrome dropdowns) —
      mutually exclusive; any outside click closes both ── */
   function toggleUserMenu(clickEvent) {
