@@ -1,0 +1,1280 @@
+<!-- Copyright (C) 2025 Matthew Davey -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  Home landing page — interactive design mock (the design contract).
+  Part of the home epic: see 00-epic.md. Pixels defer to app tokens (app/styles/colorTheme.js);
+  fonts here are stand-ins for the app's display face; all artwork is CSS-gradient placeholder.
+
+  What this mock is FOR (the interaction contract):
+    - Chrome (2026-08-29): the tab bar is RETIRED — a google-style app-select
+      launcher (9-dot button in the top bar) replaces it. Panel: 2×2 icon grid of
+      the high-level surfaces [Campaigns, Characters, Library, Market], then a
+      WORKSHOP section — header + tool line items [Map Config, Image Editor, Audio
+      Workstation, NPC Barracks, Scene Builder] — which REPLACES the workshop index
+      view (Workshop is a real destination — an index of media-type tools for GMs —
+      but not a top-level tab for every user). Top bar: wordmark · launcher ·
+      social · account. Metamorphous + the diamond motif carry the old nav's
+      identity into the panel (diamonds become line-item pips)
+    - Page composition: greeting+tagline / hero / pulse divider (full-width) / two columns:
+      news (2/5, left, full column height) + right 3/5 stacking continue-building over
+      featured (low-profile). The working card is HERO-HEIGHT (2026-08-29) and featured
+      pins to the column foot — the column's slack lives between them
+    - Pulse as a LINE with a dimmer: drag the Activity dial (bottom right) — breath,
+      coins and event cadence interpolate continuously; "A session is live" adds the
+      sticky joinable pill as CONTENT (the ticker never stops) AND drives the hero's
+      state — green live dot + ENTER SESSION with a rotating WHITE glow ring on the
+      CTA (2026-08-29: smoke conic glint through a 2px transparent border,
+      @property-driven — pure CSS, no rAF) when live; quiet status + START SESSION
+      otherwise. Hero actions are ROLE-CONDITIONAL (2026-08-29): the mock shows the
+      combined row, but the build renders per role — GM: NOTES / INVITE PLAYER /
+      START·ENTER SESSION; player: MANAGE CHARACTER / JOIN SESSION (live only, and
+      the JOIN CTA carries the same rotating glow). Role chip reads Game Master /
+      Player per viewer
+    - The invite stack (reworked 2026-08-29): the hero is NEVER occluded at rest — an
+      invite is a notification, and hiding "is my game on?" behind one inverted the
+      page's own priority. A pending invite TUCKS UNDER the hero at its bottom-right:
+      same-size card, and because both right faces lean the same 8° the exposed sliver
+      is a constant-width band along the hero's slanted face plus a strip below its
+      bottom edge. The invite's top-right corner is the exposed part, so a bare gold
+      "!" sits there (no circle, no plate — fa-solid exclamation in the real build)
+      wiggling ±20°: two full oscillations inside 1s, then 2s rest, on a 3s loop.
+      Clicking the peeking card runs the SWITCHEROO (2026-08-29): the two cards trade
+      places exactly — the invite slides into the hero's precise position while the
+      hero simultaneously slides into the tucked slot the invite vacated, now peeking
+      out underneath with its own band exposed. No dimming: the demoted card is not
+      "disabled beneath", it is waiting in the deck. Clicking the hero's peeking band
+      swaps them back (symmetric affordance); the "!" stays the invite's marker only —
+      the tucked hero never gets one. Accept is one tap, Decline is a two-step in-card
+      confirm (nothing sent until confirmed); on dismiss the hero slides home while
+      the invite card lifts away
+    - The news noticeboard: the page's single light card, with frame-breaking BANNERS
+      (flat — no shadow): a post can enable a top banner, a bottom banner, both, or
+      neither; READ MORE always sits above the bottom banner. Both banners carry real
+      mascot art (banner-top.png / banner-bottom.png — transparent cutouts, no plate
+      behind them, overhanging the card edges). Banner art contract (2026-08-29):
+      author at 21:9 — the slot is full-card-width and aspect-locked; wrong-ratio
+      sources letterbox (contain, bottom-anchored), never crop. LIKES (2026-08-29):
+      the counter IS the CTA (upvote-style — shows the value, click toggles ±1),
+      beside the date; heart fills when liked. NEW! flair lives in the UPDATES
+      section header, not on the date line (the banner images border the content and
+      would drown an in-card chip); cleared once the post is read. Backend: likes
+      table + toggle endpoint in the stage-2 news module; per-user read receipt
+      pulls a minimal slice of stage-2 PR 4 forward
+    - Featured: portrait shelf card, cover-forward
+    - Characters as a HAND of cards (reworked 2026-08-29, replacing the
+      CharacterManager tray port): each character is a free-standing rounded 8°
+      parallelogram — the same physical-card family as the hero/invite deck — built
+      by skew (rounded corners for free), overlapping 28px, first card on top
+      (dealt-hand order); hover lifts a card to the top of the hand (kept 2026-08-29,
+      HOME-ONLY — the Characters tab strip keeps its existing hover; ghost-shadow
+      decision deferred to dev QA with real art). NO tray,
+      border, or seams: the cards define the row, deliberately un-constrained.
+      Card size stays FIXED by the fill rule (3 characters + create fill the row;
+      fewer leave trailing space; no In Game pill for now). Greyscale-at-rest art
+      (hover recolors + zooms); the create card is a knocked-out ghost that casts
+      no shadow
+    - The 8° shape language (2026-08-29): ONE slant dial imported from the app's wedge
+      family (avatar pane ~8° / character strip 18° / workshop tiles 35°). Hero and
+      working-on art breaks through a hard 8° seam with a perpendicular (98°) contact
+      shadow — a seam never crosses the card's midline, sitting nearer 40% so the art
+      owns the majority; the GM chip is an 8° parallelogram and ALL pulse pills (quiet +
+      live) are ROUNDED 8° parallelograms; dark cards are slanted
+      PLATES — square LEFT face (text lives there; the character strip took the same
+      QA fallback for its lead card), ENTIRE RIGHT face leaning at 8° (a full face, not
+      a corner chamfer — QA 2026-08-29: a notch read as a nick, not a language). Right
+      face ∥ seam means the art band between them is itself a parallelogram — the
+      TWO-LAYER read (an art plate laid on the card); that layered shape is what makes
+      the page's remaining rounded rects feel less present. The invite card takes the
+      plate silhouette too (right-face slant, NO inner seam), and ALL card CTAs (hero,
+      invite, working) are rounded parallelograms. The FEATURED market card is a
+      NARROW RECT (settled 2026-08-29 after slant + mirrored-slant experiments): base
+      .card rounded rect cut 42px short on the right, its straight edge sitting on
+      the vertical line where the working card's slant above lands — a stepped stack,
+      not a refilled column. Deliberately NOT slanted: news (the other species), the
+      featured rect, and the pulse rule itself (a level horizon). Hero text is
+      TOP-aligned (2026-08-29).
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tabletop Tavern — Home (design mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Inter:wght@400;500;600;700&family=Metamorphous&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* app tokens — colorTheme.js */
+    --carbon:   #1F1F1F;
+    --smoke:    #F7F4F3;
+    --onyx:     #0B0A09;
+    --graphite: #37322F;
+    --silver:   #B5ADA6;
+    --gold:     #D9A441;
+    /* mock-local derivations */
+    --parchment: #FBF7EF;
+    --parchment-border: #E5DECF;
+    --chrome: #181613;
+    --breath: 4s;            /* pulse breathing period — driven by state */
+    --caps:  'Cinzel', Georgia, serif;               /* mock-only (book covers etc.) */
+    --nav:   'Metamorphous', Georgia, serif;         /* the app's REAL tab-bar face */
+    --sans:  'Inter', -apple-system, sans-serif;     /* the app's real body face */
+    /* ── the 8° dial ─────────────────────────────────────────
+       ONE slant for the whole page, imported from the app's wedge family
+       (avatar pane ~8° / character strip 18° / workshop tiles 35°) — same
+       single-dial discipline as CharacterManager.js STRIP_ANGLE_DEGREES.
+       tan(8°) ≈ 0.1405; every run below derives from it:
+         hero plate/seam  run = 0.1405 × 300px hero    ≈ 42px
+         working plate    run = 0.1405 × 380px card    ≈ 53px
+         featured plate   run = 0.1405 × ~247px card   ≈ 35px
+       Contact shadows sit perpendicular to the slant (90°+8° = 98°) so
+       every point of a seam projects to ONE gradient stop — the workshop
+       tiles' construction. All slants lean "/" (top x > bottom x).
+       Seam rule: a seam never crosses the card's midline — it sits
+       nearer 40% of the width, so art owns the majority of the plate. */
+    --slant: 8deg;
+    /* Slanted plates: square LEFT face — that's where text lives (QA
+       2026-08-29; same fallback the character strip took for its lead
+       card, STRIP_FIRST_CLIP) — and the ENTIRE RIGHT face leaning at
+       the slant (a full face, not a corner chamfer: a notch read as a
+       nick, not a language). Right face ∥ seam makes the art band
+       between them a true parallelogram — the "two layers" read: an
+       art plate laid on the card. Each plate sets --run = tan(8°) ×
+       its own rendered height.
+       NOTE: the plate polygon is written out at each clip-path rather
+       than composed here as a variable — var() inside a custom property
+       resolves where the property is DECLARED, so a :root-level polygon
+       referencing the per-card --run silently no-ops (bug caught
+       2026-08-29: the plates rendered as plain rounded rects). */
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  /* overflow-x:clip — the tucked invite's band overhangs main's 24px
+     gutter on ≤1410px windows; clip (not hidden — no scroll container)
+     keeps the page from ever scrolling sideways */
+  body { background:var(--smoke); color:var(--carbon); font-family:var(--sans);
+         overflow-x:clip; }
+
+  /* ── chrome — SiteHeader.js only; TabNav RETIRED (2026-08-29) in
+     favour of the app-select launcher below ─────────────────── */
+  header.top { background:var(--carbon); border-bottom:1px solid rgba(55,50,47,.25); }
+  .top-bar { max-width:1410px; margin:0 auto; padding:16px 40px;
+             display:flex; align-items:center; justify-content:space-between; }
+  .wordmark { font-family:var(--sans); font-size:24px; font-weight:700; color:var(--smoke); }
+  .wordmark span { color:var(--silver); }
+  .top-icons { display:flex; align-items:center; gap:32px; }
+  .icon-btn { position:relative; display:grid; place-items:center;
+              color:var(--silver); cursor:pointer; }
+  .icon-btn svg { width:26px; height:26px; fill:currentColor; }
+  /* user chip — avatar + screen name; opens the account menu.
+     Replaces the old avatar coin + separate logout icon (misclick hazard);
+     the wordmark anchors to the dashboard, so no house icon either. */
+  .user-wrap { position:relative; }
+  .user-chip { display:flex; align-items:center; gap:10px; padding:5px 8px;
+               background:none; border:none; border-radius:8px;
+               color:var(--smoke); font-family:var(--sans); cursor:pointer; }
+  .user-chip:hover { background:rgba(247,244,243,.07); }
+  .user-chip .avatar-coin { width:28px; height:28px; font-size:13px; }
+  .user-chip .user-name { font-size:14px; font-weight:600; }
+  .user-menu { display:none; position:absolute; top:calc(100% + 10px); right:0; z-index:40;
+               min-width:170px; background:var(--carbon); border:1px solid #3a352f;
+               border-radius:10px; padding:6px; box-shadow:0 14px 34px rgba(0,0,0,.45); }
+  .user-menu.open { display:block; }
+  .user-menu-item { padding:10px 14px; border-radius:6px; font-size:13.5px; color:var(--smoke);
+                    cursor:pointer; }
+  .user-menu-item:hover { background:rgba(247,244,243,.07); }
+  .user-menu-item.signout { color:var(--silver); border-top:1px solid rgba(58,53,47,.8);
+                            border-radius:0 0 6px 6px; margin-top:4px; padding-top:12px; }
+  .badge { position:absolute; top:-5px; right:-7px; background:#b03030; color:#fff;
+           font-size:10px; font-weight:600; min-width:16px; height:16px; border-radius:8px;
+           display:grid; place-items:center; padding:0 3px; }
+  .avatar-coin { width:32px; height:32px; border-radius:50%; background:var(--gold);
+                 color:var(--onyx); display:grid; place-items:center;
+                 font-family:var(--sans); font-size:14px; font-weight:700; }
+  /* app-select launcher (2026-08-29) — REPLACES TabNav entirely: the
+     tab bar is retired and navigation moves into a google-style
+     launcher panel behind a 9-dot button. Chrome dropdowns stay level
+     (no slant), same skin as the user menu. The Metamorphous face and
+     the diamond motif carry the old nav's identity into the panel. */
+  .launcher-wrap { position:relative; }
+  .launcher-panel { display:none; position:absolute; top:calc(100% + 14px); right:-8px;
+                    z-index:40; width:324px; background:var(--carbon);
+                    border:1px solid #3a352f; border-radius:10px; padding:14px;
+                    box-shadow:0 14px 34px rgba(0,0,0,.45); }
+  .launcher-panel.open { display:block; }
+  /* 2×2 icon grid — the high-level surfaces */
+  .launcher-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .launcher-tile { display:flex; flex-direction:column; align-items:center; gap:9px;
+                   padding:16px 10px 13px; border-radius:8px; color:var(--silver);
+                   text-decoration:none; transition:background .15s, color .15s; }
+  .launcher-tile:hover { background:rgba(247,244,243,.07); color:var(--smoke); }
+  .launcher-tile svg { width:26px; height:26px; stroke:currentColor; fill:none;
+                       stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }
+  .launcher-tile span { font-family:var(--nav); font-size:13px; text-transform:uppercase;
+                        letter-spacing:.04em; }
+  /* Workshop section — the workshop INDEX lives here now: a header +
+     tool line items (tools are media-type-scoped, GM-facing — a real
+     destination set, but not a top-level tab for every user) */
+  .launcher-section { margin-top:12px; padding-top:12px;
+                      border-top:1px solid rgba(58,53,47,.8); }
+  .launcher-section h5 { font-family:var(--sans); font-size:11px; font-weight:600;
+                         letter-spacing:.14em; text-transform:uppercase;
+                         color:var(--gold); padding:2px 10px 8px; }
+  .launcher-item { display:flex; align-items:center; gap:10px; padding:9px 10px;
+                   border-radius:6px; font-size:13.5px; color:var(--smoke);
+                   text-decoration:none; transition:background .15s; }
+  .launcher-item:hover { background:rgba(247,244,243,.07); }
+  /* the nav diamonds live on as line-item pips */
+  .launcher-item .pip { width:7px; height:7px; background:var(--silver);
+                        transform:rotate(45deg); flex:0 0 auto; opacity:.7; }
+  .launcher-item:hover .pip { background:var(--gold); opacity:1; }
+
+  /* ── page ───────────────────────────────────────────────── */
+  main { max-width:1410px; margin:0 auto; padding:38px 24px 60px; }
+  /* greeting joins the headers on the nav face (2026-08-29); the tagline
+     below deliberately stays italic sans — the one soft voice */
+  .greeting h1 { font-family:var(--nav); font-size:38px; font-weight:400; color:#141210; }
+  /* the clock shares the SUBTEXT's line, not the title's (2026-08-29):
+     tagline left, date · time right — one common line under the h1 */
+  .subhead-row { display:flex; justify-content:space-between; align-items:baseline;
+                 margin-top:6px; }
+  /* page clock — Inter (the functional face); tabular digits
+     so the time doesn't jitter as minutes tick */
+  .clock { font-family:var(--sans); font-size:20px; font-weight:400; color:var(--graphite);
+           font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+  /* colon blinks with the seconds (dim on odd seconds, driven by the
+     same 1s tick — a CSS animation would reset on every re-render) */
+  .clock .colon { transition:opacity .15s; }
+  .clock .colon.dim { opacity:.2; }
+  /* date · time on one line, uniform page-default weight, dot separator */
+  .clock-block { display:flex; align-items:baseline; gap:14px; }
+  .clock-date { font-size:20px; font-weight:400; color:var(--graphite); }
+  .clock-sep { font-size:20px; font-weight:400; color:var(--silver); }
+  .tagline { margin-left:28px; font-size:14px; font-style:italic;
+             color:#6d675f; }
+
+  /* ── hero ───────────────────────────────────────────────── */
+  .hero { position:relative; margin-top:26px; overflow:visible;
+          min-height:300px; color:var(--smoke); }
+  /* slanted plate — all hero visuals clip inside this frame, so the
+     invite card (a sibling, a physical dealt card) keeps its own shape
+     and can spill its shadow outside */
+  /* the deck has two SLOTS that are places, not states: primary (0,0)
+     and tucked (56px,24px). .hero-deck carries the hero's three pieces
+     as ONE physical card so the switcheroo moves a single element per
+     card — and, like .invite, the wrapper lets the tucked shadow render
+     outside .hero-frame's clip (a same-element drop-shadow is clipped).
+     Rest filter is a transparent drop-shadow, not none, so the swap
+     interpolates smoothly. */
+  .hero-deck { position:relative; z-index:2; transform:translate(0,0);
+               filter:drop-shadow(0 0 0 rgba(5,4,3,0)); cursor:default;
+               transition:transform .35s, filter .35s; }
+  body.invite-promoted .hero-deck { z-index:1; transform:translate(56px, 24px);
+               filter:drop-shadow(0 12px 18px rgba(5,4,3,.35)); cursor:pointer; }
+  /* z 2/3 order the pieces inside the deck's own stacking context */
+  .hero-frame { position:absolute; inset:0; z-index:2; border-radius:6px; overflow:hidden;
+                --run:42px; background:var(--carbon); }
+  .hero-art { position:absolute; inset:0;
+              background:
+                radial-gradient(120% 90% at 78% 8%, #6b4a2e 0%, rgba(107,74,46,0) 34%),
+                radial-gradient(90% 70% at 85% 30%, #24344f 0%, rgba(36,52,79,0) 55%),
+                linear-gradient(115deg, #0a0d16 20%, #131b2e 55%, #0c1020 100%); }
+  /* contact shadow the panel casts onto the art: perpendicular to the
+     seam (98°), anchored at the seam's projected stop (its x-midpoint,
+     ~(40% + 43%)/2 ≈ 42%), fixed-px fade so it stays a tight edge */
+  .hero-art::after { content:""; position:absolute; inset:0;
+              background:linear-gradient(98deg, rgba(5,4,3,.55) 42%, rgba(5,4,3,0) calc(42% + 90px)); }
+  /* content panel — flat carbon left of an 8° seam; the art breaks
+     through right of it (the workshop-tile seam, promoted to the hero).
+     Carbon token, NOT a hand-rolled tint (QA 2026-08-29: a one-off warm
+     gradient here read as a different grey than the other dark plates).
+     Seam: bottom x 40%, top x 40% + 42px run. Seam rule (QA 2026-08-29):
+     a seam never crosses the card's midline — nearer 40% — so the art
+     owns the majority of the plate. */
+  .hero-panel { position:absolute; inset:0; background:var(--carbon);
+                clip-path:polygon(0 0, calc(40% + 42px) 0, 40% 100%, 0 100%); }
+  .hero-content { position:relative; z-index:3; padding:44px 42px 38px; display:flex; flex-direction:column;
+                  gap:14px; min-height:300px; justify-content:flex-start; }
+  .hero-meta { display:flex; align-items:center; gap:12px; font-size:13px; color:#d9d4cd; }
+  /* chips are 8° parallelograms — skew the box, counter-skew the text */
+  .chip { border:1px solid rgba(247,244,243,.4); border-radius:2px; padding:2px 9px;
+          font-size:11px; letter-spacing:.08em; font-weight:600;
+          display:inline-block; transform:skewX(calc(-1 * var(--slant))); }
+  .chip > span { display:inline-block; transform:skewX(var(--slant)); }
+  /* green = live (2026-08-29) — amber read as "warning", not "on air".
+     Same green family as the app's In Game badge. */
+  .live-dot { width:8px; height:8px; border-radius:50%; background:#16a34a;
+              --breathe-glow:rgba(22,163,74,.5);
+              display:inline-block; margin-right:6px; animation:breathe 1.6s ease-in-out infinite; }
+  /* card headers use the app's real nav face (2026-08-29) — the chrome
+     brought Metamorphous in, so headers match it rather than adding a
+     separate display serif */
+  .hero h2 { font-family:var(--nav); font-size:44px; font-weight:400; line-height:1.1; }
+  .hero-desc { max-width:460px; font-size:14.5px; line-height:1.55; color:#cfc9c2; }
+  /* right offset clears the plate's leaning right face (inset ≈ 37px at
+     the buttons' depth) */
+  .hero-actions { position:absolute; z-index:3; right:60px; bottom:36px; display:flex; gap:14px; }
+
+  /* card CTAs are rounded parallelograms (2026-08-29) — skew the box,
+     counter-skew the label */
+  .btn { border-radius:8px; padding:12px 22px; font-family:var(--sans); font-size:13px;
+         font-weight:600; letter-spacing:.06em; cursor:pointer; border:none;
+         transform:skewX(calc(-1 * var(--slant))); }
+  .btn > span { display:inline-block; transform:skewX(var(--slant)); }
+  /* constant 2px transparent border so gaining the live ring (below)
+     never resizes the button — background paints across border-box, so
+     the resting look is unchanged */
+  .btn-gold { background:var(--gold); color:#241c08; border:2px solid transparent; }
+  .btn-gold:hover { filter:brightness(1.06); }
+  /* live CTA — rotating glow (2026-08-29). Two-layer background trick:
+     solid gold in padding-box, a green conic glint in border-box, so the
+     sweep shows only through the 2px transparent border ring (the ring
+     skews with the button — the glint travels the parallelogram). The
+     source article animates the angle with a rAF loop; a REGISTERED
+     custom property lets plain @keyframes interpolate it instead — no
+     script, and reduced-motion can switch it off. WHITE glint (changed
+     from live-green 2026-08-29) — smoke, the app's white, not raw #fff;
+     green stays the dot's job while the ring is pure energy. The
+     sweep's resting stops are GOLD, not transparent (QA 2026-08-29): a
+     transparent track shows the dark art behind the button, which reads
+     as the button shrinking 2px when it goes live — a gold track is
+     indistinguishable from the button face, so only the glint is new. */
+  .btn-gold.live {
+    background:linear-gradient(var(--gold), var(--gold)) padding-box,
+               conic-gradient(from var(--glow-angle),
+                 var(--gold) 0%, var(--smoke) 11%,
+                 var(--gold) 24%) border-box;
+    box-shadow:0 0 16px 1px rgba(247,244,243,.35);
+    animation:glow-spin 2.4s linear infinite; }
+  @property --glow-angle { syntax:"<angle>"; inherits:false; initial-value:0deg; }
+  @keyframes glow-spin { to { --glow-angle:360deg; } }
+  .btn-ghost { background:rgba(20,18,16,.35); color:var(--smoke);
+               border:1px solid rgba(247,244,243,.35); }
+  .btn-ghost:hover { border-color:rgba(247,244,243,.6); }
+
+  /* ── invite stack — a card UNDER a card (reworked 2026-08-29) ──
+     The hero is never occluded at rest. The invite (hero-sized) tucks
+     BENEATH the hero's bottom-right: translate(56px, 24px) under
+     z-index 1 (hero pieces sit at 2/3). Both right faces lean the same
+     8°, so the exposed sliver is a CONSTANT-width band along the hero's
+     slant — 56 + tan(8°)·24 ≈ 59px — plus a 24px strip below its bottom
+     edge. Clicking the band promotes the card to the top of the deck. */
+  .invite { position:absolute; inset:0; z-index:1; --run:42px;
+            transform:translate(56px, 24px); cursor:pointer;
+            /* box-shadow dies under clip-path, and a same-element
+               drop-shadow is clipped with it — so the shadow lives here
+               on the wrapper and the clip lives on .invite-plate */
+            filter:drop-shadow(0 12px 18px rgba(5,4,3,.35));
+            opacity:0; pointer-events:none;
+            transition:opacity .35s, transform .35s, filter .35s; }
+  /* the invite is a plate too (2026-08-29): right-face slant, same --run
+     as the hero it covers — but NO inner seam */
+  .invite-plate { position:absolute; inset:0; border-radius:6px; overflow:hidden;
+                  background:var(--carbon); }
+  body.show-invite .invite { opacity:1; pointer-events:auto; }
+  /* the switcheroo (2026-08-29): promoted = the invite takes the hero's
+     EXACT position (0,0) while .hero-deck takes the tucked slot — the two
+     cards trade places. The primary slot is flat (transparent shadow, as
+     the hero is at rest); the soft shadow always belongs to whichever
+     card is tucked. z-index swaps instantly (it can't animate), so the
+     invite rides over the hero as their paths cross. */
+  body.invite-promoted .invite { z-index:2; transform:translate(0, 0);
+            filter:drop-shadow(0 0 0 rgba(5,4,3,0)); cursor:default;
+            /* the wrapper's rect isn't clipped (the shadow lives here),
+               so while promoted its hit area would swallow band clicks
+               meant for the tucked hero where the slants overlap the
+               rect — route hits through the plate, whose clip-path
+               bounds them exactly */
+            pointer-events:none; }
+  body.invite-promoted .invite-plate { pointer-events:auto; }
+  /* dismiss: the invite lifts away from the primary slot while the deck
+     (invite-promoted removed at the same moment) slides home beneath it.
+     After the promoted rule — equal specificity, source order wins. */
+  body.show-invite .invite.leaving { opacity:0; z-index:2; transform:translate(0, -40px); }
+  .invite.leaving .invite-alert { opacity:0; }   /* no "!" pop-in on the way out */
+  /* the "!" — a bare glyph, no circle, no plate (fa-solid exclamation in
+     the real build). It lives on the invite's TOP-RIGHT because that
+     corner is what the tuck exposes past the hero's edge — the wiggle on
+     the visible sliver is the "look at me". Child of the wrapper, not
+     the plate, so neither clip nor overflow can cut the swing. */
+  .invite-alert { position:absolute; top:10px; right:20px; font-size:30px;
+            font-weight:700; line-height:1; color:var(--gold);
+            transform-origin:50% 100%;   /* bell-swing from the foot */
+            animation:invite-wiggle 3s ease-in-out infinite;
+            transition:opacity .25s; }
+  body.invite-promoted .invite-alert { opacity:0; }
+  /* wiggle spec (2026-08-29): 3s cycle — the first 1s holds TWO full ±20°
+     oscillations (left, right, left, right), the remaining 2s rest */
+  @keyframes invite-wiggle {
+    0%    { transform:rotate(0deg); }
+    4.2%  { transform:rotate(20deg); }
+    12.5% { transform:rotate(-20deg); }
+    20.8% { transform:rotate(20deg); }
+    29.2% { transform:rotate(-20deg); }
+    33.3% { transform:rotate(0deg); }
+    100%  { transform:rotate(0deg); }
+  }
+  .invite-art { position:absolute; inset:0;
+                background:
+                  radial-gradient(90% 110% at 22% 0%, #3d5a45 0%, rgba(61,90,69,0) 55%),
+                  radial-gradient(80% 80% at 80% 90%, #22402c 0%, rgba(34,64,44,0) 60%),
+                  linear-gradient(115deg, #0b120d 15%, #1d3024 60%, #0b120d 100%); }
+  .invite-art::after { content:""; position:absolute; inset:0;
+                background:linear-gradient(100deg, rgba(6,10,7,.85) 25%, rgba(6,10,7,.3) 70%); }
+  .invite-body { position:relative; height:100%; display:flex; flex-direction:column;
+                 justify-content:flex-end; gap:4px; padding:38px 42px; color:var(--smoke); }
+  .invite-body .eyebrow { font-size:12px; letter-spacing:.12em; color:var(--gold); font-weight:600; }
+  .invite-body h3 { font-family:var(--nav); font-size:34px; font-weight:400; margin:4px 0 2px; }
+  .invite-body .from { font-size:14px; color:#cfc9c2; margin-bottom:18px; }
+  .invite-actions { display:flex; gap:14px; }
+  .invite-confirm { display:none; }
+  .invite.confirming .invite-default { display:none; }
+  .invite.confirming .invite-confirm { display:block; }
+  .invite-confirm p { font-size:14.5px; margin-bottom:14px; color:#d9d4cd; }
+  .btn-danger { background:#7a2f2a; color:#f3ded9; }
+  /* no dimming (2026-08-29): the demoted hero is not "disabled beneath",
+     it is waiting in the deck — a live card whose band swaps it back.
+     Only its buttons go inert so a band click can't fire START SESSION. */
+  body.invite-promoted .hero-actions { pointer-events:none; }
+  /* while the invite is tucked, its exposed band's upper reach overlaps
+     .hero-content's transparent box (full-width block, z above the
+     invite) — drop its hit area so band clicks land; it holds no
+     interactive elements */
+  body.show-invite:not(.invite-promoted) .hero-content { pointer-events:none; }
+
+  /* ── columns ────────────────────────────────────────────── */
+  .grid { display:grid; grid-template-columns:2fr 3fr; gap:26px; margin-top:26px; }
+  .grid > div { display:flex; flex-direction:column; gap:26px; }
+  @media (max-width:920px){ .grid { grid-template-columns:1fr; } }
+  .card { background:var(--carbon); border:1px solid #34302b; border-radius:12px; color:var(--smoke); }
+  /* slanted plate variant — the silhouette replaces the hairline border
+     (clip-path would sever it along the slants; on a light page the dark
+     silhouette defines the edge on its own) */
+  .card.cut { border:none; border-radius:6px; }
+  /* the shared plate silhouette (each plate sets its own --run). The
+     slant's bottom vertex is a polygon point, not an element corner, so
+     border-radius cannot round it (QA 2026-08-29: it rendered sharp) —
+     the three points before the bottom-left corner approximate a 6px
+     arc there (tangents at r/tan(49°) ≈ 5px from the vertex); their
+     offsets are constant for any --run because the angle never changes. */
+  .hero-frame, .card.cut, .invite-plate {
+    clip-path:polygon(0 0, 100% 0,
+                      calc(100% - var(--run) + 1px) calc(100% - 5px),
+                      calc(100% - var(--run) - 1px) calc(100% - 1px),
+                      calc(100% - var(--run) - 5px) 100%,
+                      0 100%); }
+
+  /* working-on card — art right of an 8° seam (workshop-tile geometry;
+     the card's own carbon is the content surface). HERO-HEIGHT
+     (2026-08-29): 300px to match the hero card, which also lands its
+     run on the hero's own 42px. Seam: bottom x 42%, top x 42% + 42px
+     (≈47% of the ~800px card — the whole seam stays under the midline
+     per the seam rule; art owns the majority). The contact shadow rides
+     in the same background stack, anchored at the seam's projected stop
+     (~45%), and is clipped with the art so it hugs the diagonal. */
+  .working { position:relative; overflow:hidden; min-height:300px;
+             --run:42px; /* tan(8°) × 300px */ }
+  .working-art { position:absolute; inset:0;
+                 clip-path:polygon(calc(42% + 42px) 0, 100% 0, 100% 100%, 42% 100%);
+                 background:
+                   linear-gradient(98deg, rgba(5,4,3,.6) 45%, rgba(5,4,3,0) calc(45% + 80px)),
+                   radial-gradient(90% 80% at 80% 100%, #4a2c10 0%, rgba(74,44,16,0) 55%),
+                   linear-gradient(115deg, #17100a 30%, #2b1c0e 70%, #170f08 100%); }
+  .working-content { position:relative; padding:26px 30px 26px; display:flex;
+                     flex-direction:column; gap:10px; min-height:300px; height:100%; }
+  /* section labels — small h3 headings on the page ground, OUTSIDE the
+     card chrome (2026-08-29): the plates carry art + content, the page
+     carries the wayfinding */
+  .stack { display:flex; flex-direction:column; }
+  .stack.grow { flex:1; }
+  /* pinned to the column foot (2026-08-29): the working card holds
+     hero-height, so the column's slack opens BETWEEN building and
+     featured rather than trailing below the featured card */
+  .stack.push { margin-top:auto; }
+  .section-head { display:flex; justify-content:space-between; align-items:baseline;
+                  padding:0 2px; margin-bottom:10px; }
+  .section-head h3 { font-family:var(--sans); font-size:11.5px; letter-spacing:.14em;
+                     font-weight:600; color:#9a7526; text-transform:uppercase; }
+  .muted { font-size:12.5px; color:var(--silver); }
+  /* title row spans the card, so the meta sits top-RIGHT over the art —
+     campaign meta lives in the card (2026-08-29) */
+  .working-head { display:flex; justify-content:space-between; align-items:baseline; }
+  .working h4 { font-family:var(--nav); font-size:28px; font-weight:400; }
+  /* note clears the seam: content zone is ~42% of the ~800px card minus padding */
+  .working .note { font-size:13.5px; color:#c9c3bb; max-width:260px; line-height:1.5; }
+  /* actions tightened to fit the narrower content zone left of the seam;
+     wrap is the safety valve so a row never crosses the seam */
+  /* actions sit OVER the art half (2026-08-29), bottom-right — echoing
+     the hero's actions-over-art placement. right:60px clears the plate's
+     leaning face at the buttons' depth (inset ≈ 37px there), same as the
+     hero; one unwrapped row (the old in-flow 300px max-width wrapped
+     CAMPAIGN EDITOR onto its own line — gone with it) */
+  .working-actions { position:absolute; right:60px; bottom:26px; display:flex; gap:8px; }
+  /* CTAs are rounded parallelograms (2026-08-29) — same construction as
+     the pulse pills: skew the box, counter-skew the label */
+  .work-btn { background:rgba(247,244,243,.06); border:1px solid rgba(247,244,243,.28);
+              color:var(--smoke); border-radius:8px; padding:10px 12px; font-size:12px;
+              font-weight:600; letter-spacing:.05em; cursor:pointer;
+              transform:skewX(calc(-1 * var(--slant))); }
+  .work-btn > span { display:inline-block; transform:skewX(var(--slant)); }
+  .work-btn:hover { border-color:var(--gold); color:var(--gold); }
+
+  /* featured — low-profile: shelf object left, meta beside. A NARROW
+     RECT (settled 2026-08-29 after two slant experiments): straight
+     rounded rectangle in the base .card skin, but CUT SHORT — the
+     right edge insets by the working card's 42px run, so it sits on the
+     same vertical line where the sibling's slant above lands its bottom
+     corner. The cards compose as a stepped stack: the slant carves in,
+     and the card below respects the carve instead of refilling the
+     column width. */
+  .card.featured { padding:22px 26px; margin-right:42px; }
+  .featured-inner { display:flex; gap:18px; }
+  .cover { flex:0 0 110px; }
+  .cover-art { width:110px; height:156px; border-radius:6px; position:relative;
+               display:grid; place-items:end center; padding-bottom:12px;
+               background:
+                 radial-gradient(90% 60% at 50% 20%, #56504a 0%, rgba(86,80,74,0) 60%),
+                 linear-gradient(160deg, #2e2b26 10%, #4a443a 55%, #26231e);
+               box-shadow:0 10px 22px rgba(5,4,3,.5); }
+  .cover-art span { font-family:var(--caps); font-size:11px; letter-spacing:.12em;
+                    color:#ded7cc; text-align:center; line-height:1.5; }
+  .shelf { width:110px; height:6px; margin-top:10px; border-radius:50%;
+           background:radial-gradient(50% 100% at 50% 50%, rgba(5,4,3,.5), rgba(5,4,3,0)); }
+  .featured-meta h4 { font-family:var(--nav); font-size:18px; font-weight:400; }
+  .featured-meta .by { font-size:12px; color:var(--silver); margin:2px 0 8px; }
+  .featured-meta p { font-size:12.5px; line-height:1.55; color:#c9c3bb; }
+  .link-gold { display:inline-block; margin-top:12px; color:var(--gold); font-size:12.5px;
+               font-weight:600; letter-spacing:.06em; text-decoration:none; }
+
+  /* ── pulse divider ──────────────────────────────────────────
+     Dot clamped hard left — the pulse SOURCE. Events emit from it and age
+     rightward (newest nearest the dot, older items dimmer), the hairline
+     rule trails off toward the page edge. */
+  /* 54px top = 24px (the deck's tucked slot — reserved ALWAYS, so
+     toggling an invite never shifts the page) + the 30px hero→pulse gap
+     measured from the slot's bottom edge (2026-08-29) */
+  .pulse-divider { display:flex; align-items:center; gap:14px; margin:54px 0 0;
+                   min-height:34px; padding-left:4px; }
+  .pulse-divider .rule { flex:1; height:1px; min-width:40px;
+                         background:linear-gradient(90deg, #D5CFC5, rgba(213,207,197,0)); }
+  .pulse-dot { width:10px; height:10px; border-radius:50%; background:var(--gold); flex:0 0 auto;
+               animation:breathe var(--breath) ease-in-out infinite; }
+  /* glow color per dot: the pulse dot keeps the gold default, the hero's
+     live dot overrides with green via --breathe-glow */
+  @keyframes breathe {
+    0%,100% { opacity:.35; box-shadow:0 0 0 0 rgba(0,0,0,0); }
+    50%     { opacity:1;   box-shadow:0 0 10px 2px var(--breathe-glow, rgba(217,164,65,.45)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-dot, .live-dot { animation:none; opacity:.85; }
+    .pulse-item { transition:none; }
+    .coin, .invite, .hero-deck { transition:none; }
+    .invite-alert { animation:none; }   /* the "!" holds still */
+    .btn-gold.live { animation:none; }  /* static glint + steady glow */
+    .clock .colon.dim { opacity:1; }   /* no 1Hz blink */
+  }
+  .pulse-coins { display:flex; flex:0 0 auto; }
+  .coin { width:26px; height:26px; border-radius:50%; border:2px solid var(--smoke);
+          margin-left:-8px; display:grid; place-items:center; font-size:11px; font-weight:600;
+          color:var(--smoke); transform:scale(0); transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
+  .coin:first-child { margin-left:0; }
+  .coin.c1 { background:#5a7a63; } .coin.c2 { background:#7a5a63; } .coin.c3 { background:#5a637a; }
+  .pulse-coins[data-count="1"] .coin.c1,
+  .pulse-coins[data-count="2"] .coin.c1, .pulse-coins[data-count="2"] .coin.c2,
+  .pulse-coins[data-count="3"] .coin { transform:scale(1); }
+  .coin.c2 { transition-delay:.08s; } .coin.c3 { transition-delay:.16s; }
+  .pulse-items { display:flex; align-items:center; gap:12px; overflow:hidden;
+                 min-width:0; white-space:nowrap; }
+  /* pills are ROUNDED parallelograms — the family skew with soft corners.
+     The skew lives on an inner shape because the FLIP slide owns the
+     outer element's transform. */
+  .pulse-item { flex:0 0 auto; font-size:12.5px; line-height:1.4; color:#544e46;
+                transition:transform .5s cubic-bezier(.22,.9,.3,1), opacity .35s ease; }
+  .pill-shape { display:inline-block; background:rgba(31,27,22,.055); border-radius:8px;
+                padding:6px 14px; transform:skewX(calc(-1 * var(--slant))); }
+  .pill-shape > span { display:inline-block; transform:skewX(var(--slant)); }
+  .pulse-item:nth-child(2) { opacity:.68; }
+  .pulse-item:nth-child(3) { opacity:.48; }
+  .pulse-item:nth-child(4) { opacity:.34; }
+  /* a live, joinable session is CONTENT, not a mode: a sticky gold pill at the
+     head of the line, carrying its own Join action; the ticker flows behind it */
+  .live-shape { display:inline-flex; align-items:center; gap:10px; padding:6px 14px;
+                background:rgba(217,164,65,.18); color:#5c430f; font-weight:600;
+                border-radius:8px; transform:skewX(calc(-1 * var(--slant))); }
+  .live-shape > * { display:inline-block; transform:skewX(var(--slant)); }
+  .live-pill .join { background:var(--gold); border:none; color:#241c08;
+                     border-radius:3px; padding:3px 11px; font-size:11px; font-weight:700;
+                     letter-spacing:.05em; cursor:pointer; }
+
+  /* ── news noticeboard ───────────────────────────────────── */
+  /* no reserved top margin (2026-08-29): the bordered parchment box meets
+     the row top like every other card, and the top banner's -26px is REAL
+     overflow above the border — the pop. The art rises into the
+     section-head's row but never reaches its left-aligned text (art is
+     centered), and cannot reach the pulse above. */
+  .news { flex:1; display:flex; flex-direction:column;
+          background:var(--parchment); border:1px solid var(--parchment-border);
+          border-radius:12px; box-shadow:0 8px 24px rgba(31,31,31,.08); padding:0 28px 26px; }
+  .news .link-gold { margin-top:auto; padding-top:16px; align-self:flex-start; }
+  /* banners — frame-breaking mascot art, FLAT (no shadow, no plate:
+     both PNGs are transparent cutouts standing directly on the
+     parchment and overhanging the card edges). A post can enable a top
+     banner, a bottom banner, both, or neither. The bottom banner breaks
+     out below the card edge, and the READ MORE CTA always sits above it
+     (the CTA precedes the bottom banner in the flex column, so enabling
+     the banner can never push content below it). Relative URLs work
+     beside this file in the repo; the artifact build inlines both PNGs
+     as data URIs (CSP blocks file fetches). */
+  /* banner AUTHORING CONTRACT (2026-08-29): 21:9. The box spans the
+     card's full width (-28px side margins cancel the card padding) and
+     is aspect-locked at 21:9 — at the card's ~540px that's ~231px tall,
+     the height the banners were originally tuned to, now at full width.
+     Art must be EXPORTED at 21:9 to fill it: 3:2 could only fill the
+     width by tripling the card height (measured 2026-08-29 — the PNGs'
+     content is truly full-frame, no transparent sky to crop). contain +
+     bottom anchor = a wrong-ratio source letterboxes instead of
+     cropping, so the current 3:2 art renders centered-narrow until
+     re-exported. */
+  .news-art { position:relative; margin:-26px -28px 20px; aspect-ratio:21/9;
+              background:url(banner-top.png) center bottom / contain no-repeat; }
+  /* -52px: the card has 26px bottom padding (unlike its zero top padding),
+     so the first 26 consumes the padding and the second 26 overhangs the
+     card edge — the true mirror of the top banner's -26px */
+  .news-art.bottom { margin:20px -28px -52px;
+              background:url(banner-bottom.png) center bottom / contain no-repeat; }
+  .news-date-row { display:flex; align-items:center; gap:14px; }
+  .news-date { font-size:11px; letter-spacing:.12em; color:#9a7526; font-weight:600; }
+  /* like counter — the CTA itself (2026-08-29): shows the value AND
+     takes the click, upvote-style. Sits beside the date, not in the
+     masthead or the action row — the banners border the content, so
+     in-card flair stays on the meta line. Gold family; heart fills once
+     liked; count nudges ±1. */
+  .like-btn { display:inline-flex; align-items:center; gap:6px; padding:2px 7px;
+              background:none; border:none; border-radius:6px; cursor:pointer;
+              color:#9a7526; font-family:var(--sans); font-size:12px; font-weight:600; }
+  .like-btn:hover { background:rgba(154,117,38,.1); }
+  .like-btn svg { width:15px; height:15px; fill:none; stroke:currentColor;
+                  stroke-width:1.8; stroke-linejoin:round;
+                  transition:transform .15s ease-out; }
+  .like-btn.liked svg { fill:currentColor; transform:scale(1.15); }
+  /* NEW! flair — lives in the UPDATES section header, NOT on the date
+     line (2026-08-29: the banners are visually loud images bordering
+     the content; a chip inside the card gets lost). The page's chip
+     language: rounded 8° parallelogram, gold-filled. Cleared when the
+     post is read (mock: clicking READ MORE). */
+  .new-chip { display:inline-block; margin-left:10px; padding:2.5px 8px; border-radius:4px;
+              background:var(--gold); color:#241c08; font-size:9.5px; font-weight:700;
+              letter-spacing:.1em; transform:skewX(calc(-1 * var(--slant))); }
+  .new-chip > span { display:inline-block; transform:skewX(var(--slant)); }
+  .news h4 { font-family:var(--nav); font-size:22px; font-weight:400; color:#181512;
+             margin:6px 0 8px; line-height:1.3; }
+  .news p { font-size:13.5px; line-height:1.6; color:#4c463e; }
+  .news .link-gold { color:#9a7526; }
+
+  /* ── characters — a HAND of cards, not a strip (reworked 2026-08-29,
+     replacing the CharacterManager.js tray port) ──
+     Each character is a free-standing rounded 8° parallelogram — the
+     same physical-card family as the hero/invite deck — not a segment
+     clipped inside a container. Construction is SKEW, not clip-path
+     (rounded corners come free — the chips/CTAs' trick at card scale),
+     with a counter-skewed inner layer keeping art and names upright.
+     transform-origin is bottom-left so the lean never crosses the
+     content edge on the left; the tan(8°)·480 ≈ 67px top-edge overhang
+     is budgeted into the card width instead.
+     Fill rule KEPT from the tray: card width is fixed by the 4-shell
+     assumption (3 characters + create): 4W − 3·28 overlap + 67 = row
+     → W = 25% + 4.25px. H = 480px → W ≈ 345px, ≈ playing-card ratio.
+     Fewer characters leave the trailing space empty, same as before.
+     Cards overlap 28px, first on top (dealt-hand order); hovering
+     lifts a card to the top of the hand. NO tray, border, or seams —
+     the cards define the row. */
+  /* 26px page rhythm + 26px clearance for the updates card's bottom-banner
+     overhang. The allowance lives HERE at the full amount because sibling
+     margins collapse — a matching margin-bottom on the grid would merge
+     into one 26px and the banner would eat it (QA 2026-08-29). Conditional
+     on a bottom banner existing, in the real build. */
+  .char-row { margin-top:52px; }
+  /* +12px on the standard 10px head gap (QA 2026-08-29): the card
+     shadows (22px blur − 10px y-offset) reach ~12px above the card
+     tops, eating the visual gap — this restores the same OPTICAL 10px
+     every other section-head shows */
+  .char-row .section-head { margin-bottom:22px; }
+  .char-hand { display:flex; align-items:stretch; height:480px; }
+  /* width fixed by the 4-shell fill rule (header comment above) */
+  .char-shell { position:relative; flex:0 0 auto; width:calc(25% + 4.25px); }
+  .char-shell + .char-shell { margin-left:-28px; }
+  /* dealt-hand z order: first on top, each next card tucks under.
+     nth-child counts the hidden 3rd shell too, so the create card
+     keeps z:1 in the 2-character state. */
+  .char-shell:nth-child(1) { z-index:4; }
+  .char-shell:nth-child(2) { z-index:3; }
+  .char-shell:nth-child(3) { z-index:2; }
+  .char-shell:nth-child(4) { z-index:1; }
+  .char-shell:hover { z-index:10; }   /* a picked-up card tops the hand */
+  .char-card { position:relative; display:block; width:100%; height:100%;
+               border:none; padding:0; cursor:pointer; text-align:left;
+               /* 6px — the page's plate radius (hero/working/invite),
+                  not a bespoke one (QA 2026-08-29) */
+               background:var(--graphite); border-radius:6px; overflow:hidden;
+               transform:skewX(calc(-1 * var(--slant))); transform-origin:0 100%;
+               box-shadow:14px 10px 22px rgba(5,4,3,.28);
+               transition:transform .2s ease-out; }
+  .char-card:hover { transform:skewX(calc(-1 * var(--slant))) translateY(-8px); }
+  /* counter-skew layer (same origin — a true inverse): everything inside
+     is page-upright. Extends 67px right so art reaches the card's
+     top-right overhang; the card's overflow clips it to the shape. */
+  .char-tilt { position:absolute; inset:0 -67px 0 0;
+               transform:skewX(var(--slant)); transform-origin:0 100%; }
+  /* greyscale-at-rest lives on the art layer only — name stays crisp;
+     hover recolors and zooms the art inside the fixed frame */
+  .char-art { position:absolute; inset:0; background-size:cover; background-position:center;
+              filter:saturate(0); transition:filter .2s ease-out, transform .2s ease-out; }
+  .char-card:hover .char-art { filter:saturate(1); transform:scale(1.05); }
+  /* 89px = the leaning left edge's 67px top inset + 22px pad */
+  .char-name { position:absolute; top:28px; left:89px; right:28px;
+               font-family:var(--nav); font-size:24px; font-weight:400; color:var(--smoke);
+               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* the create card is a GHOST — knocked-out skin (graphite @ 25%), and
+     no shadow: a card that isn't real yet shouldn't cast one (and a
+     shadow behind a translucent face reads as dirt, not depth) */
+  .char-create .char-card { background:rgba(55,50,47,.25); box-shadow:none; }
+  .char-create-inner { position:absolute; inset:0; display:flex; flex-direction:column;
+                       align-items:center; justify-content:center; gap:14px; opacity:.5;
+                       transition:opacity .2s, transform .2s; }
+  .char-card:hover .char-create-inner { opacity:.8; transform:scale(1.05); }
+  .char-create-inner .plus { font-size:72px; color:var(--smoke); line-height:1; }
+  .char-create-inner h4 { font-family:var(--nav); font-size:24px; font-weight:400;
+                          color:var(--smoke); text-align:center; padding:0 20px; }
+
+  /* ── footer ─────────────────────────────────────────────── */
+  footer { border-top:1px solid #e2ddd6; }
+  .foot { max-width:1410px; margin:0 auto; padding:22px 24px; display:flex;
+          justify-content:space-between; align-items:center; font-size:12.5px; color:#8b857c; }
+  .foot .fm { font-family:var(--sans); font-weight:700; color:var(--carbon); font-size:15px; }
+  .foot .fm span { color:#8b857c; font-weight:500; }
+  .foot nav { display:flex; gap:22px; }
+  .foot a { color:#6d675f; text-decoration:none; }
+
+  /* ── mock controls ──────────────────────────────────────── */
+  .controls { position:fixed; right:18px; bottom:18px; background:var(--onyx); color:var(--silver);
+              border:1px solid #3a352f; border-radius:10px; padding:12px 14px; font-size:12px;
+              box-shadow:0 10px 26px rgba(0,0,0,.4); z-index:50; }
+  .controls .lbl { font-size:10px; letter-spacing:.14em; color:#7d776f; margin-bottom:8px; }
+  .controls .row { display:flex; align-items:center; gap:8px; }
+  .controls button { background:#221f1b; color:var(--silver); border:1px solid #3a352f;
+                     border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer; }
+  .controls button.active { background:var(--gold); color:#241c08; border-color:var(--gold); font-weight:600; }
+  .controls label { display:flex; gap:6px; align-items:center; margin-top:10px; cursor:pointer; }
+</style>
+</head>
+<body data-pulse="quiet">
+
+<header class="top">
+  <div class="top-bar">
+    <a class="wordmark" href="#" title="Dashboard" style="text-decoration:none">TABLETOP<span>TAVERN</span></a>
+    <div class="top-icons">
+      <!-- order (2026-08-29): social first, then the app-select beside
+           the user chip — the google-style pairing -->
+      <div class="icon-btn" title="Social">
+        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        <span class="badge">2</span>
+      </div>
+      <div class="launcher-wrap">
+        <div class="icon-btn" title="Apps" onclick="toggleLauncher(event)">
+          <!-- 9-dot app-select -->
+          <svg viewBox="0 0 24 24"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg>
+        </div>
+        <div class="launcher-panel" id="appLauncher">
+          <div class="launcher-grid">
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><path d="M6 21V3.5M6 4h12l-3 3.5 3 3.5H6"/></svg>
+              <span>Campaigns</span>
+            </a>
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 19.5c.8-3.6 3.4-5.4 6.5-5.4s5.7 1.8 6.5 5.4"/></svg>
+              <span>Characters</span>
+            </a>
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><path d="M5 4.5v15M10 4.5v15M14.5 5.5l4.5 13.5M3.5 19.5h17"/></svg>
+              <span>Library</span>
+            </a>
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><path d="M4.5 9.5L6 4.5h12l1.5 5M4.5 9.5h15M6.5 9.5V19h11V9.5M10 19v-5h4v5"/></svg>
+              <span>Market</span>
+            </a>
+          </div>
+          <div class="launcher-section">
+            <h5>Workshop</h5>
+            <a class="launcher-item" href="#"><span class="pip"></span>Map Config</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>Image Editor</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>Audio Workstation</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>NPC Barracks</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>Scene Builder</a>
+          </div>
+        </div>
+      </div>
+      <div class="user-wrap">
+        <button class="user-chip" onclick="toggleUserMenu(event)">
+          <span class="user-name">Matt</span>
+          <span class="avatar-coin">M</span>
+        </button>
+        <div class="user-menu" id="userMenu">
+          <div class="user-menu-item">Account</div>
+          <div class="user-menu-item signout">Sign out</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="greeting">
+    <h1>Welcome back, Matt</h1>
+    <div class="subhead-row">
+      <div class="tagline">Baldric still hasn't forgiven you for that critical fail in Coriolis last Thursday.</div>
+      <div class="clock-block">
+        <span class="clock-date" id="clockDate"></span>
+        <span class="clock-sep">·</span>
+        <span class="clock" id="clock">–:––</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- hero + invite stack -->
+  <section class="hero">
+    <div class="hero-deck" id="heroDeck">
+    <div class="hero-frame">
+      <div class="hero-art"></div>
+      <div class="hero-panel"></div>
+    </div>
+    <div class="hero-content">
+      <div class="hero-meta">
+        <span class="chip"><span>Game Master</span></span>
+        <span id="heroStatus"><span class="live-dot"></span>Session live &middot; 3 players at the table</span>
+      </div>
+      <h2>Coriolis</h2>
+      <div class="hero-desc">The Third Horizon calls. Explore the ruins of the Portal Builders and
+        navigate the tense politics of Coriolis station.</div>
+    </div>
+    <div class="hero-actions">
+      <!-- role-conditional (2026-08-29): MANAGE CHARACTER is the player's
+           button, as NOTES/INVITE PLAYER/START SESSION are the GM's — the
+           mock shows the combined row; the build renders per role -->
+      <button class="btn btn-ghost"><span>MANAGE CHARACTER</span></button>
+      <button class="btn btn-ghost"><span>NOTES</span></button>
+      <button class="btn btn-ghost"><span>INVITE PLAYER</span></button>
+      <button class="btn btn-gold" id="heroCta"><span>ENTER SESSION →</span></button>
+    </div>
+    </div>
+
+    <div class="invite" id="inviteCard">
+      <div class="invite-plate">
+      <div class="invite-art"></div>
+      <div class="invite-body">
+        <div class="invite-default">
+          <div class="eyebrow">CAMPAIGN INVITE</div>
+          <h3>Blackwater Reach</h3>
+          <div class="from">SarahTheDM invited you to this campaign</div>
+          <div class="invite-actions">
+            <button class="btn btn-gold" onclick="acceptInvite()"><span>ACCEPT</span></button>
+            <button class="btn btn-ghost" onclick="startDecline()"><span>DECLINE</span></button>
+          </div>
+        </div>
+        <div class="invite-confirm">
+          <div class="eyebrow">CAMPAIGN INVITE</div>
+          <h3>Blackwater Reach</h3>
+          <p>Decline this invite? SarahTheDM would need to invite you again.</p>
+          <div class="invite-actions">
+            <button class="btn btn-danger" onclick="confirmDecline()"><span>YES, DECLINE</span></button>
+            <button class="btn btn-ghost" onclick="cancelDecline()"><span>KEEP IT</span></button>
+          </div>
+        </div>
+      </div>
+      </div>
+      <div class="invite-alert" aria-hidden="true">!</div>
+    </div>
+  </section>
+
+  <!-- pulse divider — the edge of the table -->
+  <div class="pulse-divider">
+    <div class="pulse-dot"></div>
+    <div class="pulse-coins" id="pulseCoins" data-count="0">
+      <div class="coin c1">S</div><div class="coin c2">G</div><div class="coin c3">V</div>
+    </div>
+    <div class="pulse-items" id="pulseItems"></div>
+    <div class="rule"></div>
+  </div>
+
+  <div class="grid">
+    <!-- 2/5: news noticeboard, spanning the full column height -->
+    <div>
+      <div class="stack grow">
+        <div class="section-head">
+          <h3>Updates<span class="new-chip" id="newChip"><span>NEW!</span></span></h3>
+        </div>
+        <section class="news">
+        <div class="news-art"></div>
+        <div class="news-date-row">
+          <span class="news-date">28 AUG 2026</span>
+          <button class="like-btn" id="likeBtn" onclick="toggleLike()">
+            <svg viewBox="0 0 24 24"><path d="M12 20.5C12 20.5 4.5 15.4 4.5 10.1 4.5 7.4 6.5 5.5 8.8 5.5c1.4 0 2.6.7 3.2 1.9.6-1.2 1.8-1.9 3.2-1.9 2.3 0 4.3 1.9 4.3 4.6 0 5.3-7.5 10.4-7.5 10.4z"/></svg>
+            <span id="likeCount">12</span>
+          </button>
+        </div>
+        <h4>Weather effects arrive in the Workshop</h4>
+        <p>Bring your maps to life with our new dynamic weather system. Add rain, snow, fog and
+           lightning directly to your scenes, with customizable intensity and direction —
+           then save the mood as a preset and recall it mid-session.</p>
+        <a class="link-gold" href="#" onclick="markNewsRead()">READ MORE →</a>
+        <div class="news-art bottom"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 3/5: continue building + featured, stacked -->
+    <div>
+      <div class="stack">
+        <div class="section-head">
+          <h3>Continue building</h3>
+        </div>
+        <section class="card working cut">
+        <div class="working-art"></div>
+        <div class="working-content">
+          <div class="working-head">
+            <h4>Shinfukyo</h4>
+            <span class="muted">Last edited 2 hours ago</span>
+          </div>
+          <div class="note">World building notes for the eastern provinces and preliminary NPC
+            stat blocks for the Shogun's guard.</div>
+          <div class="working-actions">
+            <button class="work-btn"><span>ASSETS</span></button>
+            <button class="work-btn"><span>WORKSHOP</span></button>
+            <button class="work-btn"><span>CAMPAIGN EDITOR</span></button>
+          </div>
+        </div>
+        </section>
+      </div>
+
+      <div class="stack push">
+        <div class="section-head">
+          <h3>Featured from the Market</h3>
+        </div>
+        <section class="card featured">
+        <div class="featured-inner">
+          <div class="cover">
+            <div class="cover-art"><span>THE<br>SALT ROAD</span></div>
+            <div class="shelf"></div>
+          </div>
+          <div class="featured-meta">
+            <h4>The Salt Road</h4>
+            <div class="by">by Marrow</div>
+            <p>A grueling hex-crawl survival campaign set in the unforgiving Ash Wastes. Includes
+               40+ custom encounters, new survival mechanics, and hand-drawn maps of the
+               treacherous trade routes.</p>
+            <a class="link-gold" href="#">VIEW IN MARKET →</a>
+          </div>
+        </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- characters strip — mirrors the Characters tab (18°, its own component) -->
+  <div class="stack char-row">
+    <div class="section-head">
+      <h3>Your characters</h3>
+    </div>
+    <div class="char-hand">
+      <div class="char-shell">
+        <button class="char-card">
+          <div class="char-tilt">
+            <div class="char-art" style="background-image:
+              linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+              radial-gradient(90% 70% at 55% 30%, #7a5a3a 0%, rgba(122,90,58,0) 60%),
+              linear-gradient(150deg, #2a2018 10%, #4a3826 60%, #241a10)"></div>
+            <h3 class="char-name">Baldric</h3>
+          </div>
+        </button>
+      </div>
+      <div class="char-shell">
+        <button class="char-card">
+          <div class="char-tilt">
+            <div class="char-art" style="background-image:
+              linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+              radial-gradient(90% 70% at 50% 28%, #3a6a5a 0%, rgba(58,106,90,0) 60%),
+              linear-gradient(150deg, #14201b 10%, #26443a 60%, #101a15)"></div>
+            <h3 class="char-name">Wren</h3>
+          </div>
+        </button>
+      </div>
+      <div class="char-shell" id="charShell3">
+        <button class="char-card">
+          <div class="char-tilt">
+            <div class="char-art" style="background-image:
+              linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+              radial-gradient(90% 70% at 52% 30%, #5a4a7a 0%, rgba(90,74,122,0) 60%),
+              linear-gradient(150deg, #1a1624 10%, #362c4e 60%, #131020)"></div>
+            <h3 class="char-name">Kazimir</h3>
+          </div>
+        </button>
+      </div>
+      <div class="char-shell char-create">
+        <button class="char-card">
+          <div class="char-tilt">
+            <div class="char-create-inner">
+              <div class="plus">+</div>
+              <h4>Create New<br>Character</h4>
+            </div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="foot">
+    <div class="fm">TABLETOP<span>TAVERN</span></div>
+    <nav><a href="#">Privacy Policy</a><a href="#">Terms of Service</a>
+         <a href="#">Help Center</a><a href="#">Community Guidelines</a></nav>
+    <div>© 2026 Tabletop Tavern</div>
+  </div>
+</footer>
+
+<div class="controls">
+  <div class="lbl">MOCK CONTROLS</div>
+  <div class="row">
+    <span>Activity</span>
+    <input type="range" id="activity" min="0" max="100" value="10"
+           style="accent-color:#D9A441; width:130px" oninput="applyActivity(+this.value)">
+  </div>
+  <label><input type="checkbox" id="liveToggle" onchange="setLive(this.checked)"> A session is live</label>
+  <label><input type="checkbox" id="inviteToggle" onchange="toggleInvite(this.checked)"> Invite waiting</label>
+  <div class="row" style="margin-top:10px">
+    <span>Characters</span>
+    <button id="chars2" onclick="setCharCount(2)">2</button>
+    <button id="chars3" class="active" onclick="setCharCount(3)">3</button>
+  </div>
+</div>
+
+<script>
+  /* ── Pulse: the dimmer ─────────────────────────────────────
+     Busy-ness is a CONTINUOUS dial, not modes. Activity (0–100, from the
+     weighted signals) drives breath rate, coin count, and event cadence —
+     all interpolated. A live session is not a state: it is content (the
+     sticky gold pill) AND a contributor to activity (it raises the floor).
+     The ticker never stops because a game is live. */
+  const AMBIENT = [
+    'Grimble just sat down', 'VargTheBard is editing their character',
+    'SarahTheDM is writing notes', '3 of 5 at the table',
+    'GM started “Tavern Ambience”', 'SarahTheDM is online',
+  ];
+  const CALM_MSG = 'All quiet in the tavern · next game Saturday, 8pm';
+  const MAX_ITEMS = 4;   // hard cap; the real cap is available width (see below)
+  let emitTimer = null, poolIndex = 0, activityValue = 10, sessionLive = false;
+  let livePill = null;
+  const itemsEl = document.getElementById('pulseItems');
+  const coinsEl = document.getElementById('pulseCoins');
+
+  function emitItem(text, animate) {
+    // FLIP: capture where existing items sit, so they visibly slide right
+    const olds = [...itemsEl.children].map(el => [el, el.getBoundingClientRect().left]);
+    const item = document.createElement('span');
+    item.className = 'pulse-item';
+    item.innerHTML = '<span class="pill-shape"><span>' + text + '</span></span>';
+    if (animate) { item.style.opacity = '0'; item.style.transform = 'translateX(-16px)'; }
+    // ambient events enter beside the dot — but never ahead of a live pill
+    const anchor = (livePill && livePill.isConnected) ? livePill.nextSibling : itemsEl.firstChild;
+    itemsEl.insertBefore(item, anchor);
+    // width-aware cap: drop tail events until the line fits (never the
+    // live pill). The +10px slack absorbs the skewed pill-shapes'
+    // transform overhang (~3px past their layout box), which counts into
+    // scrollWidth — without it every emit read as overflow and drained
+    // the line to a single pill (regression caught 2026-08-29 after the
+    // pills took the 8° skew).
+    while ((itemsEl.children.length > MAX_ITEMS ||
+            itemsEl.scrollWidth > itemsEl.clientWidth + 10) && itemsEl.children.length > 1) {
+      if (itemsEl.lastChild === livePill) break;
+      itemsEl.lastChild.remove();
+    }
+    if (!animate) return;
+    for (const [el, oldLeft] of olds) {
+      if (!el.isConnected) continue;
+      const delta = oldLeft - el.getBoundingClientRect().left;
+      if (delta) {
+        el.style.transition = 'none';
+        el.style.transform = `translateX(${delta}px)`;
+      }
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      item.style.opacity = ''; item.style.transform = '';
+      for (const [el] of olds) {
+        if (el.isConnected) { el.style.transition = ''; el.style.transform = ''; }
+      }
+    }));
+  }
+
+  function applyActivity(value) {
+    activityValue = value;
+    // a live session IS activity: it raises the floor of the dial
+    const effective = sessionLive ? Math.max(value, 65) : value;
+    // breath: 4s at rest → 0.9s flat out; coins: presence grows with the room
+    const breathSeconds = 4 - (effective / 100) * 3.1;
+    document.documentElement.style.setProperty('--breath', breathSeconds.toFixed(2) + 's');
+    coinsEl.dataset.count = effective >= 70 ? 3 : effective >= 45 ? 2 : effective >= 20 ? 1 : 0;
+    clearInterval(emitTimer);
+    if (effective >= 15) {
+      const intervalMs = 9000 - ((effective - 15) / 85) * 6500;
+      emitTimer = setInterval(() => {
+        emitItem(AMBIENT[poolIndex++ % AMBIENT.length], true);
+      }, intervalMs);
+    }
+  }
+
+  /* the hero is wired to the same flag (2026-08-29): live → green dot +
+     ENTER SESSION; not live → quiet status + START SESSION. This is the
+     GM perspective — a player would see Join (live) / Waiting for GM
+     (not live), per the 01 plan's session-state mapping. */
+  function syncHero(live) {
+    const heroStatus = document.getElementById('heroStatus');
+    const heroCta = document.getElementById('heroCta');
+    if (live) {
+      heroStatus.innerHTML = '<span class="live-dot"></span>Session live · 3 players at the table';
+      heroCta.innerHTML = '<span>ENTER SESSION</span>';
+    } else {
+      heroStatus.innerHTML = 'Next session · Saturday 29th August, 8pm';
+      heroCta.innerHTML = '<span>START SESSION</span>';
+    }
+    heroCta.classList.toggle('live', live);   // rotating green glow ring
+  }
+
+  function setLive(on) {
+    sessionLive = on;
+    syncHero(on);
+    if (on && !livePill) {
+      livePill = document.createElement('span');
+      livePill.className = 'pulse-item live-pill';
+      livePill.innerHTML = '<span class="live-shape"><span>Coriolis is live · 3 at the table</span><button class="join">JOIN</button></span>';
+      livePill.style.opacity = '0'; livePill.style.transform = 'translateX(-16px)';
+      itemsEl.prepend(livePill);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        livePill.style.opacity = ''; livePill.style.transform = '';
+      }));
+    } else if (!on && livePill) {
+      livePill.remove(); livePill = null;
+    }
+    applyActivity(activityValue);
+  }
+
+  emitItem(CALM_MSG, false);
+  applyActivity(activityValue);
+  syncHero(false);   // checkbox starts unchecked — hero starts not-live
+
+  /* page clock — 12-hour h:MM AM/PM; the colon blinks with the seconds;
+     full date beneath ("Saturday 29th August") */
+  function ordinalSuffix(dayOfMonth) {
+    if (dayOfMonth >= 11 && dayOfMonth <= 13) return 'th';
+    switch (dayOfMonth % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  }
+  function tickClock() {
+    const now = new Date();
+    let clockHours = now.getHours() % 12;
+    if (clockHours === 0) clockHours = 12;
+    const clockMinutes = String(now.getMinutes()).padStart(2, '0');
+    const meridiem = now.getHours() < 12 ? 'AM' : 'PM';
+    const colonDim = now.getSeconds() % 2 === 1;
+    document.getElementById('clock').innerHTML =
+      clockHours + '<span class="colon' + (colonDim ? ' dim' : '') + '">:</span>' + clockMinutes + ' ' + meridiem;
+    document.getElementById('clockDate').textContent =
+      now.toLocaleDateString([], { weekday: 'long' }) + ' ' +
+      now.getDate() + ordinalSuffix(now.getDate()) + ' ' +
+      now.toLocaleDateString([], { month: 'long' });
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ── Invite stack: tucked under the hero at rest; clicking the peeking
+     band runs the switcheroo — the two cards trade places exactly.
+     Clicking the tucked HERO's band swaps them back (symmetric).
+     Accept = one tap; decline = two-step in-card confirm. ── */
+  const inviteCard = document.getElementById('inviteCard');
+  const heroDeck = document.getElementById('heroDeck');
+  function toggleInvite(show) {
+    inviteCard.classList.remove('leaving', 'confirming');
+    document.body.classList.remove('invite-promoted');
+    document.body.classList.toggle('show-invite', show);
+  }
+  inviteCard.addEventListener('click', (clickEvent) => {
+    if (clickEvent.target.closest('button')) return;
+    if (!document.body.classList.contains('invite-promoted')) {
+      document.body.classList.add('invite-promoted');
+    }
+  });
+  heroDeck.addEventListener('click', () => {
+    if (document.body.classList.contains('invite-promoted')) {
+      inviteCard.classList.remove('confirming');   /* demote resets a mid-decline face */
+      document.body.classList.remove('invite-promoted');
+    }
+  });
+  /* ── characters strip: card size is FIXED by the 4-shell fill rule —
+     dropping to 2 characters leaves the trailing stride empty ── */
+  function setCharCount(count) {
+    document.getElementById('charShell3').style.display = count === 3 ? '' : 'none';
+    document.getElementById('chars2').classList.toggle('active', count === 2);
+    document.getElementById('chars3').classList.toggle('active', count === 3);
+  }
+  setCharCount(2);   // start on the 2-character state (under review 2026-08-29)
+  /* ── news likes + read state — like = the counter itself (toggle,
+     ±1); NEW! chip clears on READ MORE (simulated read). Real build:
+     news_post_likes table + toggle endpoint; per-user read receipt
+     (a minimal slice of stage-2 PR 4 pulled forward). ── */
+  let newsLiked = false;
+  function toggleLike() {
+    newsLiked = !newsLiked;
+    document.getElementById('likeBtn').classList.toggle('liked', newsLiked);
+    document.getElementById('likeCount').textContent = newsLiked ? '13' : '12';
+  }
+  function markNewsRead() {
+    document.getElementById('newChip').style.display = 'none';
+  }
+
+  /* ── user chip menu + app-select launcher (chrome dropdowns) —
+     mutually exclusive; any outside click closes both ── */
+  function toggleUserMenu(clickEvent) {
+    clickEvent.stopPropagation();
+    document.getElementById('appLauncher').classList.remove('open');
+    document.getElementById('userMenu').classList.toggle('open');
+  }
+  function toggleLauncher(clickEvent) {
+    clickEvent.stopPropagation();
+    document.getElementById('userMenu').classList.remove('open');
+    document.getElementById('appLauncher').classList.toggle('open');
+  }
+  document.addEventListener('click', () => {
+    document.getElementById('userMenu').classList.remove('open');
+    document.getElementById('appLauncher').classList.remove('open');
+  });
+
+  function acceptInvite() { dismissInvite(); }
+  function startDecline() { inviteCard.classList.add('confirming'); }
+  function cancelDecline() { inviteCard.classList.remove('confirming'); }
+  function confirmDecline() { dismissInvite(); }
+  function dismissInvite() {
+    /* invite-promoted drops NOW so the hero slides home beneath the
+       lifting invite — the .leaving rule holds the invite's exit
+       transform on its own */
+    inviteCard.classList.add('leaving');
+    document.body.classList.remove('invite-promoted');
+    setTimeout(() => {
+      document.body.classList.remove('show-invite');
+      inviteCard.classList.remove('leaving');
+      document.getElementById('inviteToggle').checked = false;
+    }, 380);
+  }
+</script>
+</body>
+</html>

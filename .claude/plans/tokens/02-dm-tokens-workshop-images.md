@@ -182,7 +182,7 @@ Every PR: GPL headers on new files, autogenerate-only migrations ([[feedback_ale
 
 ## 8. Relationship to the MediaSource/MediaAsset split
 
-[TODO-media-source-asset-split.md](../TODO-media-source-asset-split.md) (instances referencing raw media; config lives only on the per-campaign instance) is not a conflict with this plan; it retroactively improves it (noted 2026-07-23):
+[media-source-asset-split.md](../home/media-source-asset-split.md) (moved into the home epic 2026-08-28 as a Market prerequisite; instances referencing raw media; config lives only on the per-campaign instance) is not a conflict with this plan; it retroactively improves it (noted 2026-07-23):
 
 - `token_config` and `focal_areas` are ordinary asset config: at split time they fold into the alias `config` JSONB exactly like the `grid_*` columns, `fog_config`, and `visual_overlays`/`motion`. Nothing in this plan's storage shape resists the fold.
 - **Decision 22's accepted caveat dissolves.** Today campaigns sharing a map share its authored token baseline (as they share fog/grid). Under the split, each campaign's map alias carries its own baseline, so campaign B can never collide with campaign A. The same applies to focal areas: they become per-instance, so two campaigns may crop the same art differently — a feature under "config on the instance", not drift.
