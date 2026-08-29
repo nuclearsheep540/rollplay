@@ -6,6 +6,15 @@
   fonts here are stand-ins for the app's display face; all artwork is CSS-gradient placeholder.
 
   What this mock is FOR (the interaction contract):
+    - Chrome (2026-08-29): the tab bar is RETIRED — a google-style app-select
+      launcher (9-dot button in the top bar) replaces it. Panel: 2×2 icon grid of
+      the high-level surfaces [Campaigns, Characters, Library, Market], then a
+      WORKSHOP section — header + tool line items [Map Config, Image Editor, Audio
+      Workstation, NPC Barracks, Scene Builder] — which REPLACES the workshop index
+      view (Workshop is a real destination — an index of media-type tools for GMs —
+      but not a top-level tab for every user). Top bar: wordmark · launcher ·
+      social · account. Metamorphous + the diamond motif carry the old nav's
+      identity into the panel (diamonds become line-item pips)
     - Page composition: greeting+tagline / hero / pulse divider (full-width) / two columns:
       news (2/5, left, full column height) + right 3/5 stacking continue-building over
       featured (low-profile). The working card is HERO-HEIGHT (2026-08-29) and featured
@@ -133,7 +142,8 @@
   body { background:var(--smoke); color:var(--carbon); font-family:var(--sans);
          overflow-x:clip; }
 
-  /* ── chrome — mirrors SiteHeader.js + TabNav.js ─────────── */
+  /* ── chrome — SiteHeader.js only; TabNav RETIRED (2026-08-29) in
+     favour of the app-select launcher below ─────────────────── */
   header.top { background:var(--carbon); border-bottom:1px solid rgba(55,50,47,.25); }
   .top-bar { max-width:1410px; margin:0 auto; padding:16px 40px;
              display:flex; align-items:center; justify-content:space-between; }
@@ -168,19 +178,43 @@
   .avatar-coin { width:32px; height:32px; border-radius:50%; background:var(--gold);
                  color:var(--onyx); display:grid; place-items:center;
                  font-family:var(--sans); font-size:14px; font-weight:700; }
-  /* TabNav: full-bleed carbon panel; equal-width slots; Metamorphous labels;
-     diamond pips straddling the panel's bottom edge (hollow = inactive —
-     on Home no tab is active, so all five stay hollow) */
-  .tabs-panel { background:var(--carbon); }
-  .tabs-inner { max-width:1410px; margin:0 auto; padding:12px 24px 0; display:flex; }
-  .tab-slot { flex:1; display:flex; flex-direction:column; align-items:center;
-              cursor:pointer; text-decoration:none; }
-  .tab-slot span { font-family:var(--nav); font-size:20px; text-transform:uppercase;
-                   color:var(--silver); opacity:.85; -webkit-text-stroke:.4px var(--silver);
-                   transition:opacity .2s; }
-  .tab-slot:hover span { opacity:1; }
-  .tab-slot svg { display:block; position:relative; transform:translateY(9px);
-                  margin-top:-2px; }
+  /* app-select launcher (2026-08-29) — REPLACES TabNav entirely: the
+     tab bar is retired and navigation moves into a google-style
+     launcher panel behind a 9-dot button. Chrome dropdowns stay level
+     (no slant), same skin as the user menu. The Metamorphous face and
+     the diamond motif carry the old nav's identity into the panel. */
+  .launcher-wrap { position:relative; }
+  .launcher-panel { display:none; position:absolute; top:calc(100% + 14px); right:-8px;
+                    z-index:40; width:324px; background:var(--carbon);
+                    border:1px solid #3a352f; border-radius:10px; padding:14px;
+                    box-shadow:0 14px 34px rgba(0,0,0,.45); }
+  .launcher-panel.open { display:block; }
+  /* 2×2 icon grid — the high-level surfaces */
+  .launcher-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .launcher-tile { display:flex; flex-direction:column; align-items:center; gap:9px;
+                   padding:16px 10px 13px; border-radius:8px; color:var(--silver);
+                   text-decoration:none; transition:background .15s, color .15s; }
+  .launcher-tile:hover { background:rgba(247,244,243,.07); color:var(--smoke); }
+  .launcher-tile svg { width:26px; height:26px; stroke:currentColor; fill:none;
+                       stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }
+  .launcher-tile span { font-family:var(--nav); font-size:13px; text-transform:uppercase;
+                        letter-spacing:.04em; }
+  /* Workshop section — the workshop INDEX lives here now: a header +
+     tool line items (tools are media-type-scoped, GM-facing — a real
+     destination set, but not a top-level tab for every user) */
+  .launcher-section { margin-top:12px; padding-top:12px;
+                      border-top:1px solid rgba(58,53,47,.8); }
+  .launcher-section h5 { font-family:var(--sans); font-size:11px; font-weight:600;
+                         letter-spacing:.14em; text-transform:uppercase;
+                         color:var(--gold); padding:2px 10px 8px; }
+  .launcher-item { display:flex; align-items:center; gap:10px; padding:9px 10px;
+                   border-radius:6px; font-size:13.5px; color:var(--smoke);
+                   text-decoration:none; transition:background .15s; }
+  .launcher-item:hover { background:rgba(247,244,243,.07); }
+  /* the nav diamonds live on as line-item pips */
+  .launcher-item .pip { width:7px; height:7px; background:var(--silver);
+                        transform:rotate(45deg); flex:0 0 auto; opacity:.7; }
+  .launcher-item:hover .pip { background:var(--gold); opacity:1; }
 
   /* ── page ───────────────────────────────────────────────── */
   main { max-width:1410px; margin:0 auto; padding:38px 24px 60px; }
@@ -693,6 +727,40 @@
   <div class="top-bar">
     <a class="wordmark" href="#" title="Dashboard" style="text-decoration:none">TABLETOP<span>TAVERN</span></a>
     <div class="top-icons">
+      <div class="launcher-wrap">
+        <div class="icon-btn" title="Apps" onclick="toggleLauncher(event)">
+          <!-- 9-dot app-select -->
+          <svg viewBox="0 0 24 24"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg>
+        </div>
+        <div class="launcher-panel" id="appLauncher">
+          <div class="launcher-grid">
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><path d="M6 21V3.5M6 4h12l-3 3.5 3 3.5H6"/></svg>
+              <span>Campaigns</span>
+            </a>
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 19.5c.8-3.6 3.4-5.4 6.5-5.4s5.7 1.8 6.5 5.4"/></svg>
+              <span>Characters</span>
+            </a>
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><path d="M5 4.5v15M10 4.5v15M14.5 5.5l4.5 13.5M3.5 19.5h17"/></svg>
+              <span>Library</span>
+            </a>
+            <a class="launcher-tile" href="#">
+              <svg viewBox="0 0 24 24"><path d="M4.5 9.5L6 4.5h12l1.5 5M4.5 9.5h15M6.5 9.5V19h11V9.5M10 19v-5h4v5"/></svg>
+              <span>Market</span>
+            </a>
+          </div>
+          <div class="launcher-section">
+            <h5>Workshop</h5>
+            <a class="launcher-item" href="#"><span class="pip"></span>Map Config</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>Image Editor</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>Audio Workstation</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>NPC Barracks</a>
+            <a class="launcher-item" href="#"><span class="pip"></span>Scene Builder</a>
+          </div>
+        </div>
+      </div>
       <div class="icon-btn" title="Social">
         <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
         <span class="badge">2</span>
@@ -710,20 +778,6 @@
     </div>
   </div>
 </header>
-<nav class="tabs-panel">
-  <div class="tabs-inner">
-    <a class="tab-slot" href="#"><span>Campaigns</span>
-      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
-    <a class="tab-slot" href="#"><span>Characters</span>
-      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
-    <a class="tab-slot" href="#"><span>Library</span>
-      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
-    <a class="tab-slot" href="#"><span>Workshop</span>
-      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
-    <a class="tab-slot" href="#"><span>Market</span>
-      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
-  </div>
-</nav>
 
 <main>
   <div class="greeting">
@@ -1121,13 +1175,21 @@
     document.getElementById('chars3').classList.toggle('active', count === 3);
   }
   setCharCount(2);   // start on the 2-character state (under review 2026-08-29)
-  /* ── user chip menu (replaces avatar coin + separate logout) ── */
+  /* ── user chip menu + app-select launcher (chrome dropdowns) —
+     mutually exclusive; any outside click closes both ── */
   function toggleUserMenu(clickEvent) {
     clickEvent.stopPropagation();
+    document.getElementById('appLauncher').classList.remove('open');
     document.getElementById('userMenu').classList.toggle('open');
+  }
+  function toggleLauncher(clickEvent) {
+    clickEvent.stopPropagation();
+    document.getElementById('userMenu').classList.remove('open');
+    document.getElementById('appLauncher').classList.toggle('open');
   }
   document.addEventListener('click', () => {
     document.getElementById('userMenu').classList.remove('open');
+    document.getElementById('appLauncher').classList.remove('open');
   });
 
   function acceptInvite() { dismissInvite(); }
