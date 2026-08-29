@@ -1,5 +1,15 @@
-# TODO — Split MediaAsset into MediaSource (file) + MediaAsset (alias/instance)
+# Split MediaAsset into MediaSource (file) + MediaAsset (alias/instance)
 
+> **Moved into the home epic 2026-08-28 as a stage-4 (Market) PREREQUISITE** — formerly
+> `plans/TODO-media-source-asset-split.md`. Market is now the main driver of motivation 3:
+> acquisition creates cross-user instances over a single stored source (no S3 duplication;
+> delivery cost is CloudFront bandwidth only). The marketplace items this plan lists as out of
+> scope are exactly what [04-market.md](04-market.md) builds on top. Extract as its own PR
+> series, landed before stage 4's acquire flow. Note for then: revocation is DECIDED (04,
+> 2026-08-28) as a retroactive cascade via a `permitted` flag on `MediaSource` — an access-kill
+> independent of deletion, so it coexists with this plan's refcount gate (which keeps governing
+> hard-deletes). When extracting, add the `permitted` column to the `MediaSource` model here.
+>
 > Supersedes the earlier "campaign asset alias" sketch. This version is grounded in a code survey of
 > `modules/library` and the current lock, and reflects the design decisions taken in discussion.
 
@@ -147,7 +157,7 @@ hydrate `config` from JSONB. Add `find_assets_for_source`, `count_refs(source_id
 ### Step 6 — Data migration (Alembic, autogenerate + hand-authored data step)
 - Create `media_sources`; for each existing `media_assets` row, insert one `MediaSource` (file fields).
 - Rewrite `media_assets`: add new columns; fold subclass config → `config` JSONB.
-  - Tokens v2 ([tokens/02](tokens/02-dm-tokens-workshop-images.md), 2026-07-23) adds two more folds:
+  - Tokens v2 ([tokens/02](../tokens/02-dm-tokens-workshop-images.md), 2026-07-23) adds two more folds:
     `map_assets.token_config` (NPC baseline) and `image_assets.focal_areas` (purpose-keyed crops).
     Both become per-instance under this split — which *dissolves* tokens-v2 decision 22's
     shared-baseline caveat and simplifies its in-play guard to a single `campaign_id` check.

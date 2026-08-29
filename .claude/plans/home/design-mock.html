@@ -1,0 +1,590 @@
+<!-- Copyright (C) 2025 Matthew Davey -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  Home landing page — interactive design mock (the design contract).
+  Part of the home epic: see 00-epic.md. Pixels defer to app tokens (app/styles/colorTheme.js);
+  fonts here are stand-ins for the app's display face; all artwork is CSS-gradient placeholder.
+
+  What this mock is FOR (the interaction contract):
+    - Page composition: greeting+tagline / hero / pulse divider (full-width) / two columns:
+      news (2/5, left, full column height) + right 3/5 stacking continue-building over
+      featured (low-profile)
+    - Pulse as a LINE with a dimmer: drag the Activity dial (bottom right) — breath,
+      coins and event cadence interpolate continuously; "A session is live" adds the
+      sticky joinable pill as CONTENT (the ticker never stops)
+    - The invite stack: toggle "Invite waiting" — a hero-sized card dealt ON TOP of the
+      hero (which dims and goes inert beneath); Accept is one tap, Decline is a two-step
+      in-card confirm (nothing sent until confirmed)
+    - The news noticeboard: the page's single light card, frame-breaking art (mascot-ready)
+    - Featured: portrait shelf card, cover-forward
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tabletop Tavern — Home (design mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IM+Fell+English&family=Inter:wght@400;500;600;700&family=Metamorphous&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* app tokens — colorTheme.js */
+    --carbon:   #1F1F1F;
+    --smoke:    #F7F4F3;
+    --onyx:     #0B0A09;
+    --graphite: #37322F;
+    --silver:   #B5ADA6;
+    --gold:     #D9A441;
+    /* mock-local derivations */
+    --parchment: #FBF7EF;
+    --parchment-border: #E5DECF;
+    --chrome: #181613;
+    --breath: 4s;            /* pulse breathing period — driven by state */
+    --serif: 'IM Fell English', Georgia, serif;      /* stand-in for app display font */
+    --caps:  'Cinzel', Georgia, serif;               /* mock-only (book covers etc.) */
+    --nav:   'Metamorphous', Georgia, serif;         /* the app's REAL tab-bar face */
+    --sans:  'Inter', -apple-system, sans-serif;     /* the app's real body face */
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--smoke); color:var(--carbon); font-family:var(--sans); }
+
+  /* ── chrome — mirrors SiteHeader.js + TabNav.js ─────────── */
+  header.top { background:var(--carbon); border-bottom:1px solid rgba(55,50,47,.25); }
+  .top-bar { max-width:1410px; margin:0 auto; padding:16px 40px;
+             display:flex; align-items:center; justify-content:space-between; }
+  .wordmark { font-family:var(--sans); font-size:24px; font-weight:700; color:var(--smoke); }
+  .wordmark span { color:var(--silver); }
+  .top-icons { display:flex; align-items:center; gap:32px; }
+  .icon-btn { position:relative; display:grid; place-items:center;
+              color:var(--silver); cursor:pointer; }
+  .icon-btn svg { width:26px; height:26px; fill:currentColor; }
+  /* user chip — avatar + screen name; opens the account menu.
+     Replaces the old avatar coin + separate logout icon (misclick hazard);
+     the wordmark anchors to the dashboard, so no house icon either. */
+  .user-wrap { position:relative; }
+  .user-chip { display:flex; align-items:center; gap:10px; padding:5px 8px;
+               background:none; border:none; border-radius:8px;
+               color:var(--smoke); font-family:var(--sans); cursor:pointer; }
+  .user-chip:hover { background:rgba(247,244,243,.07); }
+  .user-chip .avatar-coin { width:28px; height:28px; font-size:13px; }
+  .user-chip .user-name { font-size:14px; font-weight:600; }
+  .user-menu { display:none; position:absolute; top:calc(100% + 10px); right:0; z-index:40;
+               min-width:170px; background:var(--carbon); border:1px solid #3a352f;
+               border-radius:10px; padding:6px; box-shadow:0 14px 34px rgba(0,0,0,.45); }
+  .user-menu.open { display:block; }
+  .user-menu-item { padding:10px 14px; border-radius:6px; font-size:13.5px; color:var(--smoke);
+                    cursor:pointer; }
+  .user-menu-item:hover { background:rgba(247,244,243,.07); }
+  .user-menu-item.signout { color:var(--silver); border-top:1px solid rgba(58,53,47,.8);
+                            border-radius:0 0 6px 6px; margin-top:4px; padding-top:12px; }
+  .badge { position:absolute; top:-5px; right:-7px; background:#b03030; color:#fff;
+           font-size:10px; font-weight:600; min-width:16px; height:16px; border-radius:8px;
+           display:grid; place-items:center; padding:0 3px; }
+  .avatar-coin { width:32px; height:32px; border-radius:50%; background:var(--gold);
+                 color:var(--onyx); display:grid; place-items:center;
+                 font-family:var(--sans); font-size:14px; font-weight:700; }
+  /* TabNav: full-bleed carbon panel; equal-width slots; Metamorphous labels;
+     diamond pips straddling the panel's bottom edge (hollow = inactive —
+     on Home no tab is active, so all five stay hollow) */
+  .tabs-panel { background:var(--carbon); }
+  .tabs-inner { max-width:1410px; margin:0 auto; padding:12px 24px 0; display:flex; }
+  .tab-slot { flex:1; display:flex; flex-direction:column; align-items:center;
+              cursor:pointer; text-decoration:none; }
+  .tab-slot span { font-family:var(--nav); font-size:20px; text-transform:uppercase;
+                   color:var(--silver); opacity:.85; -webkit-text-stroke:.4px var(--silver);
+                   transition:opacity .2s; }
+  .tab-slot:hover span { opacity:1; }
+  .tab-slot svg { display:block; position:relative; transform:translateY(9px);
+                  margin-top:-2px; }
+
+  /* ── page ───────────────────────────────────────────────── */
+  main { max-width:1410px; margin:0 auto; padding:38px 24px 60px; }
+  .greeting h1 { font-family:var(--serif); font-size:44px; font-weight:400; color:#141210; }
+  .tagline { margin-top:6px; margin-left:28px; font-size:14px; font-style:italic;
+             color:#6d675f; }
+
+  /* ── hero ───────────────────────────────────────────────── */
+  .hero { position:relative; margin-top:26px; border-radius:12px; overflow:visible;
+          min-height:300px; color:var(--smoke); }
+  .hero-art { position:absolute; inset:0; border-radius:12px; overflow:hidden;
+              background:
+                radial-gradient(120% 90% at 78% 8%, #6b4a2e 0%, rgba(107,74,46,0) 34%),
+                radial-gradient(90% 70% at 85% 30%, #24344f 0%, rgba(36,52,79,0) 55%),
+                linear-gradient(115deg, #0a0d16 20%, #131b2e 55%, #0c1020 100%); }
+  .hero-art::after { content:""; position:absolute; inset:0;
+              background:linear-gradient(100deg, rgba(8,8,10,.82) 22%, rgba(8,8,10,.25) 65%, rgba(8,8,10,.45)); }
+  .hero-content { position:relative; padding:44px 42px 38px; display:flex; flex-direction:column;
+                  gap:14px; min-height:300px; justify-content:flex-end; }
+  .hero-meta { display:flex; align-items:center; gap:12px; font-size:13px; color:#d9d4cd; }
+  .chip { border:1px solid rgba(247,244,243,.4); border-radius:5px; padding:2px 8px;
+          font-size:11px; letter-spacing:.08em; font-weight:600; }
+  .live-dot { width:8px; height:8px; border-radius:50%; background:var(--gold);
+              display:inline-block; margin-right:6px; animation:breathe 1.6s ease-in-out infinite; }
+  .hero h2 { font-family:var(--serif); font-size:52px; font-weight:400; line-height:1; }
+  .hero-desc { max-width:560px; font-size:14.5px; line-height:1.55; color:#cfc9c2; }
+  .hero-actions { position:absolute; right:38px; bottom:36px; display:flex; gap:14px; }
+
+  .btn { border-radius:8px; padding:12px 22px; font-family:var(--sans); font-size:13px;
+         font-weight:600; letter-spacing:.06em; cursor:pointer; border:none; }
+  .btn-gold { background:var(--gold); color:#241c08; }
+  .btn-gold:hover { filter:brightness(1.06); }
+  .btn-ghost { background:rgba(20,18,16,.35); color:var(--smoke);
+               border:1px solid rgba(247,244,243,.35); }
+  .btn-ghost:hover { border-color:rgba(247,244,243,.6); }
+
+  /* ── invite stack — a card ON a card ─────────────────────
+     Same dimensions as the hero, offset a few px on x/y so the under-card
+     edge shows; the hero dims and goes inert beneath it. */
+  .invite { position:absolute; inset:0; z-index:5; border-radius:12px; overflow:hidden;
+            background:var(--carbon); border:1px solid #3d3833;
+            transform:translate(12px, -12px);
+            box-shadow:0 26px 60px rgba(5,4,3,.6);
+            opacity:0; pointer-events:none; transition:opacity .35s, transform .35s; }
+  body.show-invite .invite { opacity:1; pointer-events:auto; }
+  .invite.leaving { opacity:0; transform:translate(12px, -52px); }
+  .invite-art { position:absolute; inset:0;
+                background:
+                  radial-gradient(90% 110% at 22% 0%, #3d5a45 0%, rgba(61,90,69,0) 55%),
+                  radial-gradient(80% 80% at 80% 90%, #22402c 0%, rgba(34,64,44,0) 60%),
+                  linear-gradient(115deg, #0b120d 15%, #1d3024 60%, #0b120d 100%); }
+  .invite-art::after { content:""; position:absolute; inset:0;
+                background:linear-gradient(100deg, rgba(6,10,7,.85) 25%, rgba(6,10,7,.3) 70%); }
+  .invite-body { position:relative; height:100%; display:flex; flex-direction:column;
+                 justify-content:flex-end; gap:4px; padding:38px 42px; color:var(--smoke); }
+  .invite-body .eyebrow { font-size:12px; letter-spacing:.12em; color:var(--gold); font-weight:600; }
+  .invite-body h3 { font-family:var(--serif); font-size:40px; font-weight:400; margin:4px 0 2px; }
+  .invite-body .from { font-size:14px; color:#cfc9c2; margin-bottom:18px; }
+  .invite-actions { display:flex; gap:14px; }
+  .invite-confirm { display:none; }
+  .invite.confirming .invite-default { display:none; }
+  .invite.confirming .invite-confirm { display:block; }
+  .invite-confirm p { font-size:14.5px; margin-bottom:14px; color:#d9d4cd; }
+  .btn-danger { background:#7a2f2a; color:#f3ded9; }
+  /* hero disabled while an invite sits on it */
+  .hero-art, .hero-content, .hero-actions { transition:opacity .35s, filter .35s; }
+  body.show-invite .hero-art { filter:brightness(.5) saturate(.7); }
+  body.show-invite .hero-content,
+  body.show-invite .hero-actions { opacity:.35; pointer-events:none; }
+
+  /* ── columns ────────────────────────────────────────────── */
+  .grid { display:grid; grid-template-columns:2fr 3fr; gap:26px; margin-top:26px; }
+  .grid > div { display:flex; flex-direction:column; gap:26px; }
+  @media (max-width:920px){ .grid { grid-template-columns:1fr; } }
+  .card { background:var(--carbon); border:1px solid #34302b; border-radius:12px; color:var(--smoke); }
+
+  /* working-on card — spread art, moodier than hero */
+  .working { position:relative; overflow:hidden; min-height:380px; }
+  .working-art { position:absolute; inset:0;
+                 background:
+                   radial-gradient(90% 80% at 80% 100%, #4a2c10 0%, rgba(74,44,16,0) 55%),
+                   linear-gradient(115deg, #17100a 30%, #2b1c0e 70%, #170f08 100%); }
+  .working-art::after { content:""; position:absolute; inset:0;
+                 background:linear-gradient(100deg, rgba(10,8,6,.93) 30%, rgba(10,8,6,.55)); }
+  .working-content { position:relative; padding:26px 30px 26px; display:flex;
+                     flex-direction:column; gap:10px; min-height:380px; height:100%; }
+  .card-head { display:flex; justify-content:space-between; align-items:baseline; }
+  .card-head h3 { font-family:var(--serif); font-size:24px; font-weight:400; }
+  .muted { font-size:12.5px; color:var(--silver); }
+  .eyebrow { font-size:11px; letter-spacing:.12em; color:var(--gold); font-weight:600; }
+  .working h4 { font-family:var(--serif); font-size:32px; font-weight:400; }
+  .working .note { font-size:13.5px; color:#c9c3bb; max-width:520px; line-height:1.5; }
+  .working-actions { display:flex; gap:12px; margin-top:auto; padding-top:14px; }
+  .work-btn { background:rgba(247,244,243,.06); border:1px solid rgba(247,244,243,.28);
+              color:var(--smoke); border-radius:8px; padding:10px 18px; font-size:12.5px;
+              font-weight:600; letter-spacing:.05em; cursor:pointer; }
+  .work-btn:hover { border-color:var(--gold); color:var(--gold); }
+
+  /* featured — low-profile: shelf object left, meta beside */
+  .featured { padding:22px 26px; }
+  .featured-inner { display:flex; gap:18px; margin-top:14px; }
+  .cover { flex:0 0 110px; }
+  .cover-art { width:110px; height:156px; border-radius:6px; position:relative;
+               display:grid; place-items:end center; padding-bottom:12px;
+               background:
+                 radial-gradient(90% 60% at 50% 20%, #56504a 0%, rgba(86,80,74,0) 60%),
+                 linear-gradient(160deg, #2e2b26 10%, #4a443a 55%, #26231e);
+               box-shadow:0 10px 22px rgba(5,4,3,.5); }
+  .cover-art span { font-family:var(--caps); font-size:11px; letter-spacing:.12em;
+                    color:#ded7cc; text-align:center; line-height:1.5; }
+  .shelf { width:110px; height:6px; margin-top:10px; border-radius:50%;
+           background:radial-gradient(50% 100% at 50% 50%, rgba(5,4,3,.5), rgba(5,4,3,0)); }
+  .featured-meta h4 { font-family:var(--serif); font-size:20px; font-weight:400; }
+  .featured-meta .by { font-size:12px; color:var(--silver); margin:2px 0 8px; }
+  .featured-meta p { font-size:12.5px; line-height:1.55; color:#c9c3bb; }
+  .link-gold { display:inline-block; margin-top:12px; color:var(--gold); font-size:12.5px;
+               font-weight:600; letter-spacing:.06em; text-decoration:none; }
+
+  /* ── pulse divider ──────────────────────────────────────────
+     Dot clamped hard left — the pulse SOURCE. Events emit from it and age
+     rightward (newest nearest the dot, older items dimmer), the hairline
+     rule trails off toward the page edge. */
+  .pulse-divider { display:flex; align-items:center; gap:14px; margin:30px 0 0;
+                   min-height:34px; padding-left:4px; }
+  .pulse-divider .rule { flex:1; height:1px; min-width:40px;
+                         background:linear-gradient(90deg, #D5CFC5, rgba(213,207,197,0)); }
+  .pulse-dot { width:10px; height:10px; border-radius:50%; background:var(--gold); flex:0 0 auto;
+               animation:breathe var(--breath) ease-in-out infinite; }
+  @keyframes breathe {
+    0%,100% { opacity:.35; box-shadow:0 0 0 0 rgba(217,164,65,0); }
+    50%     { opacity:1;   box-shadow:0 0 10px 2px rgba(217,164,65,.45); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-dot, .live-dot { animation:none; opacity:.85; }
+    .pulse-item { transition:none; }
+    .coin, .invite { transition:none; }
+  }
+  .pulse-coins { display:flex; flex:0 0 auto; }
+  .coin { width:26px; height:26px; border-radius:50%; border:2px solid var(--smoke);
+          margin-left:-8px; display:grid; place-items:center; font-size:11px; font-weight:600;
+          color:var(--smoke); transform:scale(0); transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
+  .coin:first-child { margin-left:0; }
+  .coin.c1 { background:#5a7a63; } .coin.c2 { background:#7a5a63; } .coin.c3 { background:#5a637a; }
+  .pulse-coins[data-count="1"] .coin.c1,
+  .pulse-coins[data-count="2"] .coin.c1, .pulse-coins[data-count="2"] .coin.c2,
+  .pulse-coins[data-count="3"] .coin { transform:scale(1); }
+  .coin.c2 { transition-delay:.08s; } .coin.c3 { transition-delay:.16s; }
+  .pulse-items { display:flex; align-items:center; gap:12px; overflow:hidden;
+                 min-width:0; white-space:nowrap; }
+  .pulse-item { flex:0 0 auto; font-size:12.5px; line-height:1.4; color:#544e46;
+                background:rgba(31,27,22,.055); border-radius:999px; padding:6px 14px;
+                transition:transform .5s cubic-bezier(.22,.9,.3,1), opacity .35s ease; }
+  .pulse-item:nth-child(2) { opacity:.68; }
+  .pulse-item:nth-child(3) { opacity:.48; }
+  .pulse-item:nth-child(4) { opacity:.34; }
+  /* a live, joinable session is CONTENT, not a mode: a sticky gold pill at the
+     head of the line, carrying its own Join action; the ticker flows behind it */
+  .pulse-item.live-pill { display:inline-flex; align-items:center; gap:10px;
+                          background:rgba(217,164,65,.18); color:#5c430f; font-weight:600; }
+  .live-pill .join { background:var(--gold); border:none; color:#241c08;
+                     border-radius:999px; padding:3px 11px; font-size:11px; font-weight:700;
+                     letter-spacing:.05em; cursor:pointer; }
+
+  /* ── news noticeboard ───────────────────────────────────── */
+  .news { margin-top:34px; flex:1; display:flex; flex-direction:column;
+          background:var(--parchment); border:1px solid var(--parchment-border);
+          border-radius:12px; box-shadow:0 8px 24px rgba(31,31,31,.08); padding:0 28px 26px; }
+  .news .link-gold { margin-top:auto; padding-top:16px; align-self:flex-start; }
+  .news-art { position:relative; margin:-26px 10px 20px; height:180px; border-radius:8px;
+              box-shadow:0 10px 22px rgba(31,31,31,.28);
+              background:
+                linear-gradient(24deg, rgba(247,244,243,0) 46%, rgba(247,244,243,.55) 49.5%, rgba(247,244,243,0) 52%),
+                radial-gradient(100% 90% at 75% 0%, #3d4a63 0%, rgba(61,74,99,0) 55%),
+                linear-gradient(120deg, #14161f 20%, #232a3d 60%, #12141c); }
+  .news-date { font-size:11px; letter-spacing:.12em; color:#9a7526; font-weight:600; }
+  .news h4 { font-family:var(--serif); font-size:24px; font-weight:400; color:#181512;
+             margin:6px 0 8px; line-height:1.2; }
+  .news p { font-size:13.5px; line-height:1.6; color:#4c463e; }
+  .news .link-gold { color:#9a7526; }
+
+  /* ── footer ─────────────────────────────────────────────── */
+  footer { border-top:1px solid #e2ddd6; }
+  .foot { max-width:1410px; margin:0 auto; padding:22px 24px; display:flex;
+          justify-content:space-between; align-items:center; font-size:12.5px; color:#8b857c; }
+  .foot .fm { font-family:var(--sans); font-weight:700; color:var(--carbon); font-size:15px; }
+  .foot .fm span { color:#8b857c; font-weight:500; }
+  .foot nav { display:flex; gap:22px; }
+  .foot a { color:#6d675f; text-decoration:none; }
+
+  /* ── mock controls ──────────────────────────────────────── */
+  .controls { position:fixed; right:18px; bottom:18px; background:var(--onyx); color:var(--silver);
+              border:1px solid #3a352f; border-radius:10px; padding:12px 14px; font-size:12px;
+              box-shadow:0 10px 26px rgba(0,0,0,.4); z-index:50; }
+  .controls .lbl { font-size:10px; letter-spacing:.14em; color:#7d776f; margin-bottom:8px; }
+  .controls .row { display:flex; align-items:center; gap:8px; }
+  .controls button { background:#221f1b; color:var(--silver); border:1px solid #3a352f;
+                     border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer; }
+  .controls button.active { background:var(--gold); color:#241c08; border-color:var(--gold); font-weight:600; }
+  .controls label { display:flex; gap:6px; align-items:center; margin-top:10px; cursor:pointer; }
+</style>
+</head>
+<body data-pulse="quiet">
+
+<header class="top">
+  <div class="top-bar">
+    <a class="wordmark" href="#" title="Dashboard" style="text-decoration:none">TABLETOP<span>TAVERN</span></a>
+    <div class="top-icons">
+      <div class="icon-btn" title="Social">
+        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        <span class="badge">2</span>
+      </div>
+      <div class="user-wrap">
+        <button class="user-chip" onclick="toggleUserMenu(event)">
+          <span class="user-name">Matt</span>
+          <span class="avatar-coin">M</span>
+        </button>
+        <div class="user-menu" id="userMenu">
+          <div class="user-menu-item">Account</div>
+          <div class="user-menu-item signout">Sign out</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+<nav class="tabs-panel">
+  <div class="tabs-inner">
+    <a class="tab-slot" href="#"><span>Campaigns</span>
+      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
+    <a class="tab-slot" href="#"><span>Characters</span>
+      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
+    <a class="tab-slot" href="#"><span>Library</span>
+      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
+    <a class="tab-slot" href="#"><span>Workshop</span>
+      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
+    <a class="tab-slot" href="#"><span>Market</span>
+      <svg width="18" height="18" viewBox="0 0 22 22"><polygon points="11,1.5 20.5,11 11,20.5 1.5,11" fill="#F7F4F3" stroke="#1F1F1F" stroke-width="3" stroke-linejoin="miter"/></svg></a>
+  </div>
+</nav>
+
+<main>
+  <div class="greeting">
+    <h1>Welcome back, Matt</h1>
+    <div class="tagline">Baldric still hasn't forgiven you for that critical fail in Coriolis last Thursday.</div>
+  </div>
+
+  <!-- hero + invite stack -->
+  <section class="hero">
+    <div class="hero-art"></div>
+    <div class="hero-content">
+      <div class="hero-meta">
+        <span class="chip">GM</span>
+        <span><span class="live-dot"></span>Session live &middot; 3 players at the table</span>
+      </div>
+      <h2>Coriolis</h2>
+      <div class="hero-desc">The Third Horizon calls. Explore the ruins of the Portal Builders and
+        navigate the tense politics of Coriolis station.</div>
+    </div>
+    <div class="hero-actions">
+      <button class="btn btn-ghost">INVITE PLAYER</button>
+      <button class="btn btn-gold">ENTER SESSION →</button>
+    </div>
+
+    <div class="invite" id="inviteCard">
+      <div class="invite-art"></div>
+      <div class="invite-body">
+        <div class="invite-default">
+          <div class="eyebrow">CAMPAIGN INVITE</div>
+          <h3>Blackwater Reach</h3>
+          <div class="from">SarahTheDM invited you to this campaign</div>
+          <div class="invite-actions">
+            <button class="btn btn-gold" onclick="acceptInvite()">ACCEPT</button>
+            <button class="btn btn-ghost" onclick="startDecline()">DECLINE</button>
+          </div>
+        </div>
+        <div class="invite-confirm">
+          <div class="eyebrow">CAMPAIGN INVITE</div>
+          <h3>Blackwater Reach</h3>
+          <p>Decline this invite? SarahTheDM would need to invite you again.</p>
+          <div class="invite-actions">
+            <button class="btn btn-danger" onclick="confirmDecline()">YES, DECLINE</button>
+            <button class="btn btn-ghost" onclick="cancelDecline()">KEEP IT</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- pulse divider — the edge of the table -->
+  <div class="pulse-divider">
+    <div class="pulse-dot"></div>
+    <div class="pulse-coins" id="pulseCoins" data-count="0">
+      <div class="coin c1">S</div><div class="coin c2">G</div><div class="coin c3">V</div>
+    </div>
+    <div class="pulse-items" id="pulseItems"></div>
+    <div class="rule"></div>
+  </div>
+
+  <div class="grid">
+    <!-- 2/5: news noticeboard, spanning the full column height -->
+    <div>
+      <section class="news">
+        <div class="news-art"></div>
+        <div class="news-date">28 AUG 2026</div>
+        <h4>Weather effects arrive in the Workshop</h4>
+        <p>Bring your maps to life with our new dynamic weather system. Add rain, snow, fog and
+           lightning directly to your scenes, with customizable intensity and direction —
+           then save the mood as a preset and recall it mid-session.</p>
+        <a class="link-gold" href="#">READ MORE →</a>
+      </section>
+    </div>
+
+    <!-- 3/5: continue building + featured, stacked -->
+    <div>
+      <section class="card working">
+        <div class="working-art"></div>
+        <div class="working-content">
+          <div class="card-head">
+            <span class="eyebrow">CONTINUE BUILDING</span>
+            <span class="muted">Last edited 2 hours ago</span>
+          </div>
+          <h4>Shinfukyo</h4>
+          <div class="note">World building notes for the eastern provinces and preliminary NPC
+            stat blocks for the Shogun's guard.</div>
+          <div class="working-actions">
+            <button class="work-btn">ASSETS</button>
+            <button class="work-btn">NOTES</button>
+            <button class="work-btn">WORKSHOP</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card featured">
+        <div class="card-head">
+          <span class="eyebrow">FEATURED FROM THE MARKET</span>
+        </div>
+        <div class="featured-inner">
+          <div class="cover">
+            <div class="cover-art"><span>THE<br>SALT ROAD</span></div>
+            <div class="shelf"></div>
+          </div>
+          <div class="featured-meta">
+            <h4>The Salt Road</h4>
+            <div class="by">by Marrow</div>
+            <p>A grueling hex-crawl survival campaign set in the unforgiving Ash Wastes. Includes
+               40+ custom encounters, new survival mechanics, and hand-drawn maps of the
+               treacherous trade routes.</p>
+            <a class="link-gold" href="#">VIEW IN MARKET →</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="foot">
+    <div class="fm">TABLETOP<span>TAVERN</span></div>
+    <nav><a href="#">Privacy Policy</a><a href="#">Terms of Service</a>
+         <a href="#">Help Center</a><a href="#">Community Guidelines</a></nav>
+    <div>© 2026 Tabletop Tavern</div>
+  </div>
+</footer>
+
+<div class="controls">
+  <div class="lbl">MOCK CONTROLS — PULSE</div>
+  <div class="row">
+    <span>Activity</span>
+    <input type="range" id="activity" min="0" max="100" value="10"
+           style="accent-color:#D9A441; width:130px" oninput="applyActivity(+this.value)">
+  </div>
+  <label><input type="checkbox" id="liveToggle" onchange="setLive(this.checked)"> A session is live</label>
+  <label><input type="checkbox" id="inviteToggle" onchange="toggleInvite(this.checked)"> Invite waiting</label>
+</div>
+
+<script>
+  /* ── Pulse: the dimmer ─────────────────────────────────────
+     Busy-ness is a CONTINUOUS dial, not modes. Activity (0–100, from the
+     weighted signals) drives breath rate, coin count, and event cadence —
+     all interpolated. A live session is not a state: it is content (the
+     sticky gold pill) AND a contributor to activity (it raises the floor).
+     The ticker never stops because a game is live. */
+  const AMBIENT = [
+    'Grimble just sat down', 'VargTheBard is editing their character',
+    'SarahTheDM is writing notes', '3 of 5 at the table',
+    'GM started “Tavern Ambience”', 'SarahTheDM is online',
+  ];
+  const CALM_MSG = 'All quiet in the tavern · next game Thursday, 20:00';
+  const MAX_ITEMS = 4;   // hard cap; the real cap is available width (see below)
+  let emitTimer = null, poolIndex = 0, activityValue = 10, sessionLive = false;
+  let livePill = null;
+  const itemsEl = document.getElementById('pulseItems');
+  const coinsEl = document.getElementById('pulseCoins');
+
+  function emitItem(text, animate) {
+    // FLIP: capture where existing items sit, so they visibly slide right
+    const olds = [...itemsEl.children].map(el => [el, el.getBoundingClientRect().left]);
+    const item = document.createElement('span');
+    item.className = 'pulse-item';
+    item.textContent = text;
+    if (animate) { item.style.opacity = '0'; item.style.transform = 'translateX(-16px)'; }
+    // ambient events enter beside the dot — but never ahead of a live pill
+    const anchor = (livePill && livePill.isConnected) ? livePill.nextSibling : itemsEl.firstChild;
+    itemsEl.insertBefore(item, anchor);
+    // width-aware cap: drop tail events until the line fits (never the live pill)
+    while ((itemsEl.children.length > MAX_ITEMS ||
+            itemsEl.scrollWidth > itemsEl.clientWidth) && itemsEl.children.length > 1) {
+      if (itemsEl.lastChild === livePill) break;
+      itemsEl.lastChild.remove();
+    }
+    if (!animate) return;
+    for (const [el, oldLeft] of olds) {
+      if (!el.isConnected) continue;
+      const delta = oldLeft - el.getBoundingClientRect().left;
+      if (delta) {
+        el.style.transition = 'none';
+        el.style.transform = `translateX(${delta}px)`;
+      }
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      item.style.opacity = ''; item.style.transform = '';
+      for (const [el] of olds) {
+        if (el.isConnected) { el.style.transition = ''; el.style.transform = ''; }
+      }
+    }));
+  }
+
+  function applyActivity(value) {
+    activityValue = value;
+    // a live session IS activity: it raises the floor of the dial
+    const effective = sessionLive ? Math.max(value, 65) : value;
+    // breath: 4s at rest → 0.9s flat out; coins: presence grows with the room
+    const breathSeconds = 4 - (effective / 100) * 3.1;
+    document.documentElement.style.setProperty('--breath', breathSeconds.toFixed(2) + 's');
+    coinsEl.dataset.count = effective >= 70 ? 3 : effective >= 45 ? 2 : effective >= 20 ? 1 : 0;
+    clearInterval(emitTimer);
+    if (effective >= 15) {
+      const intervalMs = 9000 - ((effective - 15) / 85) * 6500;
+      emitTimer = setInterval(() => {
+        emitItem(AMBIENT[poolIndex++ % AMBIENT.length], true);
+      }, intervalMs);
+    }
+  }
+
+  function setLive(on) {
+    sessionLive = on;
+    if (on && !livePill) {
+      livePill = document.createElement('span');
+      livePill.className = 'pulse-item live-pill';
+      livePill.innerHTML = 'Coriolis is live · 3 at the table <button class="join">JOIN</button>';
+      livePill.style.opacity = '0'; livePill.style.transform = 'translateX(-16px)';
+      itemsEl.prepend(livePill);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        livePill.style.opacity = ''; livePill.style.transform = '';
+      }));
+    } else if (!on && livePill) {
+      livePill.remove(); livePill = null;
+    }
+    applyActivity(activityValue);
+  }
+
+  emitItem(CALM_MSG, false);
+  applyActivity(activityValue);
+
+  /* ── Invite stack: accept = one tap; decline = two-step in-card confirm ── */
+  const inviteCard = document.getElementById('inviteCard');
+  function toggleInvite(show) {
+    inviteCard.classList.remove('leaving', 'confirming');
+    document.body.classList.toggle('show-invite', show);
+  }
+  /* ── user chip menu (replaces avatar coin + separate logout) ── */
+  function toggleUserMenu(clickEvent) {
+    clickEvent.stopPropagation();
+    document.getElementById('userMenu').classList.toggle('open');
+  }
+  document.addEventListener('click', () => {
+    document.getElementById('userMenu').classList.remove('open');
+  });
+
+  function acceptInvite() { dismissInvite(); }
+  function startDecline() { inviteCard.classList.add('confirming'); }
+  function cancelDecline() { inviteCard.classList.remove('confirming'); }
+  function confirmDecline() { dismissInvite(); }
+  function dismissInvite() {
+    inviteCard.classList.add('leaving');
+    setTimeout(() => {
+      document.body.classList.remove('show-invite');
+      document.getElementById('inviteToggle').checked = false;
+    }, 380);
+  }
+</script>
+</body>
+</html>
