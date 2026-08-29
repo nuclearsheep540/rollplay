@@ -17,7 +17,11 @@
     - The invite stack: toggle "Invite waiting" — a hero-sized card dealt ON TOP of the
       hero (which dims and goes inert beneath); Accept is one tap, Decline is a two-step
       in-card confirm (nothing sent until confirmed)
-    - The news noticeboard: the page's single light card, frame-breaking art (mascot-ready)
+    - The news noticeboard: the page's single light card, with frame-breaking BANNERS
+      (flat — no shadow): a post can enable a top banner, a bottom banner, both, or
+      neither; READ MORE always sits above the bottom banner. Both banners carry real
+      mascot art (banner-top.png / banner-bottom.png — transparent cutouts, no plate
+      behind them, overhanging the card edges)
     - Featured: portrait shelf card, cover-forward
     - Characters strip (2026-08-29): a row BELOW the grid using CharacterManager.js's
       parallelogram tiling at the PAGE's 8° dial (the tab component runs 18°; 18° read
@@ -53,7 +57,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tabletop Tavern — Home (design mock)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IM+Fell+English&family=Inter:wght@400;500;600;700&family=Metamorphous&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Inter:wght@400;500;600;700&family=Metamorphous&display=swap" rel="stylesheet">
 <style>
   :root {
     /* app tokens — colorTheme.js */
@@ -68,7 +72,6 @@
     --parchment-border: #E5DECF;
     --chrome: #181613;
     --breath: 4s;            /* pulse breathing period — driven by state */
-    --serif: 'IM Fell English', Georgia, serif;      /* stand-in for app display font */
     --caps:  'Cinzel', Georgia, serif;               /* mock-only (book covers etc.) */
     --nav:   'Metamorphous', Georgia, serif;         /* the app's REAL tab-bar face */
     --sans:  'Inter', -apple-system, sans-serif;     /* the app's real body face */
@@ -154,7 +157,22 @@
 
   /* ── page ───────────────────────────────────────────────── */
   main { max-width:1410px; margin:0 auto; padding:38px 24px 60px; }
-  .greeting h1 { font-family:var(--serif); font-size:44px; font-weight:400; color:#141210; }
+  /* greeting joins the headers on the nav face (2026-08-29); the tagline
+     below deliberately stays italic sans — the one soft voice */
+  .greeting-row { display:flex; justify-content:space-between; align-items:baseline; }
+  .greeting h1 { font-family:var(--nav); font-size:38px; font-weight:400; color:#141210; }
+  /* page clock — Inter (the functional face), weighted; tabular digits
+     so the time doesn't jitter as minutes tick */
+  .clock { font-family:var(--sans); font-size:24px; font-weight:400; color:var(--graphite);
+           font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+  /* colon blinks with the seconds (dim on odd seconds, driven by the
+     same 1s tick — a CSS animation would reset on every re-render) */
+  .clock .colon { transition:opacity .15s; }
+  .clock .colon.dim { opacity:.2; }
+  /* date · time on one line, uniform page-default weight, dot separator */
+  .clock-block { display:flex; align-items:baseline; gap:14px; }
+  .clock-date { font-size:24px; font-weight:400; color:var(--graphite); }
+  .clock-sep { font-size:24px; font-weight:400; color:var(--silver); }
   .tagline { margin-top:6px; margin-left:28px; font-size:14px; font-style:italic;
              color:#6d675f; }
 
@@ -198,7 +216,10 @@
   .live-dot { width:8px; height:8px; border-radius:50%; background:#16a34a;
               --breathe-glow:rgba(22,163,74,.5);
               display:inline-block; margin-right:6px; animation:breathe 1.6s ease-in-out infinite; }
-  .hero h2 { font-family:var(--serif); font-size:52px; font-weight:400; line-height:1; }
+  /* card headers use the app's real nav face (2026-08-29) — the chrome
+     brought Metamorphous in, so headers match it rather than adding a
+     separate display serif */
+  .hero h2 { font-family:var(--nav); font-size:44px; font-weight:400; line-height:1.1; }
   .hero-desc { max-width:460px; font-size:14.5px; line-height:1.55; color:#cfc9c2; }
   /* right offset clears the plate's leaning right face (inset ≈ 37px at
      the buttons' depth) */
@@ -242,7 +263,7 @@
   .invite-body { position:relative; height:100%; display:flex; flex-direction:column;
                  justify-content:flex-end; gap:4px; padding:38px 42px; color:var(--smoke); }
   .invite-body .eyebrow { font-size:12px; letter-spacing:.12em; color:var(--gold); font-weight:600; }
-  .invite-body h3 { font-family:var(--serif); font-size:40px; font-weight:400; margin:4px 0 2px; }
+  .invite-body h3 { font-family:var(--nav); font-size:34px; font-weight:400; margin:4px 0 2px; }
   .invite-body .from { font-size:14px; color:#cfc9c2; margin-bottom:18px; }
   .invite-actions { display:flex; gap:14px; }
   .invite-confirm { display:none; }
@@ -308,7 +329,7 @@
   /* title row spans the card, so the meta sits top-RIGHT over the art —
      campaign meta lives in the card (2026-08-29) */
   .working-head { display:flex; justify-content:space-between; align-items:baseline; }
-  .working h4 { font-family:var(--serif); font-size:32px; font-weight:400; }
+  .working h4 { font-family:var(--nav); font-size:28px; font-weight:400; }
   /* note clears the seam: content zone is ~42% of the ~800px card minus padding */
   .working .note { font-size:13.5px; color:#c9c3bb; max-width:260px; line-height:1.5; }
   /* actions tightened to fit the narrower content zone left of the seam;
@@ -339,7 +360,7 @@
                     color:#ded7cc; text-align:center; line-height:1.5; }
   .shelf { width:110px; height:6px; margin-top:10px; border-radius:50%;
            background:radial-gradient(50% 100% at 50% 50%, rgba(5,4,3,.5), rgba(5,4,3,0)); }
-  .featured-meta h4 { font-family:var(--serif); font-size:20px; font-weight:400; }
+  .featured-meta h4 { font-family:var(--nav); font-size:18px; font-weight:400; }
   .featured-meta .by { font-size:12px; color:var(--silver); margin:2px 0 8px; }
   .featured-meta p { font-size:12.5px; line-height:1.55; color:#c9c3bb; }
   .link-gold { display:inline-block; margin-top:12px; color:var(--gold); font-size:12.5px;
@@ -365,6 +386,7 @@
     .pulse-dot, .live-dot { animation:none; opacity:.85; }
     .pulse-item { transition:none; }
     .coin, .invite { transition:none; }
+    .clock .colon.dim { opacity:1; }   /* no 1Hz blink */
   }
   .pulse-coins { display:flex; flex:0 0 auto; }
   .coin { width:26px; height:26px; border-radius:50%; border:2px solid var(--smoke);
@@ -400,21 +422,34 @@
                      letter-spacing:.05em; cursor:pointer; }
 
   /* ── news noticeboard ───────────────────────────────────── */
-  /* top margin clears the frame-breaking art (rises 26px above the card)
-     so the breakout doesn't collide with the section header above */
-  .news { margin-top:26px; flex:1; display:flex; flex-direction:column;
+  /* no reserved top margin (2026-08-29): the bordered parchment box meets
+     the row top like every other card, and the top banner's -26px is REAL
+     overflow above the border — the pop. The art rises into the
+     section-head's row but never reaches its left-aligned text (art is
+     centered), and cannot reach the pulse above. */
+  .news { flex:1; display:flex; flex-direction:column;
           background:var(--parchment); border:1px solid var(--parchment-border);
           border-radius:12px; box-shadow:0 8px 24px rgba(31,31,31,.08); padding:0 28px 26px; }
   .news .link-gold { margin-top:auto; padding-top:16px; align-self:flex-start; }
-  .news-art { position:relative; margin:-26px 10px 20px; height:180px; border-radius:8px;
-              box-shadow:0 10px 22px rgba(31,31,31,.28);
-              background:
-                linear-gradient(24deg, rgba(247,244,243,0) 46%, rgba(247,244,243,.55) 49.5%, rgba(247,244,243,0) 52%),
-                radial-gradient(100% 90% at 75% 0%, #3d4a63 0%, rgba(61,74,99,0) 55%),
-                linear-gradient(120deg, #14161f 20%, #232a3d 60%, #12141c); }
+  /* banners — frame-breaking mascot art, FLAT (no shadow, no plate:
+     both PNGs are transparent cutouts standing directly on the
+     parchment and overhanging the card edges). A post can enable a top
+     banner, a bottom banner, both, or neither. The bottom banner breaks
+     out below the card edge, and the READ MORE CTA always sits above it
+     (the CTA precedes the bottom banner in the flex column, so enabling
+     the banner can never push content below it). Relative URLs work
+     beside this file in the repo; the artifact build inlines both PNGs
+     as data URIs (CSP blocks file fetches). */
+  .news-art { position:relative; margin:-26px 10px 20px; height:220px;
+              background:url(banner-top.png) center bottom / contain no-repeat; }
+  /* -52px: the card has 26px bottom padding (unlike its zero top padding),
+     so the first 26 consumes the padding and the second 26 overhangs the
+     card edge — the true mirror of the top banner's -26px */
+  .news-art.bottom { margin:20px 10px -52px; height:210px;
+              background:url(banner-bottom.png) center bottom / contain no-repeat; }
   .news-date { font-size:11px; letter-spacing:.12em; color:#9a7526; font-weight:600; }
-  .news h4 { font-family:var(--serif); font-size:24px; font-weight:400; color:#181512;
-             margin:6px 0 8px; line-height:1.2; }
+  .news h4 { font-family:var(--nav); font-size:22px; font-weight:400; color:#181512;
+             margin:6px 0 8px; line-height:1.3; }
   .news p { font-size:13.5px; line-height:1.6; color:#4c463e; }
   .news .link-gold { color:#9a7526; }
 
@@ -433,11 +468,17 @@
        fixed 72px fade tail.
      First card square-capped (no left neighbour → no seam shadow);
      create card is the strip's last member, knocked-out. */
-  .char-row { margin-top:26px; }
-  /* the strip sits in a visible tray (carbon hairline, 2026-08-29 — the
-     parchment border read too faint here) so the container reads as a
-     defined space even when the row is sparse (1–2 characters leave an
-     empty trailing stride inside it).
+  /* 26px page rhythm + 26px clearance for the updates card's bottom-banner
+     overhang. The allowance lives HERE at the full amount because sibling
+     margins collapse — a matching margin-bottom on the grid would merge
+     into one 26px and the banner would eat it (QA 2026-08-29). Conditional
+     on a bottom banner existing, in the real build. */
+  .char-row { margin-top:52px; }
+  /* the strip sits in a visible tray — hairline in the create card's
+     knocked-out skin (graphite @ 25%, 2026-08-29; carbon read too hard,
+     parchment too faint) so tray and placeholder speak one color. The
+     container reads as a defined space even when the row is sparse
+     (1–2 characters leave an empty trailing stride inside it).
      The tray is a PLATE (square left, 8° right face) — and since a real
      border would be severed by clip-path along the slant, the hairline
      is drawn as two clipped layers: this outer layer IS the border
@@ -449,7 +490,7 @@
      so the 4-shell fill lands exactly on the inner's edge (QA 2026-08-29:
      with the outer owning the aspect, the inner box came out ~3px wider
      than the strip content — a smoke sliver before the hairline). */
-  .char-strip { --run:80px; background:var(--carbon); border-radius:12px; }
+  .char-strip { --run:80px; background:rgba(55,50,47,.25); border-radius:12px; }
   .char-strip-inner { margin:1px; aspect-ratio:2.3905; display:flex; overflow:hidden;
                       background:var(--smoke); border-radius:11px; }
   .char-shell { position:relative; flex:0 0 auto; height:100%; aspect-ratio:9/16;
@@ -542,7 +583,14 @@
 
 <main>
   <div class="greeting">
-    <h1>Welcome back, Matt</h1>
+    <div class="greeting-row">
+      <h1>Welcome back, Matt</h1>
+      <div class="clock-block">
+        <span class="clock-date" id="clockDate"></span>
+        <span class="clock-sep">·</span>
+        <span class="clock" id="clock">–:––</span>
+      </div>
+    </div>
     <div class="tagline">Baldric still hasn't forgiven you for that critical fail in Coriolis last Thursday.</div>
   </div>
 
@@ -619,6 +667,7 @@
            lightning directly to your scenes, with customizable intensity and direction —
            then save the mood as a preset and recall it mid-session.</p>
         <a class="link-gold" href="#">READ MORE →</a>
+        <div class="news-art bottom"></div>
         </section>
       </div>
     </div>
@@ -856,6 +905,34 @@
   emitItem(CALM_MSG, false);
   applyActivity(activityValue);
   syncHero(false);   // checkbox starts unchecked — hero starts not-live
+
+  /* page clock — 12-hour h:MM AM/PM; the colon blinks with the seconds;
+     full date beneath ("Saturday 29th August") */
+  function ordinalSuffix(dayOfMonth) {
+    if (dayOfMonth >= 11 && dayOfMonth <= 13) return 'th';
+    switch (dayOfMonth % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  }
+  function tickClock() {
+    const now = new Date();
+    let clockHours = now.getHours() % 12;
+    if (clockHours === 0) clockHours = 12;
+    const clockMinutes = String(now.getMinutes()).padStart(2, '0');
+    const meridiem = now.getHours() < 12 ? 'AM' : 'PM';
+    const colonDim = now.getSeconds() % 2 === 1;
+    document.getElementById('clock').innerHTML =
+      clockHours + '<span class="colon' + (colonDim ? ' dim' : '') + '">:</span>' + clockMinutes + ' ' + meridiem;
+    document.getElementById('clockDate').textContent =
+      now.toLocaleDateString([], { weekday: 'long' }) + ' ' +
+      now.getDate() + ordinalSuffix(now.getDate()) + ' ' +
+      now.toLocaleDateString([], { month: 'long' });
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
 
   /* ── Invite stack: accept = one tap; decline = two-step in-card confirm ── */
   const inviteCard = document.getElementById('inviteCard');
