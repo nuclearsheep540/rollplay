@@ -8,12 +8,19 @@
   What this mock is FOR (the interaction contract):
     - Page composition: greeting+tagline / hero / pulse divider (full-width) / two columns:
       news (2/5, left, full column height) + right 3/5 stacking continue-building over
-      featured (low-profile)
+      featured (low-profile). The working card is HERO-HEIGHT (2026-08-29) and featured
+      pins to the column foot — the column's slack lives between them
     - Pulse as a LINE with a dimmer: drag the Activity dial (bottom right) — breath,
       coins and event cadence interpolate continuously; "A session is live" adds the
       sticky joinable pill as CONTENT (the ticker never stops) AND drives the hero's
-      state — green live dot + ENTER SESSION when live, quiet status + START SESSION
-      otherwise (GM perspective; role chip reads Game Master / Player per viewer)
+      state — green live dot + ENTER SESSION with a rotating WHITE glow ring on the
+      CTA (2026-08-29: smoke conic glint through a 2px transparent border,
+      @property-driven — pure CSS, no rAF) when live; quiet status + START SESSION
+      otherwise. Hero actions are ROLE-CONDITIONAL (2026-08-29): the mock shows the
+      combined row, but the build renders per role — GM: NOTES / INVITE PLAYER /
+      START·ENTER SESSION; player: MANAGE CHARACTER / JOIN SESSION (live only, and
+      the JOIN CTA carries the same rotating glow). Role chip reads Game Master /
+      Player per viewer
     - The invite stack (reworked 2026-08-29): the hero is NEVER occluded at rest — an
       invite is a notification, and hiding "is my game on?" behind one inverted the
       page's own priority. A pending invite TUCKS UNDER the hero at its bottom-right:
@@ -35,18 +42,20 @@
       (flat — no shadow): a post can enable a top banner, a bottom banner, both, or
       neither; READ MORE always sits above the bottom banner. Both banners carry real
       mascot art (banner-top.png / banner-bottom.png — transparent cutouts, no plate
-      behind them, overhanging the card edges)
+      behind them, overhanging the card edges). Banner art contract (2026-08-29):
+      author at 21:9 — the slot is full-card-width and aspect-locked; wrong-ratio
+      sources letterbox (contain, bottom-anchored), never crop
     - Featured: portrait shelf card, cover-forward
-    - Characters strip (2026-08-29): a row BELOW the grid using CharacterManager.js's
-      parallelogram tiling at the PAGE's 8° dial (the tab component runs 18°; 18° read
-      too obtuse beside the 8° plates, so the construction is kept and the dial
-      swapped): 9:16 shells, square-capped lead card, 98° seam shadows, greyscale-
-      at-rest art (hover recolors + zooms), knocked-out create card last. Cards are
-      sized so the typical load — up to 3 characters + create (4 shells) — fills the
-      row width exactly (no In Game pill for now). The strip sits in a bordered tray
-      (carbon hairline, 12px radius) so the container reads even when sparse; the
-      tray is itself a plate (square left, 8° right face), its hairline drawn as two
-      clipped layers because a real border would be severed along the slant
+    - Characters as a HAND of cards (reworked 2026-08-29, replacing the
+      CharacterManager tray port): each character is a free-standing rounded 8°
+      parallelogram — the same physical-card family as the hero/invite deck — built
+      by skew (rounded corners for free), overlapping 28px, first card on top
+      (dealt-hand order); hover lifts a card to the top of the hand. NO tray,
+      border, or seams: the cards define the row, deliberately un-constrained.
+      Card size stays FIXED by the fill rule (3 characters + create fill the row;
+      fewer leave trailing space; no In Game pill for now). Greyscale-at-rest art
+      (hover recolors + zooms); the create card is a knocked-out ghost that casts
+      no shadow
     - The 8° shape language (2026-08-29): ONE slant dial imported from the app's wedge
       family (avatar pane ~8° / character strip 18° / workshop tiles 35°). Hero and
       working-on art breaks through a hard 8° seam with a perpendicular (98°) contact
@@ -177,11 +186,14 @@
   main { max-width:1410px; margin:0 auto; padding:38px 24px 60px; }
   /* greeting joins the headers on the nav face (2026-08-29); the tagline
      below deliberately stays italic sans — the one soft voice */
-  .greeting-row { display:flex; justify-content:space-between; align-items:baseline; }
   .greeting h1 { font-family:var(--nav); font-size:38px; font-weight:400; color:#141210; }
-  /* page clock — Inter (the functional face), weighted; tabular digits
+  /* the clock shares the SUBTEXT's line, not the title's (2026-08-29):
+     tagline left, date · time right — one common line under the h1 */
+  .subhead-row { display:flex; justify-content:space-between; align-items:baseline;
+                 margin-top:6px; }
+  /* page clock — Inter (the functional face); tabular digits
      so the time doesn't jitter as minutes tick */
-  .clock { font-family:var(--sans); font-size:24px; font-weight:400; color:var(--graphite);
+  .clock { font-family:var(--sans); font-size:20px; font-weight:400; color:var(--graphite);
            font-variant-numeric:tabular-nums; letter-spacing:.02em; }
   /* colon blinks with the seconds (dim on odd seconds, driven by the
      same 1s tick — a CSS animation would reset on every re-render) */
@@ -189,9 +201,9 @@
   .clock .colon.dim { opacity:.2; }
   /* date · time on one line, uniform page-default weight, dot separator */
   .clock-block { display:flex; align-items:baseline; gap:14px; }
-  .clock-date { font-size:24px; font-weight:400; color:var(--graphite); }
-  .clock-sep { font-size:24px; font-weight:400; color:var(--silver); }
-  .tagline { margin-top:6px; margin-left:28px; font-size:14px; font-style:italic;
+  .clock-date { font-size:20px; font-weight:400; color:var(--graphite); }
+  .clock-sep { font-size:20px; font-weight:400; color:var(--silver); }
+  .tagline { margin-left:28px; font-size:14px; font-style:italic;
              color:#6d675f; }
 
   /* ── hero ───────────────────────────────────────────────── */
@@ -262,8 +274,33 @@
          font-weight:600; letter-spacing:.06em; cursor:pointer; border:none;
          transform:skewX(calc(-1 * var(--slant))); }
   .btn > span { display:inline-block; transform:skewX(var(--slant)); }
-  .btn-gold { background:var(--gold); color:#241c08; }
+  /* constant 2px transparent border so gaining the live ring (below)
+     never resizes the button — background paints across border-box, so
+     the resting look is unchanged */
+  .btn-gold { background:var(--gold); color:#241c08; border:2px solid transparent; }
   .btn-gold:hover { filter:brightness(1.06); }
+  /* live CTA — rotating glow (2026-08-29). Two-layer background trick:
+     solid gold in padding-box, a green conic glint in border-box, so the
+     sweep shows only through the 2px transparent border ring (the ring
+     skews with the button — the glint travels the parallelogram). The
+     source article animates the angle with a rAF loop; a REGISTERED
+     custom property lets plain @keyframes interpolate it instead — no
+     script, and reduced-motion can switch it off. WHITE glint (changed
+     from live-green 2026-08-29) — smoke, the app's white, not raw #fff;
+     green stays the dot's job while the ring is pure energy. The
+     sweep's resting stops are GOLD, not transparent (QA 2026-08-29): a
+     transparent track shows the dark art behind the button, which reads
+     as the button shrinking 2px when it goes live — a gold track is
+     indistinguishable from the button face, so only the glint is new. */
+  .btn-gold.live {
+    background:linear-gradient(var(--gold), var(--gold)) padding-box,
+               conic-gradient(from var(--glow-angle),
+                 var(--gold) 0%, var(--smoke) 11%,
+                 var(--gold) 24%) border-box;
+    box-shadow:0 0 16px 1px rgba(247,244,243,.35);
+    animation:glow-spin 2.4s linear infinite; }
+  @property --glow-angle { syntax:"<angle>"; inherits:false; initial-value:0deg; }
+  @keyframes glow-spin { to { --glow-angle:360deg; } }
   .btn-ghost { background:rgba(20,18,16,.35); color:var(--smoke);
                border:1px solid rgba(247,244,243,.35); }
   .btn-ghost:hover { border-color:rgba(247,244,243,.6); }
@@ -373,7 +410,7 @@
      the three points before the bottom-left corner approximate a 6px
      arc there (tangents at r/tan(49°) ≈ 5px from the vertex); their
      offsets are constant for any --run because the angle never changes. */
-  .hero-frame, .card.cut, .invite-plate, .char-strip, .char-strip-inner {
+  .hero-frame, .card.cut, .invite-plate {
     clip-path:polygon(0 0, 100% 0,
                       calc(100% - var(--run) + 1px) calc(100% - 5px),
                       calc(100% - var(--run) - 1px) calc(100% - 1px),
@@ -381,27 +418,32 @@
                       0 100%); }
 
   /* working-on card — art right of an 8° seam (workshop-tile geometry;
-     the card's own carbon is the content surface). Seam: bottom x 42%,
-     top x 42% + 53px (≈48.6% of the ~800px card — the whole seam stays
-     under the midline per the seam rule; art owns the majority). The
-     contact shadow rides in the same background stack, anchored at the
-     seam's projected stop (~45%), and is clipped with the art so it hugs
-     the diagonal. */
-  .working { position:relative; overflow:hidden; min-height:380px;
-             --run:53px; /* tan(8°) × 380px */ }
+     the card's own carbon is the content surface). HERO-HEIGHT
+     (2026-08-29): 300px to match the hero card, which also lands its
+     run on the hero's own 42px. Seam: bottom x 42%, top x 42% + 42px
+     (≈47% of the ~800px card — the whole seam stays under the midline
+     per the seam rule; art owns the majority). The contact shadow rides
+     in the same background stack, anchored at the seam's projected stop
+     (~45%), and is clipped with the art so it hugs the diagonal. */
+  .working { position:relative; overflow:hidden; min-height:300px;
+             --run:42px; /* tan(8°) × 300px */ }
   .working-art { position:absolute; inset:0;
-                 clip-path:polygon(calc(42% + 53px) 0, 100% 0, 100% 100%, 42% 100%);
+                 clip-path:polygon(calc(42% + 42px) 0, 100% 0, 100% 100%, 42% 100%);
                  background:
                    linear-gradient(98deg, rgba(5,4,3,.6) 45%, rgba(5,4,3,0) calc(45% + 80px)),
                    radial-gradient(90% 80% at 80% 100%, #4a2c10 0%, rgba(74,44,16,0) 55%),
                    linear-gradient(115deg, #17100a 30%, #2b1c0e 70%, #170f08 100%); }
   .working-content { position:relative; padding:26px 30px 26px; display:flex;
-                     flex-direction:column; gap:10px; min-height:380px; height:100%; }
+                     flex-direction:column; gap:10px; min-height:300px; height:100%; }
   /* section labels — small h3 headings on the page ground, OUTSIDE the
      card chrome (2026-08-29): the plates carry art + content, the page
      carries the wayfinding */
   .stack { display:flex; flex-direction:column; }
   .stack.grow { flex:1; }
+  /* pinned to the column foot (2026-08-29): the working card holds
+     hero-height, so the column's slack opens BETWEEN building and
+     featured rather than trailing below the featured card */
+  .stack.push { margin-top:auto; }
   .section-head { display:flex; justify-content:space-between; align-items:baseline;
                   padding:0 2px; margin-bottom:10px; }
   .section-head h3 { font-family:var(--sans); font-size:11.5px; letter-spacing:.14em;
@@ -471,6 +513,7 @@
     .pulse-item { transition:none; }
     .coin, .invite, .hero-deck { transition:none; }
     .invite-alert { animation:none; }   /* the "!" holds still */
+    .btn-gold.live { animation:none; }  /* static glint + steady glow */
     .clock .colon.dim { opacity:1; }   /* no 1Hz blink */
   }
   .pulse-coins { display:flex; flex:0 0 auto; }
@@ -525,12 +568,22 @@
      the banner can never push content below it). Relative URLs work
      beside this file in the repo; the artifact build inlines both PNGs
      as data URIs (CSP blocks file fetches). */
-  .news-art { position:relative; margin:-26px 10px 20px; height:220px;
+  /* banner AUTHORING CONTRACT (2026-08-29): 21:9. The box spans the
+     card's full width (-28px side margins cancel the card padding) and
+     is aspect-locked at 21:9 — at the card's ~540px that's ~231px tall,
+     the height the banners were originally tuned to, now at full width.
+     Art must be EXPORTED at 21:9 to fill it: 3:2 could only fill the
+     width by tripling the card height (measured 2026-08-29 — the PNGs'
+     content is truly full-frame, no transparent sky to crop). contain +
+     bottom anchor = a wrong-ratio source letterboxes instead of
+     cropping, so the current 3:2 art renders centered-narrow until
+     re-exported. */
+  .news-art { position:relative; margin:-26px -28px 20px; aspect-ratio:21/9;
               background:url(banner-top.png) center bottom / contain no-repeat; }
   /* -52px: the card has 26px bottom padding (unlike its zero top padding),
      so the first 26 consumes the padding and the second 26 overhangs the
      card edge — the true mirror of the top banner's -26px */
-  .news-art.bottom { margin:20px 10px -52px; height:210px;
+  .news-art.bottom { margin:20px -28px -52px;
               background:url(banner-bottom.png) center bottom / contain no-repeat; }
   .news-date { font-size:11px; letter-spacing:.12em; color:#9a7526; font-weight:600; }
   .news h4 { font-family:var(--nav); font-size:22px; font-weight:400; color:#181512;
@@ -538,67 +591,73 @@
   .news p { font-size:13.5px; line-height:1.6; color:#4c463e; }
   .news .link-gold { color:#9a7526; }
 
-  /* ── characters strip — CharacterManager.js's construction at the
-     PAGE's dial ──
-     The dashboard strip's tiling (tokens v3 decision 37), with the angle
-     swapped from the component's 18° to the page's 8° (QA 2026-08-29: 18°
-     read too obtuse beside the 8° plates). Same derivations, new dial —
-     tan(8°) = 0.1405, sin(8°) = 0.1392, cos(8°) = 0.9903:
-       fill rule: up to 3 characters + create (4 shells) fill the row →
-       W/H = 4·0.5625 + 0.1405 = 2.3905 (aspect below); at the 1362px
-       frame → H ≈ 570px, stride ≈ 320px
-       box width = (S+R)/S = 124.99% of shell
-       clip x-stops: R/(S+R) = 19.99% top, S/(S+R) = 80.01% bottom
-       seam shadow: 98° (90+8), anchor sin/(box·cos+sin) = 16.66%,
-       fixed 72px fade tail.
-     First card square-capped (no left neighbour → no seam shadow);
-     create card is the strip's last member, knocked-out. */
+  /* ── characters — a HAND of cards, not a strip (reworked 2026-08-29,
+     replacing the CharacterManager.js tray port) ──
+     Each character is a free-standing rounded 8° parallelogram — the
+     same physical-card family as the hero/invite deck — not a segment
+     clipped inside a container. Construction is SKEW, not clip-path
+     (rounded corners come free — the chips/CTAs' trick at card scale),
+     with a counter-skewed inner layer keeping art and names upright.
+     transform-origin is bottom-left so the lean never crosses the
+     content edge on the left; the tan(8°)·480 ≈ 67px top-edge overhang
+     is budgeted into the card width instead.
+     Fill rule KEPT from the tray: card width is fixed by the 4-shell
+     assumption (3 characters + create): 4W − 3·28 overlap + 67 = row
+     → W = 25% + 4.25px. H = 480px → W ≈ 345px, ≈ playing-card ratio.
+     Fewer characters leave the trailing space empty, same as before.
+     Cards overlap 28px, first on top (dealt-hand order); hovering
+     lifts a card to the top of the hand. NO tray, border, or seams —
+     the cards define the row. */
   /* 26px page rhythm + 26px clearance for the updates card's bottom-banner
      overhang. The allowance lives HERE at the full amount because sibling
      margins collapse — a matching margin-bottom on the grid would merge
      into one 26px and the banner would eat it (QA 2026-08-29). Conditional
      on a bottom banner existing, in the real build. */
   .char-row { margin-top:52px; }
-  /* the strip sits in a visible tray — hairline in the create card's
-     knocked-out skin (graphite @ 25%, 2026-08-29; carbon read too hard,
-     parchment too faint) so tray and placeholder speak one color. The
-     container reads as a defined space even when the row is sparse
-     (1–2 characters leave an empty trailing stride inside it).
-     The tray is a PLATE (square left, 8° right face) — and since a real
-     border would be severed by clip-path along the slant, the hairline
-     is drawn as two clipped layers: this outer layer IS the border
-     color, and the inner layer (inset 1px, page color) leaves a 1px
-     ring that follows the silhouette. --run = tan(8°) × ~570px tray
-     height; the create card's own 8° edge lands flush on the tray's
-     slanted face because both runs derive from the same height. */
-  /* the INNER owns the aspect ratio: shells size from the inner's height,
-     so the 4-shell fill lands exactly on the inner's edge (QA 2026-08-29:
-     with the outer owning the aspect, the inner box came out ~3px wider
-     than the strip content — a smoke sliver before the hairline). */
-  .char-strip { --run:80px; background:rgba(55,50,47,.25); border-radius:12px; }
-  .char-strip-inner { margin:1px; aspect-ratio:2.3905; display:flex; overflow:hidden;
-                      background:var(--smoke); border-radius:11px; }
-  .char-shell { position:relative; flex:0 0 auto; height:100%; aspect-ratio:9/16;
-                pointer-events:none; }
-  .char-card { position:absolute; top:0; bottom:0; left:0; width:124.99%;
-               border:none; padding:0; cursor:pointer; pointer-events:auto;
-               background:var(--graphite); text-align:left;
-               clip-path:polygon(19.99% 0, 100% 0, 80.01% 100%, 0 100%); }
-  .char-shell.first .char-card { clip-path:polygon(0 0, 100% 0, 80.01% 100%, 0 100%); }
-  /* greyscale-at-rest lives on the art layer only — name/badge stay
-     crisp; hover recolors and zooms the art inside the fixed frame */
+  /* +12px on the standard 10px head gap (QA 2026-08-29): the card
+     shadows (22px blur − 10px y-offset) reach ~12px above the card
+     tops, eating the visual gap — this restores the same OPTICAL 10px
+     every other section-head shows */
+  .char-row .section-head { margin-bottom:22px; }
+  .char-hand { display:flex; align-items:stretch; height:480px; }
+  /* width fixed by the 4-shell fill rule (header comment above) */
+  .char-shell { position:relative; flex:0 0 auto; width:calc(25% + 4.25px); }
+  .char-shell + .char-shell { margin-left:-28px; }
+  /* dealt-hand z order: first on top, each next card tucks under.
+     nth-child counts the hidden 3rd shell too, so the create card
+     keeps z:1 in the 2-character state. */
+  .char-shell:nth-child(1) { z-index:4; }
+  .char-shell:nth-child(2) { z-index:3; }
+  .char-shell:nth-child(3) { z-index:2; }
+  .char-shell:nth-child(4) { z-index:1; }
+  .char-shell:hover { z-index:10; }   /* a picked-up card tops the hand */
+  .char-card { position:relative; display:block; width:100%; height:100%;
+               border:none; padding:0; cursor:pointer; text-align:left;
+               /* 6px — the page's plate radius (hero/working/invite),
+                  not a bespoke one (QA 2026-08-29) */
+               background:var(--graphite); border-radius:6px; overflow:hidden;
+               transform:skewX(calc(-1 * var(--slant))); transform-origin:0 100%;
+               box-shadow:14px 10px 22px rgba(5,4,3,.28);
+               transition:transform .2s ease-out; }
+  .char-card:hover { transform:skewX(calc(-1 * var(--slant))) translateY(-8px); }
+  /* counter-skew layer (same origin — a true inverse): everything inside
+     is page-upright. Extends 67px right so art reaches the card's
+     top-right overhang; the card's overflow clips it to the shape. */
+  .char-tilt { position:absolute; inset:0 -67px 0 0;
+               transform:skewX(var(--slant)); transform-origin:0 100%; }
+  /* greyscale-at-rest lives on the art layer only — name stays crisp;
+     hover recolors and zooms the art inside the fixed frame */
   .char-art { position:absolute; inset:0; background-size:cover; background-position:center;
               filter:saturate(0); transition:filter .2s ease-out, transform .2s ease-out; }
   .char-card:hover .char-art { filter:saturate(1); transform:scale(1.05); }
-  /* seam shadow on its own layer so hover can fade it while popped */
-  .char-seam { position:absolute; inset:0; pointer-events:none;
-               background:linear-gradient(98deg, rgba(0,0,0,.55) 16.66%, transparent calc(16.66% + 72px));
-               transition:opacity .2s ease-out; }
-  .char-card:hover .char-seam { opacity:0; }
-  .char-name { position:absolute; top:2rem; left:calc(19.99% + 1rem); right:1rem;
+  /* 89px = the leaning left edge's 67px top inset + 22px pad */
+  .char-name { position:absolute; top:28px; left:89px; right:28px;
                font-family:var(--nav); font-size:24px; font-weight:400; color:var(--smoke);
                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .char-create .char-card { background:rgba(55,50,47,.25); }
+  /* the create card is a GHOST — knocked-out skin (graphite @ 25%), and
+     no shadow: a card that isn't real yet shouldn't cast one (and a
+     shadow behind a translucent face reads as dirt, not depth) */
+  .char-create .char-card { background:rgba(55,50,47,.25); box-shadow:none; }
   .char-create-inner { position:absolute; inset:0; display:flex; flex-direction:column;
                        align-items:center; justify-content:center; gap:14px; opacity:.5;
                        transition:opacity .2s, transform .2s; }
@@ -668,15 +727,15 @@
 
 <main>
   <div class="greeting">
-    <div class="greeting-row">
-      <h1>Welcome back, Matt</h1>
+    <h1>Welcome back, Matt</h1>
+    <div class="subhead-row">
+      <div class="tagline">Baldric still hasn't forgiven you for that critical fail in Coriolis last Thursday.</div>
       <div class="clock-block">
         <span class="clock-date" id="clockDate"></span>
         <span class="clock-sep">·</span>
         <span class="clock" id="clock">–:––</span>
       </div>
     </div>
-    <div class="tagline">Baldric still hasn't forgiven you for that critical fail in Coriolis last Thursday.</div>
   </div>
 
   <!-- hero + invite stack -->
@@ -696,6 +755,10 @@
         navigate the tense politics of Coriolis station.</div>
     </div>
     <div class="hero-actions">
+      <!-- role-conditional (2026-08-29): MANAGE CHARACTER is the player's
+           button, as NOTES/INVITE PLAYER/START SESSION are the GM's — the
+           mock shows the combined row; the build renders per role -->
+      <button class="btn btn-ghost"><span>MANAGE CHARACTER</span></button>
       <button class="btn btn-ghost"><span>NOTES</span></button>
       <button class="btn btn-ghost"><span>INVITE PLAYER</span></button>
       <button class="btn btn-gold" id="heroCta"><span>ENTER SESSION →</span></button>
@@ -784,7 +847,7 @@
         </section>
       </div>
 
-      <div class="stack">
+      <div class="stack push">
         <div class="section-head">
           <h3>Featured from the Market</h3>
         </div>
@@ -813,45 +876,49 @@
     <div class="section-head">
       <h3>Your characters</h3>
     </div>
-    <div class="char-strip">
-      <div class="char-strip-inner">
-      <div class="char-shell first">
+    <div class="char-hand">
+      <div class="char-shell">
         <button class="char-card">
-          <div class="char-art" style="background-image:
-            linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
-            radial-gradient(90% 70% at 55% 30%, #7a5a3a 0%, rgba(122,90,58,0) 60%),
-            linear-gradient(150deg, #2a2018 10%, #4a3826 60%, #241a10)"></div>
-          <h3 class="char-name">Baldric</h3>
+          <div class="char-tilt">
+            <div class="char-art" style="background-image:
+              linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+              radial-gradient(90% 70% at 55% 30%, #7a5a3a 0%, rgba(122,90,58,0) 60%),
+              linear-gradient(150deg, #2a2018 10%, #4a3826 60%, #241a10)"></div>
+            <h3 class="char-name">Baldric</h3>
+          </div>
         </button>
       </div>
       <div class="char-shell">
         <button class="char-card">
-          <div class="char-art" style="background-image:
-            linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
-            radial-gradient(90% 70% at 50% 28%, #3a6a5a 0%, rgba(58,106,90,0) 60%),
-            linear-gradient(150deg, #14201b 10%, #26443a 60%, #101a15)"></div>
-          <div class="char-seam"></div>
-          <h3 class="char-name">Wren</h3>
+          <div class="char-tilt">
+            <div class="char-art" style="background-image:
+              linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+              radial-gradient(90% 70% at 50% 28%, #3a6a5a 0%, rgba(58,106,90,0) 60%),
+              linear-gradient(150deg, #14201b 10%, #26443a 60%, #101a15)"></div>
+            <h3 class="char-name">Wren</h3>
+          </div>
         </button>
       </div>
       <div class="char-shell" id="charShell3">
         <button class="char-card">
-          <div class="char-art" style="background-image:
-            linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
-            radial-gradient(90% 70% at 52% 30%, #5a4a7a 0%, rgba(90,74,122,0) 60%),
-            linear-gradient(150deg, #1a1624 10%, #362c4e 60%, #131020)"></div>
-          <div class="char-seam"></div>
-          <h3 class="char-name">Kazimir</h3>
+          <div class="char-tilt">
+            <div class="char-art" style="background-image:
+              linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+              radial-gradient(90% 70% at 52% 30%, #5a4a7a 0%, rgba(90,74,122,0) 60%),
+              linear-gradient(150deg, #1a1624 10%, #362c4e 60%, #131020)"></div>
+            <h3 class="char-name">Kazimir</h3>
+          </div>
         </button>
       </div>
       <div class="char-shell char-create">
         <button class="char-card">
-          <div class="char-create-inner">
-            <div class="plus">+</div>
-            <h4>Create New Character</h4>
+          <div class="char-tilt">
+            <div class="char-create-inner">
+              <div class="plus">+</div>
+              <h4>Create New<br>Character</h4>
+            </div>
           </div>
         </button>
-      </div>
       </div>
     </div>
   </div>
@@ -965,11 +1032,12 @@
     const heroCta = document.getElementById('heroCta');
     if (live) {
       heroStatus.innerHTML = '<span class="live-dot"></span>Session live · 3 players at the table';
-      heroCta.innerHTML = '<span>ENTER SESSION →</span>';
+      heroCta.innerHTML = '<span>ENTER SESSION</span>';
     } else {
       heroStatus.innerHTML = 'Next session · Saturday 29th August, 8pm';
       heroCta.innerHTML = '<span>START SESSION</span>';
     }
+    heroCta.classList.toggle('live', live);   // rotating green glow ring
   }
 
   function setLive(on) {
