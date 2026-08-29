@@ -17,6 +17,25 @@ game, and is it actually happening?" — "Next session Thu 4 Sep, 20:00 · 3 of 
 — "3 of 5 confirmed" is. Do not ship the date and defer availability; the data model for both
 lands in the same PR.
 
+## Ground truth (dependency audit, 2026-08-29)
+
+Verified by code sweep — [dependency-audit.md](dependency-audit.md) §2:
+
+- Scheduling has **zero footprint** today: no column, no entity, no RSVP concept in
+  api-site, api-game, the frontend, or any of the 76 migrations. Only prose comments call
+  a Session "the scheduled/planned play instance" (`session_model.py:8`) — the naming is
+  ready; the data isn't.
+- The Session model lives in the **campaign module's** model file
+  (`modules/campaign/model/session_model.py`), not `modules/session/` — the
+  `scheduled_at` migration and model import land there.
+- **Two Home lines depend on this stage and have no source until it lands**: the hero's
+  not-live meta ("Next session · Saturday 29th August, 8pm") and the pulse's calm pill
+  ("All quiet in the tavern · next game Saturday, 8pm"). Stages 1–2 ship both with
+  interim copy (last-played based — exact line decided at stage-1 build).
+- The only time-based trigger precedent is the session-expiry sweeper
+  (`get_expired_sessions`, `session_repository.py:64`) — confirmed nothing else exists
+  for the reminder-notifications open question below.
+
 ## Known shape
 
 - **Data**: `scheduled_at` on sessions — the Session aggregate already self-describes as "the

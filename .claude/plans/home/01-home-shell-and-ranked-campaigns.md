@@ -43,6 +43,10 @@ most recent first**. Rank 1 → hero, ranks 2–3 → compact cards, remainder �
 campaign appears exactly once. (The scheduled slot joins the rule in stage 3 — write the
 ranking comparator so inserting it is an extension, not a rewrite.)
 
+**Open (2026-08-29):** the final mock renders NO compact rank-2/3 cards — the composition
+settled as hero + working-on only. Decide before the hero/ranking build (epic delivery step
+5) whether compact cards + count link survive, or the Campaigns index remains the overflow.
+
 ## Session-state → hero/card mapping
 
 | Session status | Player sees | GM sees |
@@ -55,12 +59,24 @@ ranking comparator so inserting it is an extension, not a rewrite.)
 ## PR sketch
 
 ### PR 1 — Home shell, greeting, empty state, demo retirement
-- Home surface + default landing (**open:** `?tab=home` in `VALID_TABS` vs bare `/dashboard`
-  route — decide here; `DashboardLayout.js` currently forces `tab=campaigns`).
-- Header rework in `SiteHeader.js` (lands app-wide — it's the shared header): remove the Home
-  link and the standalone logout button; wordmark becomes a `Link` to `/dashboard`; add the
-  **user chip** (avatar + `screen_name`, rectangle button) opening a Headless UI Dropdown with
-  [Account → `/account`, Sign out]. No tab underlined on Home; tab bar otherwise untouched.
+- Home surface + default landing (**decided 2026-08-29:** bare `/dashboard` IS Home — remove
+  the forced `?tab=campaigns` redirect at `DashboardLayout.js:44-56`; every `?tab=` URL keeps
+  pointing at its existing index view).
+- Chrome rework (lands app-wide — it's the shared header): remove the Home link and the
+  standalone logout button; wordmark becomes a `Link` to `/dashboard`; add the **user chip**
+  (avatar + `screen_name`, rectangle button) opening a Headless UI Dropdown with
+  [Account → `/account`, Sign out].
+- **TabNav retirement → app-select launcher** (decided 2026-08-29; contract in the mock): the
+  tab bar goes away; a 9-dot launcher in the top bar opens a panel — 2×2 grid [Campaigns,
+  Characters, Library, Market] + a WORKSHOP section whose tool line items REPLACE the workshop
+  index view. The pattern that keeps this cheap (Matt, 2026-08-29): launcher entries navigate
+  to the SAME `/dashboard?tab=…` index views — the 11 external `?tab=` writer call sites
+  (7 files) keep working unchanged; only the entry chrome changes. Full touchpoint inventory:
+  [dependency-audit.md](dependency-audit.md) §9. While in there: fix the `tab=account`
+  dead-end (eventConfig.js emits a tab that VALID_TABS doesn't know → empty content area) and
+  delete the orphaned `SessionsManager.js`. Launcher labels must match real tools: **Image
+  Config** (not "Image Editor"); NPC Barracks / Scene Builder render disabled via the
+  existing "Soon" badge pattern (`WorkshopToolNav.js`).
 - Greeting + flavor tagline: a small template bank rendered over existing fields (character
   name, campaign title, last-played date). Pure texture — never status. (Adventure logs are
   persisted, so log-derived lines are a possible future upgrade; not now.)
@@ -72,13 +88,24 @@ ranking comparator so inserting it is an extension, not a rewrite.)
   PR (delete superseded code, don't strand it).
 
 ### PR 2 — Ranking data
-- Add `last_played_at` to `CampaignSummaryResponse` (derive from the campaign's sessions'
-  `started_at`/`stopped_at`; the summary already carries `active_sessions`).
-- **Open:** compute ranking FE-side from the existing dashboard hooks (leaning — zero new
-  endpoints, TanStack cache already holds campaigns) vs a dedicated home-summary endpoint.
-  Decide when the FE shape is known from the design pass.
-- If hero needs "N players at the table" for live sessions, confirm the summary exposes enough
-  (member counts exist; live seat count may need the active session id).
+- **`active_sessions` is hardcoded 0** on both campaign responses AND the user dashboard
+  (TODOs at `campaign/api/endpoints.py:145,173`, `user/api/endpoints.py:624`) — the hero's
+  live state has no true source today. **Decided 2026-08-29: the int is prehistoric — a
+  campaign has at most one active session** (`get_active_session_for_campaign` is singular),
+  so replace it with a boolean-shaped field. Proposed shape: `active_session_id`
+  (null = not live; the id doubles as the join/enter target). Delete the dead int count in
+  the same change.
+- **`last_played_at` does not exist** — and the FE already reads it (`CampaignManager.js:1540`
+  renders "Never" for every campaign — fixing this fixes a shipped defect). **Decided
+  2026-08-29: capture it event-driven** — stamp the campaign when a user enters/starts a
+  session — rather than aggregating MAX(started_at) per request.
+- **Live seat count ("N players at the table"): no source exists.** Real presence lives only
+  in api-game's in-memory ConnectionManager (websocket-only, no HTTP index route, and
+  api-game HTTP carries no auth — audit §11). Matt's sketch (2026-08-29): a campaign-level
+  `active_session_members` column patched from api-game. **Needs its own scoping — parked**;
+  stage 1 ships the hero without the count.
+- Ranking computed FE-side from the existing dashboard hooks (leaning unchanged — zero new
+  endpoints; the summary now carries `active_session_id` + `last_played_at`).
 
 ### PR 3 — Hero + working-on card + invite stack
 - Hero card component (state-driven, per the mapping above), spread-art treatment.

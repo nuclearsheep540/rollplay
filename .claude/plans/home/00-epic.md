@@ -78,6 +78,37 @@ Settled through the Stitch wireframe rounds + design conversation; column groupi
 Per-card, not panels: session state, next-session date + RSVP count (stage 3),
 new-since-last-visit line (stage 2), role chip, "your character" link (players).
 
+### Composition amendments — 2026-08-29 (authoritative record: the mock's header comment)
+
+The list above froze at 2026-08-28; a full live-iteration session on 2026-08-29 evolved the
+contract. **`design-mock.html`'s header comment is the authoritative design record** — where
+it and this file disagree, the mock wins. Major deltas:
+
+- **Chrome**: tab bar RETIRED → app-select launcher (9-dot button; panel = 2×2 grid
+  [Campaigns, Characters, Library, Market] + a WORKSHOP tool section replacing the workshop
+  index view). Top bar: wordmark · launcher · social · account.
+- **Invite stack reworked**: the hero is never occluded — a pending invite TUCKS UNDER the
+  hero's bottom-right (bare wiggling "!" on the exposed corner); clicking runs the
+  SWITCHEROO (the two cards trade places exactly); no dimming. The tuck slot's space is
+  permanently reserved so toggling never shifts the page.
+- **The 8° shape language**: dark cards are slanted plates (square left face, full 8° right
+  face), art seams before midline with 98° contact shadows, chips/CTAs/pills as rounded
+  parallelograms; the featured card is a NARROW RECT stepped under the working card's slant
+  terminus; news card + pulse rule deliberately level.
+- **"Your characters" row added** below the grid: a HAND of free-standing rounded 8°
+  parallelogram cards (28px overlap, first on top, hover lifts) — replaced the
+  CharacterManager tray port. Zero-dependency (portraits pipeline exists).
+- **Greeting row**: page clock (date · time, blinking colon) shares the tagline's line.
+- **Updates card**: full-width frame-breaking banners top/bottom (per-post optional; art
+  contract 21:9, letterbox never crop), like counter IS the CTA beside the date, NEW! chip
+  in the UPDATES section header, READ MORE always above the bottom banner.
+- **Hero**: text top-aligned; role-conditional actions incl. MANAGE CHARACTER (player);
+  green = live (dot + rotating white-glint glow ring on the CTA, gold track); the working
+  card is hero-height (300px) with the slack opening above the featured card.
+- **Featured slot ships as a VISIBLE placeholder** (decision 2026-08-29 — supersedes
+  "hidden until stage 4" above and 02's dormant-slot hiding); activates in stage 4.
+- **No compact rank-2/3 cards exist in the mock** — see the open decisions ledger.
+
 ## Repo corrections to the chat design
 
 Facts the chat got wrong or couldn't know, established 2026-08-28:
@@ -94,7 +125,8 @@ Facts the chat got wrong or couldn't know, established 2026-08-28:
 - **Demo campaign auto-grant** (`campaign/api/endpoints.py`, first campaigns fetch) made the
   designed empty state unreachable — hence the retire decision.
 - **`CampaignSummaryResponse` has `active_sessions` but no last-played timestamp** — the one
-  backend gap for the ranking rule (stage 1).
+  backend gap for the ranking rule (stage 1). (Audit 2026-08-29: worse — the field is
+  hardcoded `0`; full ground truth in [dependency-audit.md](dependency-audit.md).)
 
 ## Stage split
 
@@ -119,6 +151,55 @@ line does.
   Prerequisite: [media-source-asset-split.md](media-source-asset-split.md) — one stored file,
   many cross-user instances; acquisition costs CloudFront bandwidth, not S3 storage.
 
+## Delivery sequence (pecking order — decided 2026-08-29)
+
+Ordered by minimal dependencies + least blast radius, informed by the
+[dependency audit](dependency-audit.md). Each step pairs a dependency with its consumer —
+nothing ships orphaned. (This sequences delivery ACROSS the stages above; stage docs keep
+owning their scope.)
+
+1. **Home shell + route flip.** `/dashboard` = Home (delete the forced `?tab=campaigns`
+   redirect — the tab URLs already work), greeting + clock, user-chip chrome rework
+   (wordmark → home anchor, account dropdown, logout removal), cards rendering the data
+   that already exists — campaign art, titles, role chip, last-edited, AND the characters
+   hand (zero-dependency: portraits pipeline exists). Honest placeholders ONLY for the
+   unserved (live dot, next-session line, pulse, news, market). Includes the empty states
+   (no-campaigns onboarding hero — still unmocked, small design task first; zero-characters
+   hand) and the designed no-art fallback for the plate treatment. Demo retirement rides
+   along.
+2. **Launcher + tab bar removal.** One PR: app-select menu in, TabNav out, `tab=account`
+   dead-end fixed, orphaned `SessionsManager.js` deleted. Safe after 1 because all `?tab=`
+   URLs keep working — only the entry chrome changes. Carries the workshop deep-link
+   decision (tool items open with media context vs at their own pickers).
+3. **Truth PRs** (backend, near-zero UI blast; can run parallel to 1–2):
+   `active_session_id` replacing the hardcoded `active_sessions=0` int (approved
+   2026-08-29: null = not live, id doubles as the enter target), event-driven
+   `last_played_at`, **and the live seat count** (`active_session_members` fed from
+   api-game — moved here 2026-08-29 for cohesion with the other session-truth schema
+   work; its scoping happens here, incl. the api-game unauthenticated-HTTP constraint).
+   The first two fix already-shipped consumers, so no orphaned dependencies.
+4. **Scheduling + RSVP** (stage 3, promoted 2026-08-29: it hangs off aggregates that
+   already exist and unblocks everything downstream). `scheduled_at` + RSVP together per
+   the 03 non-negotiable.
+5. **Hero goes state-aware.** All three states in one pass — live (dot + glow CTA) /
+   scheduled (date + confirmed count) / idle — plus ranking (live > scheduled > last
+   played), role-conditional actions, invite tuck/switcheroo. Needs 3 + 4; scheduling
+   landing first means no interim not-live copy to rework.
+6. **Tagline template bank** — small, pure texture, any time after 1.
+7. **News vertical** — admin infra → news module → authoring → Home card + likes + NEW!
+   read receipt. Self-contained.
+8. **Pulse** — in two deliberate releases (framing agreed 2026-08-29): **v1** wires what
+   the social tab already reads — friends online + live games, poll-based, zero new
+   dependencies — and is a complete shippable feature in its own right. **v2 is the MVP
+   we're aiming for**: the new parts — activity signals ("editing their character",
+   "writing notes"), the client→server reporting channel, the broadcast transport, the
+   full weighted dial — shipped whole per the infra-lands-with-its-feature rule. The
+   music line follows separately per 02. By v1 the calm pill already has a real schedule
+   to name.
+
+Market stays placeholded throughout (a VISIBLE placeholder — decision 2026-08-29 —
+activated in stage 4).
+
 ## Out of scope (this epic)
 
 - **Honorable mention — Account page redo.** The header rework (user chip → [Account,
@@ -134,8 +215,9 @@ line does.
 
 | Decision | When |
 |---|---|
-| Home routing shape (`?tab=home` vs bare `/dashboard`) | Stage 1, first PR |
 | Ranking computed FE-side from existing hooks vs dedicated summary endpoint | Stage 1, backend PR |
+| Compact rank-2/3 campaign cards + overflow count link (01's ranking rule) vs the mock's hero+working-only composition — keep or kill | Before step 5 (hero/ranking build) |
+| Workshop launcher items: deep-link with media context vs open at own pickers | Step 2 (launcher PR) |
 | Pulse activity-weighting signals beyond online/in-session (editing character, writing notes) — design the weight table now, feed signals as they become available | Stage 2, Pulse PR |
 | TipTap image support for news (`@tiptap/extension-image` + S3 flow) | Stage 2, news PR |
 | Market: user-facing naming ("Market" implies commerce — legal lean: library-style name + share/adopt verbs), audio in sharing v1 (lean: exclude), featured vetting mechanics | Stage 4 extraction, with solicitor input (`market-legal-notes.md`) |
