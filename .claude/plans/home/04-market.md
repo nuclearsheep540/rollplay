@@ -24,7 +24,8 @@ reality), not an extraction detail of this one. This also supports the safe-harb
 (no direct financial benefit from shared content) — but per the legal notes, don't market
 "free" as a selling point against paid alternatives (inducement risk).
 
-The nav tab already exists (labelled MARKET); nothing behind it does.
+The nav entry already exists (a launcher tile since the 2026-08-29 tab-bar retirement —
+labelled MARKET); nothing behind it does.
 
 **Seed content**: initial listings can be platform-authored, SRD-scoped campaign templates —
 viable (commercially too) under the SRD's CC-BY-4.0 licence with attribution, provided non-SRD
@@ -97,7 +98,9 @@ everyone, the way revoked-licence music disappears from playlists.
 ## The featured item (what Home consumes)
 
 - **Contract for the Home card**: cover art, title, author, blurb, link → listing in the Market
-  tab. Same visual language as the campaign/news cards (art background, title overlay).
+  surface. Visual language settled in the mock (2026-08-29): a cover-forward shelf card —
+  portrait cover left, meta beside it — on a narrow stepped rect (not an art-background/
+  title-overlay card).
 - **Selection mechanism — leaning: admin-curated.** An admin action "feature this listing",
   gated behind the stage-2 `require_admin` infra (which conveniently already exists by this
   stage). Automatic selection (most-acquired, newest) only makes sense with volume; revisit
@@ -106,9 +109,9 @@ everyone, the way revoked-licence music disappears from playlists.
   neutral-host posture safe harbour depends on — featuring a listing means taking on knowledge
   of it. Mitigation: feature only listings whose provenance has been vetted (the featured shelf
   is curated *and* checked, never blind). Confirm the approach in the solicitor review.
-- **Home activation**: the "Featured from the Market" card and the empty-state CTA ("Don't have
-  a game? Grab a ready-made one") are designed in the stage-1/2 mocks and ship hidden; this
-  stage turns them on.
+- **Home activation**: the "Featured from the Market" card ships as a VISIBLE placeholder from
+  stage 1 (revised 2026-08-29 — see 02's Market slots section); the empty-state CTA ("Don't
+  have a game? Grab a ready-made one") stays designed-but-hidden. This stage makes both real.
 
 ## Legal launch gates (non-negotiable — before the first shared asset exists)
 

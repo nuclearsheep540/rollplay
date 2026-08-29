@@ -87,8 +87,11 @@ game gets Join); anything sharing a user's own activity with friends (e.g. "{use
 - Home card: the **noticeboard** — the page's single LIGHT card (parchment on a page of dark
   cards; contrast inversion is the "pop", not animation), with **frame-breaking art**: the
   illustration overlaps the card boundary. That breakout layer is mascot-ready — when Tabletop
-  Tavern mascots exist, they live around/on the card, not trapped inside it. One card, dated —
-  never a feed. If the latest post is stale, staleness is visible by design; that pressure is
+  Tavern mascots exist, they live around/on the card, not trapped inside it. **Realized
+  2026-08-29**: per-post optional TOP and BOTTOM banner slots, full-card-width, art contract
+  21:9 (letterbox never crop), truly overflowing the card edges; READ MORE always above the
+  bottom banner; the first mascot art exists (`banner-*.png` beside the mock). One card,
+  dated — never a feed. If the latest post is stale, staleness is visible by design; that pressure is
   accepted.
 - Click → full-screen Headless UI Modal rendering the TipTap doc read-only.
 
@@ -128,20 +131,21 @@ game gets Join); anything sharing a user's own activity with friends (e.g. "{use
   2026-08-28) and the in-game fan-out activity feed (retired `TODO-social-live-pulse.md`).
   Pulse stays site-level and member-scoped.
 
-### PR 4 — New-since-last-visit lines (optional; may trail the stage)
-- Requires per-user visit/read tracking (the infrastructure arrives here, with its feature).
-  Scope the minimal version: last-seen timestamp per user per campaign, compared against
-  note/handout/log activity to render "2 new handouts" (player) / "last note edited Tue" (GM).
-- If the tracking design gets heavy, split it out — the card lines are a nicety, not a gate on
-  calling this epic done.
+### ~~PR 4 — New-since-last-visit lines~~ — KILLED 2026-08-29
+Matt: no desire to surface campaign-level "changed while you were away" deltas on Home.
+Removed outright, not deferred — do not reintroduce per-campaign visit tracking for this.
+(The news NEW! read receipt in PR 1/2 is unrelated and survives: one receipt on the latest
+post, trivially gated.)
 
-## Dormant Market slots
+## Market slots
 
-Designed in the stage-1/2 mocks, shipped hidden behind a flag: "Featured from the Market" card
-(right or left column per the design pass) and the Market CTA in the empty state. No visible
-placeholder, no "coming soon" tile. They activate in stage 4 — the featured-item card contract
-(cover, title, author, blurb, link) is defined in [04-market.md](04-market.md); design the
-hidden slots against that contract.
+**Revised 2026-08-29: the "Featured from the Market" card ships as a VISIBLE placeholder**
+(mock-style content — supersedes the original "shipped hidden, no visible placeholder"
+decision; Matt: "massively placehold this"). It renders in the right column beneath the
+working-on card (narrow stepped rect, cover-forward, pinned to the column foot). The
+empty-state Market CTA remains designed-but-hidden. Both activate for real in stage 4 — the
+featured-item card contract (cover, title, author, blurb, link) is defined in
+[04-market.md](04-market.md); build the placeholder against that contract.
 
 ## Acceptance
 
@@ -150,4 +154,4 @@ hidden slots against that contract.
 - Home shows the latest post as a card; the modal renders the rich content faithfully.
 - Pulse shows a live friend + a live game with working actions, and reads as intentional when
   everything is quiet.
-- No admin concept, visit tracking, or Market UI exists anywhere before the PR that needs it.
+- No admin concept, read tracking, or Market UI exists anywhere before the PR that needs it.

@@ -16,9 +16,11 @@ campaign.
 Three Google Stitch wireframe rounds ran on 2026-08-28 (screenshots in the conversation; Stitch
 decayed by round 3 and was retired). The design contract is the committed interactive mock:
 [design-mock.html](design-mock.html) — pixels defer to app tokens (`app/styles/colorTheme.js`:
-carbon `#1F1F1F`, smoke `#F7F4F3`, gold `#D9A441`; display serif for titles, humanist sans for
-body). Decisions that came out of the pass are folded into the epic's decision record and page
-composition (invite stack on the hero, working-on card, shape language per content type).
+carbon `#1F1F1F`, smoke `#F7F4F3`, gold `#D9A441`). Typography settled 2026-08-29: TWO faces —
+Metamorphous (the nav face) for greeting + all card titles, Inter for everything else (Cinzel
+only on placeholder book-cover art; the earlier "display serif for titles" is superseded).
+Decisions from the pass and the 2026-08-29 live session are folded into the epic's decision
+record and page composition.
 
 ## Page composition (stage-1 scope)
 
@@ -27,25 +29,26 @@ composition (invite stack on the hero, working-on card, shape language per conte
    — degrade gracefully.
 2. Hero: the ranked campaign (live > last played until scheduling), full width, art background,
    role chip, session state, role-specific primary action.
-3. Working-on card ("Continue building"): most recently edited owned campaign, spread darkened
-   art background, Assets / Notes / Workshop actions, last-edited meta.
-4. Invite stack: pending-invite card layered on the hero; Accept one-tap, Decline two-step
-   confirm on the card.
-5. Empty state variant when the user has no campaigns.
+3. Working-on card ("Continue building"): most recently edited owned campaign, hero-height
+   plate with the 8° art seam, ASSETS / WORKSHOP / CAMPAIGN EDITOR actions (NOTES moved to
+   the hero 2026-08-29), last-edited meta top-right.
+4. Invite stack: pending invite TUCKS UNDER the hero (switcheroo on click — see the epic's
+   decision record); Accept one-tap, Decline two-step confirm on the card.
+5. "Your characters" hand-of-cards row below the grid (zero-dependency — portraits pipeline
+   exists; added to stage-1 scope 2026-08-29).
+6. Empty state variant when the user has no campaigns.
 
-Not in stage 1: Pulse, What's new, Market slots, new-since-last-visit lines, scheduling fields
-— the right ("knowing") column arrives in stage 2.
+Not in stage 1: Pulse, What's new, Market slots, scheduling fields — the right ("knowing")
+column arrives in stage 2.
 
 ## Ranking rule (stage-1 form)
 
-Rank campaigns the user belongs to: **live first** (`active_sessions > 0`), then **last played,
-most recent first**. Rank 1 → hero, ranks 2–3 → compact cards, remainder → count link. A
-campaign appears exactly once. (The scheduled slot joins the rule in stage 3 — write the
-ranking comparator so inserting it is an extension, not a rewrite.)
-
-**Open (2026-08-29):** the final mock renders NO compact rank-2/3 cards — the composition
-settled as hero + working-on only. Decide before the hero/ranking build (epic delivery step
-5) whether compact cards + count link survive, or the Campaigns index remains the overflow.
+Rank campaigns the user belongs to: **live first** (via `active_session_id`), then **last
+played, most recent first**. The ranking selects the **hero only** — no rank-2/3 compact
+cards and no "N more" link (both cut at epic time 2026-08-28, decision record; this file's
+earlier "ranks 2–3 → compact cards" text was stale and corrected 2026-08-29 — the Campaigns
+index, one launcher click away, is the overflow). (The scheduled slot joins the rule in
+stage 3 — write the ranking comparator so inserting it is an extension, not a rewrite.)
 
 ## Session-state → hero/card mapping
 
@@ -76,7 +79,9 @@ settled as hero + working-on only. Decide before the hero/ranking build (epic de
   dead-end (eventConfig.js emits a tab that VALID_TABS doesn't know → empty content area) and
   delete the orphaned `SessionsManager.js`. Launcher labels must match real tools: **Image
   Config** (not "Image Editor"); NPC Barracks / Scene Builder render disabled via the
-  existing "Soon" badge pattern (`WorkshopToolNav.js`).
+  existing "Soon" badge pattern (`WorkshopToolNav.js`). **Icons are Font Awesome in the
+  build** (decision 2026-08-29 — applies generally, not just here); the mock's hand-drawn
+  SVGs are placeholders only.
 - Greeting + flavor tagline: a small template bank rendered over existing fields (character
   name, campaign title, last-played date). Pure texture — never status. (Adventure logs are
   persisted, so log-derived lines are a possible future upgrade; not now.)
@@ -110,21 +115,26 @@ settled as hero + working-on only. Decide before the hero/ranking build (epic de
 ### PR 3 — Hero + working-on card + invite stack
 - Hero card component (state-driven, per the mapping above), spread-art treatment.
 - Working-on card: `max(updated_at)` over owned campaigns (`updated_at` already on the
-  summary), spread darkened art, Assets / Notes / Workshop actions, last-edited meta. Shown
-  even when it's the same campaign as the hero (different job, different CTAs); absent for
-  pure players.
-- Role chip: GM when `campaign.host_id == user.id`, else Player.
-- Role actions: GM Start/Resume + Invite player; Player Join (live only) + Edit character.
-- "Read notes" action: the notes API is standalone (`/api/notes`, `app/notes/` slice) — verify
-  at implementation where a dashboard-context notes view lives. If notes are only reachable
-  in-game when this PR lands, the action waits (Home and notes stay independently shippable).
-- Invite stack on the hero: dealt-card overlay per the mock — Accept fires immediately;
-  Decline snaps to an in-card confirm state and only the confirm sends. Buttons primary,
-  drag as bonus. Multiple invites stack, top card first.
+  summary), hero-height plate with the 8° art seam, ASSETS / WORKSHOP / CAMPAIGN EDITOR
+  actions, last-edited meta top-right. Shown even when it's the same campaign as the hero
+  (different job, different CTAs); absent for pure players.
+- Role chip: Game Master when `campaign.host_id == user.id`, else Player (full words, not
+  "GM" — mock 2026-08-29).
+- Role actions (mock contract 2026-08-29): GM — NOTES, INVITE PLAYER, START·RESUME·ENTER
+  SESSION (live CTA carries the rotating white-glint glow, gold track); Player — MANAGE
+  CHARACTER, JOIN SESSION (live only, same glow; else "Waiting for GM").
+- NOTES action: resolved — the standalone `/notes?campaign_id=` route exists and is
+  dashboard-reachable (audit 2026-08-29); the hero action points there. No dependency wait.
+- Invite stack: TUCK-UNDER + SWITCHEROO per the epic's decision record (hero never occluded;
+  wiggling "!" on the exposed corner; click swaps the cards exactly; no dimming). Accept
+  fires immediately; Decline snaps to an in-card confirm state and only the confirm sends.
+  Buttons primary, drag as bonus. Multiple invites: deeper under-stack, one promotion at a
+  time.
 
 ## Acceptance
 
-- Login lands on Home; house icon active; no tab underlined.
+- Login lands on Home; the wordmark anchors it; the tab bar is gone (app-select launcher in
+  the top bar — no house icon exists, superseded 2026-08-29).
 - One-or-two-campaign user (the typical case): hero answering "is my game on?" and the
   working-on card answering "where was I building?" — even when both are the same campaign;
   Campaigns tab unchanged as the full index.

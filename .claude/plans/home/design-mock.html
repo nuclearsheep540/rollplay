@@ -65,7 +65,9 @@
       CharacterManager tray port): each character is a free-standing rounded 8°
       parallelogram — the same physical-card family as the hero/invite deck — built
       by skew (rounded corners for free), overlapping 28px, first card on top
-      (dealt-hand order); hover lifts a card to the top of the hand. NO tray,
+      (dealt-hand order); hover lifts a card to the top of the hand (kept 2026-08-29,
+      HOME-ONLY — the Characters tab strip keeps its existing hover; ghost-shadow
+      decision deferred to dev QA with real art). NO tray,
       border, or seams: the cards define the row, deliberately un-constrained.
       Card size stays FIXED by the fill rule (3 characters + create fill the row;
       fewer leave trailing space; no In Game pill for now). Greyscale-at-rest art
@@ -501,8 +503,12 @@
   .working .note { font-size:13.5px; color:#c9c3bb; max-width:260px; line-height:1.5; }
   /* actions tightened to fit the narrower content zone left of the seam;
      wrap is the safety valve so a row never crosses the seam */
-  .working-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:14px;
-                     max-width:300px; }
+  /* actions sit OVER the art half (2026-08-29), bottom-right — echoing
+     the hero's actions-over-art placement. right:60px clears the plate's
+     leaning face at the buttons' depth (inset ≈ 37px there), same as the
+     hero; one unwrapped row (the old in-flow 300px max-width wrapped
+     CAMPAIGN EDITOR onto its own line — gone with it) */
+  .working-actions { position:absolute; right:60px; bottom:26px; display:flex; gap:8px; }
   /* CTAs are rounded parallelograms (2026-08-29) — same construction as
      the pulse pills: skew the box, counter-skew the label */
   .work-btn { background:rgba(247,244,243,.06); border:1px solid rgba(247,244,243,.28);
@@ -766,6 +772,12 @@
   <div class="top-bar">
     <a class="wordmark" href="#" title="Dashboard" style="text-decoration:none">TABLETOP<span>TAVERN</span></a>
     <div class="top-icons">
+      <!-- order (2026-08-29): social first, then the app-select beside
+           the user chip — the google-style pairing -->
+      <div class="icon-btn" title="Social">
+        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        <span class="badge">2</span>
+      </div>
       <div class="launcher-wrap">
         <div class="icon-btn" title="Apps" onclick="toggleLauncher(event)">
           <!-- 9-dot app-select -->
@@ -799,10 +811,6 @@
             <a class="launcher-item" href="#"><span class="pip"></span>Scene Builder</a>
           </div>
         </div>
-      </div>
-      <div class="icon-btn" title="Social">
-        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-        <span class="badge">2</span>
       </div>
       <div class="user-wrap">
         <button class="user-chip" onclick="toggleUserMenu(event)">
