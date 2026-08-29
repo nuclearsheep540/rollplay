@@ -11,7 +11,9 @@
       featured (low-profile)
     - Pulse as a LINE with a dimmer: drag the Activity dial (bottom right) — breath,
       coins and event cadence interpolate continuously; "A session is live" adds the
-      sticky joinable pill as CONTENT (the ticker never stops)
+      sticky joinable pill as CONTENT (the ticker never stops) AND drives the hero's
+      state — green live dot + ENTER SESSION when live, quiet status + START SESSION
+      otherwise (GM perspective; role chip reads Game Master / Player per viewer)
     - The invite stack: toggle "Invite waiting" — a hero-sized card dealt ON TOP of the
       hero (which dims and goes inert beneath); Accept is one tap, Decline is a two-step
       in-card confirm (nothing sent until confirmed)
@@ -24,7 +26,9 @@
       at-rest art (hover recolors + zooms), knocked-out create card last. Cards are
       sized so the typical load — up to 3 characters + create (4 shells) — fills the
       row width exactly (no In Game pill for now). The strip sits in a bordered tray
-      (news border color, 12px radius) so the container reads even when sparse
+      (carbon hairline, 12px radius) so the container reads even when sparse; the
+      tray is itself a plate (square left, 8° right face), its hairline drawn as two
+      clipped layers because a real border would be severed along the slant
     - The 8° shape language (2026-08-29): ONE slant dial imported from the app's wedge
       family (avatar pane ~8° / character strip 18° / workshop tiles 35°). Hero and
       working-on art breaks through a hard 8° seam with a perpendicular (98°) contact
@@ -174,11 +178,12 @@
               background:linear-gradient(98deg, rgba(5,4,3,.55) 42%, rgba(5,4,3,0) calc(42% + 90px)); }
   /* content panel — flat carbon left of an 8° seam; the art breaks
      through right of it (the workshop-tile seam, promoted to the hero).
+     Carbon token, NOT a hand-rolled tint (QA 2026-08-29: a one-off warm
+     gradient here read as a different grey than the other dark plates).
      Seam: bottom x 40%, top x 40% + 42px run. Seam rule (QA 2026-08-29):
      a seam never crosses the card's midline — nearer 40% — so the art
      owns the majority of the plate. */
-  .hero-panel { position:absolute; inset:0;
-                background:linear-gradient(180deg, #232019, #1a1714);
+  .hero-panel { position:absolute; inset:0; background:var(--carbon);
                 clip-path:polygon(0 0, calc(40% + 42px) 0, 40% 100%, 0 100%); }
   .hero-content { position:relative; padding:44px 42px 38px; display:flex; flex-direction:column;
                   gap:14px; min-height:300px; justify-content:flex-start; }
@@ -188,7 +193,10 @@
           font-size:11px; letter-spacing:.08em; font-weight:600;
           display:inline-block; transform:skewX(calc(-1 * var(--slant))); }
   .chip > span { display:inline-block; transform:skewX(var(--slant)); }
-  .live-dot { width:8px; height:8px; border-radius:50%; background:var(--gold);
+  /* green = live (2026-08-29) — amber read as "warning", not "on air".
+     Same green family as the app's In Game badge. */
+  .live-dot { width:8px; height:8px; border-radius:50%; background:#16a34a;
+              --breathe-glow:rgba(22,163,74,.5);
               display:inline-block; margin-right:6px; animation:breathe 1.6s ease-in-out infinite; }
   .hero h2 { font-family:var(--serif); font-size:52px; font-weight:400; line-height:1; }
   .hero-desc { max-width:460px; font-size:14.5px; line-height:1.55; color:#cfc9c2; }
@@ -263,7 +271,7 @@
      the three points before the bottom-left corner approximate a 6px
      arc there (tangents at r/tan(49°) ≈ 5px from the vertex); their
      offsets are constant for any --run because the angle never changes. */
-  .hero-frame, .card.cut, .invite-plate {
+  .hero-frame, .card.cut, .invite-plate, .char-strip, .char-strip-inner {
     clip-path:polygon(0 0, 100% 0,
                       calc(100% - var(--run) + 1px) calc(100% - 5px),
                       calc(100% - var(--run) - 1px) calc(100% - 1px),
@@ -291,6 +299,7 @@
      card chrome (2026-08-29): the plates carry art + content, the page
      carries the wayfinding */
   .stack { display:flex; flex-direction:column; }
+  .stack.grow { flex:1; }
   .section-head { display:flex; justify-content:space-between; align-items:baseline;
                   padding:0 2px; margin-bottom:10px; }
   .section-head h3 { font-family:var(--sans); font-size:11.5px; letter-spacing:.14em;
@@ -346,9 +355,11 @@
                          background:linear-gradient(90deg, #D5CFC5, rgba(213,207,197,0)); }
   .pulse-dot { width:10px; height:10px; border-radius:50%; background:var(--gold); flex:0 0 auto;
                animation:breathe var(--breath) ease-in-out infinite; }
+  /* glow color per dot: the pulse dot keeps the gold default, the hero's
+     live dot overrides with green via --breathe-glow */
   @keyframes breathe {
-    0%,100% { opacity:.35; box-shadow:0 0 0 0 rgba(217,164,65,0); }
-    50%     { opacity:1;   box-shadow:0 0 10px 2px rgba(217,164,65,.45); }
+    0%,100% { opacity:.35; box-shadow:0 0 0 0 rgba(0,0,0,0); }
+    50%     { opacity:1;   box-shadow:0 0 10px 2px var(--breathe-glow, rgba(217,164,65,.45)); }
   }
   @media (prefers-reduced-motion: reduce) {
     .pulse-dot, .live-dot { animation:none; opacity:.85; }
@@ -389,7 +400,9 @@
                      letter-spacing:.05em; cursor:pointer; }
 
   /* ── news noticeboard ───────────────────────────────────── */
-  .news { margin-top:34px; flex:1; display:flex; flex-direction:column;
+  /* top margin clears the frame-breaking art (rises 26px above the card)
+     so the breakout doesn't collide with the section header above */
+  .news { margin-top:26px; flex:1; display:flex; flex-direction:column;
           background:var(--parchment); border:1px solid var(--parchment-border);
           border-radius:12px; box-shadow:0 8px 24px rgba(31,31,31,.08); padding:0 28px 26px; }
   .news .link-gold { margin-top:auto; padding-top:16px; align-self:flex-start; }
@@ -421,13 +434,24 @@
      First card square-capped (no left neighbour → no seam shadow);
      create card is the strip's last member, knocked-out. */
   .char-row { margin-top:26px; }
-  /* the strip sits in a visible tray: news-card border color + rounding,
-     so the container reads as a defined space even when the row is
-     sparse (1–2 characters leave an empty trailing stride inside it).
-     overflow:hidden lets the tray's radius round the lead card's square
-     cap and whatever meets the right edge. */
-  .char-strip { display:flex; aspect-ratio:2.3905; overflow:hidden;
-                border:1px solid var(--parchment-border); border-radius:12px; }
+  /* the strip sits in a visible tray (carbon hairline, 2026-08-29 — the
+     parchment border read too faint here) so the container reads as a
+     defined space even when the row is sparse (1–2 characters leave an
+     empty trailing stride inside it).
+     The tray is a PLATE (square left, 8° right face) — and since a real
+     border would be severed by clip-path along the slant, the hairline
+     is drawn as two clipped layers: this outer layer IS the border
+     color, and the inner layer (inset 1px, page color) leaves a 1px
+     ring that follows the silhouette. --run = tan(8°) × ~570px tray
+     height; the create card's own 8° edge lands flush on the tray's
+     slanted face because both runs derive from the same height. */
+  /* the INNER owns the aspect ratio: shells size from the inner's height,
+     so the 4-shell fill lands exactly on the inner's edge (QA 2026-08-29:
+     with the outer owning the aspect, the inner box came out ~3px wider
+     than the strip content — a smoke sliver before the hairline). */
+  .char-strip { --run:80px; background:var(--carbon); border-radius:12px; }
+  .char-strip-inner { margin:1px; aspect-ratio:2.3905; display:flex; overflow:hidden;
+                      background:var(--smoke); border-radius:11px; }
   .char-shell { position:relative; flex:0 0 auto; height:100%; aspect-ratio:9/16;
                 pointer-events:none; }
   .char-card { position:absolute; top:0; bottom:0; left:0; width:124.99%;
@@ -530,8 +554,8 @@
     </div>
     <div class="hero-content">
       <div class="hero-meta">
-        <span class="chip"><span>GM</span></span>
-        <span><span class="live-dot"></span>Session live &middot; 3 players at the table</span>
+        <span class="chip"><span>Game Master</span></span>
+        <span id="heroStatus"><span class="live-dot"></span>Session live &middot; 3 players at the table</span>
       </div>
       <h2>Coriolis</h2>
       <div class="hero-desc">The Third Horizon calls. Explore the ruins of the Portal Builders and
@@ -540,7 +564,7 @@
     <div class="hero-actions">
       <button class="btn btn-ghost"><span>NOTES</span></button>
       <button class="btn btn-ghost"><span>INVITE PLAYER</span></button>
-      <button class="btn btn-gold"><span>ENTER SESSION →</span></button>
+      <button class="btn btn-gold" id="heroCta"><span>ENTER SESSION →</span></button>
     </div>
 
     <div class="invite" id="inviteCard">
@@ -583,7 +607,11 @@
   <div class="grid">
     <!-- 2/5: news noticeboard, spanning the full column height -->
     <div>
-      <section class="news">
+      <div class="stack grow">
+        <div class="section-head">
+          <h3>Updates</h3>
+        </div>
+        <section class="news">
         <div class="news-art"></div>
         <div class="news-date">28 AUG 2026</div>
         <h4>Weather effects arrive in the Workshop</h4>
@@ -591,7 +619,8 @@
            lightning directly to your scenes, with customizable intensity and direction —
            then save the mood as a preset and recall it mid-session.</p>
         <a class="link-gold" href="#">READ MORE →</a>
-      </section>
+        </section>
+      </div>
     </div>
 
     <!-- 3/5: continue building + featured, stacked -->
@@ -648,6 +677,7 @@
       <h3>Your characters</h3>
     </div>
     <div class="char-strip">
+      <div class="char-strip-inner">
       <div class="char-shell first">
         <button class="char-card">
           <div class="char-art" style="background-image:
@@ -684,6 +714,7 @@
             <h4>Create New Character</h4>
           </div>
         </button>
+      </div>
       </div>
     </div>
   </div>
@@ -726,7 +757,7 @@
     'SarahTheDM is writing notes', '3 of 5 at the table',
     'GM started “Tavern Ambience”', 'SarahTheDM is online',
   ];
-  const CALM_MSG = 'All quiet in the tavern · next game Thursday, 20:00';
+  const CALM_MSG = 'All quiet in the tavern · next game Saturday, 8pm';
   const MAX_ITEMS = 4;   // hard cap; the real cap is available width (see below)
   let emitTimer = null, poolIndex = 0, activityValue = 10, sessionLive = false;
   let livePill = null;
@@ -743,9 +774,14 @@
     // ambient events enter beside the dot — but never ahead of a live pill
     const anchor = (livePill && livePill.isConnected) ? livePill.nextSibling : itemsEl.firstChild;
     itemsEl.insertBefore(item, anchor);
-    // width-aware cap: drop tail events until the line fits (never the live pill)
+    // width-aware cap: drop tail events until the line fits (never the
+    // live pill). The +10px slack absorbs the skewed pill-shapes'
+    // transform overhang (~3px past their layout box), which counts into
+    // scrollWidth — without it every emit read as overflow and drained
+    // the line to a single pill (regression caught 2026-08-29 after the
+    // pills took the 8° skew).
     while ((itemsEl.children.length > MAX_ITEMS ||
-            itemsEl.scrollWidth > itemsEl.clientWidth) && itemsEl.children.length > 1) {
+            itemsEl.scrollWidth > itemsEl.clientWidth + 10) && itemsEl.children.length > 1) {
       if (itemsEl.lastChild === livePill) break;
       itemsEl.lastChild.remove();
     }
@@ -783,8 +819,25 @@
     }
   }
 
+  /* the hero is wired to the same flag (2026-08-29): live → green dot +
+     ENTER SESSION; not live → quiet status + START SESSION. This is the
+     GM perspective — a player would see Join (live) / Waiting for GM
+     (not live), per the 01 plan's session-state mapping. */
+  function syncHero(live) {
+    const heroStatus = document.getElementById('heroStatus');
+    const heroCta = document.getElementById('heroCta');
+    if (live) {
+      heroStatus.innerHTML = '<span class="live-dot"></span>Session live · 3 players at the table';
+      heroCta.innerHTML = '<span>ENTER SESSION →</span>';
+    } else {
+      heroStatus.innerHTML = 'Next session · Saturday 29th August, 8pm';
+      heroCta.innerHTML = '<span>START SESSION</span>';
+    }
+  }
+
   function setLive(on) {
     sessionLive = on;
+    syncHero(on);
     if (on && !livePill) {
       livePill = document.createElement('span');
       livePill.className = 'pulse-item live-pill';
@@ -802,6 +855,7 @@
 
   emitItem(CALM_MSG, false);
   applyActivity(activityValue);
+  syncHero(false);   // checkbox starts unchecked — hero starts not-live
 
   /* ── Invite stack: accept = one tap; decline = two-step in-card confirm ── */
   const inviteCard = document.getElementById('inviteCard');
