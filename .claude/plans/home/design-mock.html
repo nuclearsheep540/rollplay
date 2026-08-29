@@ -17,6 +17,30 @@
       in-card confirm (nothing sent until confirmed)
     - The news noticeboard: the page's single light card, frame-breaking art (mascot-ready)
     - Featured: portrait shelf card, cover-forward
+    - Characters strip (2026-08-29): a row BELOW the grid using CharacterManager.js's
+      parallelogram tiling at the PAGE's 8° dial (the tab component runs 18°; 18° read
+      too obtuse beside the 8° plates, so the construction is kept and the dial
+      swapped): 9:16 shells, square-capped lead card, 98° seam shadows, greyscale-
+      at-rest art (hover recolors + zooms), knocked-out create card last. Cards are
+      sized so the typical load — up to 3 characters + create (4 shells) — fills the
+      row width exactly (no In Game pill for now). The strip sits in a bordered tray
+      (news border color, 12px radius) so the container reads even when sparse
+    - The 8° shape language (2026-08-29): ONE slant dial imported from the app's wedge
+      family (avatar pane ~8° / character strip 18° / workshop tiles 35°). Hero and
+      working-on art breaks through a hard 8° seam with a perpendicular (98°) contact
+      shadow — a seam never crosses the card's midline, sitting nearer 40% so the art
+      owns the majority; the GM chip is an 8° parallelogram and ALL pulse pills (quiet +
+      live) are ROUNDED 8° parallelograms; dark cards are slanted
+      PLATES — square LEFT face (text lives there; the character strip took the same
+      QA fallback for its lead card), ENTIRE RIGHT face leaning at 8° (a full face, not
+      a corner chamfer — QA 2026-08-29: a notch read as a nick, not a language). Right
+      face ∥ seam means the art band between them is itself a parallelogram — the
+      TWO-LAYER read (an art plate laid on the card); that layered shape is what makes
+      the page's remaining rounded rects feel less present. The invite card takes the
+      plate silhouette too (right-face slant, NO inner seam), and ALL card CTAs (hero,
+      invite, working) are rounded parallelograms. Deliberately NOT slanted: news (the other
+      species) and the pulse rule itself (a level horizon). Hero text is TOP-aligned
+      (2026-08-29).
 -->
 <!doctype html>
 <html lang="en">
@@ -44,6 +68,33 @@
     --caps:  'Cinzel', Georgia, serif;               /* mock-only (book covers etc.) */
     --nav:   'Metamorphous', Georgia, serif;         /* the app's REAL tab-bar face */
     --sans:  'Inter', -apple-system, sans-serif;     /* the app's real body face */
+    /* ── the 8° dial ─────────────────────────────────────────
+       ONE slant for the whole page, imported from the app's wedge family
+       (avatar pane ~8° / character strip 18° / workshop tiles 35°) — same
+       single-dial discipline as CharacterManager.js STRIP_ANGLE_DEGREES.
+       tan(8°) ≈ 0.1405; every run below derives from it:
+         hero plate/seam  run = 0.1405 × 300px hero    ≈ 42px
+         working plate    run = 0.1405 × 380px card    ≈ 53px
+         featured plate   run = 0.1405 × ~247px card   ≈ 35px
+       Contact shadows sit perpendicular to the slant (90°+8° = 98°) so
+       every point of a seam projects to ONE gradient stop — the workshop
+       tiles' construction. All slants lean "/" (top x > bottom x).
+       Seam rule: a seam never crosses the card's midline — it sits
+       nearer 40% of the width, so art owns the majority of the plate. */
+    --slant: 8deg;
+    /* Slanted plates: square LEFT face — that's where text lives (QA
+       2026-08-29; same fallback the character strip took for its lead
+       card, STRIP_FIRST_CLIP) — and the ENTIRE RIGHT face leaning at
+       the slant (a full face, not a corner chamfer: a notch read as a
+       nick, not a language). Right face ∥ seam makes the art band
+       between them a true parallelogram — the "two layers" read: an
+       art plate laid on the card. Each plate sets --run = tan(8°) ×
+       its own rendered height.
+       NOTE: the plate polygon is written out at each clip-path rather
+       than composed here as a variable — var() inside a custom property
+       resolves where the property is DECLARED, so a :root-level polygon
+       referencing the per-card --run silently no-ops (bug caught
+       2026-08-29: the plates rendered as plain rounded rects). */
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:var(--smoke); color:var(--carbon); font-family:var(--sans); }
@@ -104,28 +155,53 @@
              color:#6d675f; }
 
   /* ── hero ───────────────────────────────────────────────── */
-  .hero { position:relative; margin-top:26px; border-radius:12px; overflow:visible;
+  .hero { position:relative; margin-top:26px; overflow:visible;
           min-height:300px; color:var(--smoke); }
-  .hero-art { position:absolute; inset:0; border-radius:12px; overflow:hidden;
+  /* slanted plate — all hero visuals clip inside this frame, so the
+     invite card (a sibling, a physical dealt card) keeps its own shape
+     and can spill its shadow outside */
+  .hero-frame { position:absolute; inset:0; border-radius:6px; overflow:hidden;
+                --run:42px; background:var(--carbon); }
+  .hero-art { position:absolute; inset:0;
               background:
                 radial-gradient(120% 90% at 78% 8%, #6b4a2e 0%, rgba(107,74,46,0) 34%),
                 radial-gradient(90% 70% at 85% 30%, #24344f 0%, rgba(36,52,79,0) 55%),
                 linear-gradient(115deg, #0a0d16 20%, #131b2e 55%, #0c1020 100%); }
+  /* contact shadow the panel casts onto the art: perpendicular to the
+     seam (98°), anchored at the seam's projected stop (its x-midpoint,
+     ~(40% + 43%)/2 ≈ 42%), fixed-px fade so it stays a tight edge */
   .hero-art::after { content:""; position:absolute; inset:0;
-              background:linear-gradient(100deg, rgba(8,8,10,.82) 22%, rgba(8,8,10,.25) 65%, rgba(8,8,10,.45)); }
+              background:linear-gradient(98deg, rgba(5,4,3,.55) 42%, rgba(5,4,3,0) calc(42% + 90px)); }
+  /* content panel — flat carbon left of an 8° seam; the art breaks
+     through right of it (the workshop-tile seam, promoted to the hero).
+     Seam: bottom x 40%, top x 40% + 42px run. Seam rule (QA 2026-08-29):
+     a seam never crosses the card's midline — nearer 40% — so the art
+     owns the majority of the plate. */
+  .hero-panel { position:absolute; inset:0;
+                background:linear-gradient(180deg, #232019, #1a1714);
+                clip-path:polygon(0 0, calc(40% + 42px) 0, 40% 100%, 0 100%); }
   .hero-content { position:relative; padding:44px 42px 38px; display:flex; flex-direction:column;
-                  gap:14px; min-height:300px; justify-content:flex-end; }
+                  gap:14px; min-height:300px; justify-content:flex-start; }
   .hero-meta { display:flex; align-items:center; gap:12px; font-size:13px; color:#d9d4cd; }
-  .chip { border:1px solid rgba(247,244,243,.4); border-radius:5px; padding:2px 8px;
-          font-size:11px; letter-spacing:.08em; font-weight:600; }
+  /* chips are 8° parallelograms — skew the box, counter-skew the text */
+  .chip { border:1px solid rgba(247,244,243,.4); border-radius:2px; padding:2px 9px;
+          font-size:11px; letter-spacing:.08em; font-weight:600;
+          display:inline-block; transform:skewX(calc(-1 * var(--slant))); }
+  .chip > span { display:inline-block; transform:skewX(var(--slant)); }
   .live-dot { width:8px; height:8px; border-radius:50%; background:var(--gold);
               display:inline-block; margin-right:6px; animation:breathe 1.6s ease-in-out infinite; }
   .hero h2 { font-family:var(--serif); font-size:52px; font-weight:400; line-height:1; }
-  .hero-desc { max-width:560px; font-size:14.5px; line-height:1.55; color:#cfc9c2; }
-  .hero-actions { position:absolute; right:38px; bottom:36px; display:flex; gap:14px; }
+  .hero-desc { max-width:460px; font-size:14.5px; line-height:1.55; color:#cfc9c2; }
+  /* right offset clears the plate's leaning right face (inset ≈ 37px at
+     the buttons' depth) */
+  .hero-actions { position:absolute; right:60px; bottom:36px; display:flex; gap:14px; }
 
+  /* card CTAs are rounded parallelograms (2026-08-29) — skew the box,
+     counter-skew the label */
   .btn { border-radius:8px; padding:12px 22px; font-family:var(--sans); font-size:13px;
-         font-weight:600; letter-spacing:.06em; cursor:pointer; border:none; }
+         font-weight:600; letter-spacing:.06em; cursor:pointer; border:none;
+         transform:skewX(calc(-1 * var(--slant))); }
+  .btn > span { display:inline-block; transform:skewX(var(--slant)); }
   .btn-gold { background:var(--gold); color:#241c08; }
   .btn-gold:hover { filter:brightness(1.06); }
   .btn-ghost { background:rgba(20,18,16,.35); color:var(--smoke);
@@ -135,11 +211,17 @@
   /* ── invite stack — a card ON a card ─────────────────────
      Same dimensions as the hero, offset a few px on x/y so the under-card
      edge shows; the hero dims and goes inert beneath it. */
-  .invite { position:absolute; inset:0; z-index:5; border-radius:12px; overflow:hidden;
-            background:var(--carbon); border:1px solid #3d3833;
+  .invite { position:absolute; inset:0; z-index:5; --run:42px;
             transform:translate(12px, -12px);
-            box-shadow:0 26px 60px rgba(5,4,3,.6);
+            /* box-shadow dies under clip-path, and a same-element
+               drop-shadow is clipped with it — so the shadow lives here
+               on the wrapper and the clip lives on .invite-plate */
+            filter:drop-shadow(0 22px 30px rgba(5,4,3,.55));
             opacity:0; pointer-events:none; transition:opacity .35s, transform .35s; }
+  /* the invite is a plate too (2026-08-29): right-face slant, same --run
+     as the hero it covers — but NO inner seam */
+  .invite-plate { position:absolute; inset:0; border-radius:6px; overflow:hidden;
+                  background:var(--carbon); }
   body.show-invite .invite { opacity:1; pointer-events:auto; }
   .invite.leaving { opacity:0; transform:translate(12px, -52px); }
   .invite-art { position:absolute; inset:0;
@@ -161,8 +243,8 @@
   .invite-confirm p { font-size:14.5px; margin-bottom:14px; color:#d9d4cd; }
   .btn-danger { background:#7a2f2a; color:#f3ded9; }
   /* hero disabled while an invite sits on it */
-  .hero-art, .hero-content, .hero-actions { transition:opacity .35s, filter .35s; }
-  body.show-invite .hero-art { filter:brightness(.5) saturate(.7); }
+  .hero-frame, .hero-content, .hero-actions { transition:opacity .35s, filter .35s; }
+  body.show-invite .hero-frame { filter:brightness(.5) saturate(.7); }
   body.show-invite .hero-content,
   body.show-invite .hero-actions { opacity:.35; pointer-events:none; }
 
@@ -171,32 +253,72 @@
   .grid > div { display:flex; flex-direction:column; gap:26px; }
   @media (max-width:920px){ .grid { grid-template-columns:1fr; } }
   .card { background:var(--carbon); border:1px solid #34302b; border-radius:12px; color:var(--smoke); }
+  /* slanted plate variant — the silhouette replaces the hairline border
+     (clip-path would sever it along the slants; on a light page the dark
+     silhouette defines the edge on its own) */
+  .card.cut { border:none; border-radius:6px; }
+  /* the shared plate silhouette (each plate sets its own --run). The
+     slant's bottom vertex is a polygon point, not an element corner, so
+     border-radius cannot round it (QA 2026-08-29: it rendered sharp) —
+     the three points before the bottom-left corner approximate a 6px
+     arc there (tangents at r/tan(49°) ≈ 5px from the vertex); their
+     offsets are constant for any --run because the angle never changes. */
+  .hero-frame, .card.cut, .invite-plate {
+    clip-path:polygon(0 0, 100% 0,
+                      calc(100% - var(--run) + 1px) calc(100% - 5px),
+                      calc(100% - var(--run) - 1px) calc(100% - 1px),
+                      calc(100% - var(--run) - 5px) 100%,
+                      0 100%); }
 
-  /* working-on card — spread art, moodier than hero */
-  .working { position:relative; overflow:hidden; min-height:380px; }
+  /* working-on card — art right of an 8° seam (workshop-tile geometry;
+     the card's own carbon is the content surface). Seam: bottom x 42%,
+     top x 42% + 53px (≈48.6% of the ~800px card — the whole seam stays
+     under the midline per the seam rule; art owns the majority). The
+     contact shadow rides in the same background stack, anchored at the
+     seam's projected stop (~45%), and is clipped with the art so it hugs
+     the diagonal. */
+  .working { position:relative; overflow:hidden; min-height:380px;
+             --run:53px; /* tan(8°) × 380px */ }
   .working-art { position:absolute; inset:0;
+                 clip-path:polygon(calc(42% + 53px) 0, 100% 0, 100% 100%, 42% 100%);
                  background:
+                   linear-gradient(98deg, rgba(5,4,3,.6) 45%, rgba(5,4,3,0) calc(45% + 80px)),
                    radial-gradient(90% 80% at 80% 100%, #4a2c10 0%, rgba(74,44,16,0) 55%),
                    linear-gradient(115deg, #17100a 30%, #2b1c0e 70%, #170f08 100%); }
-  .working-art::after { content:""; position:absolute; inset:0;
-                 background:linear-gradient(100deg, rgba(10,8,6,.93) 30%, rgba(10,8,6,.55)); }
   .working-content { position:relative; padding:26px 30px 26px; display:flex;
                      flex-direction:column; gap:10px; min-height:380px; height:100%; }
-  .card-head { display:flex; justify-content:space-between; align-items:baseline; }
-  .card-head h3 { font-family:var(--serif); font-size:24px; font-weight:400; }
+  /* section labels — small h3 headings on the page ground, OUTSIDE the
+     card chrome (2026-08-29): the plates carry art + content, the page
+     carries the wayfinding */
+  .stack { display:flex; flex-direction:column; }
+  .section-head { display:flex; justify-content:space-between; align-items:baseline;
+                  padding:0 2px; margin-bottom:10px; }
+  .section-head h3 { font-family:var(--sans); font-size:11.5px; letter-spacing:.14em;
+                     font-weight:600; color:#9a7526; text-transform:uppercase; }
   .muted { font-size:12.5px; color:var(--silver); }
-  .eyebrow { font-size:11px; letter-spacing:.12em; color:var(--gold); font-weight:600; }
+  /* title row spans the card, so the meta sits top-RIGHT over the art —
+     campaign meta lives in the card (2026-08-29) */
+  .working-head { display:flex; justify-content:space-between; align-items:baseline; }
   .working h4 { font-family:var(--serif); font-size:32px; font-weight:400; }
-  .working .note { font-size:13.5px; color:#c9c3bb; max-width:520px; line-height:1.5; }
-  .working-actions { display:flex; gap:12px; margin-top:auto; padding-top:14px; }
+  /* note clears the seam: content zone is ~42% of the ~800px card minus padding */
+  .working .note { font-size:13.5px; color:#c9c3bb; max-width:260px; line-height:1.5; }
+  /* actions tightened to fit the narrower content zone left of the seam;
+     wrap is the safety valve so a row never crosses the seam */
+  .working-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:14px;
+                     max-width:300px; }
+  /* CTAs are rounded parallelograms (2026-08-29) — same construction as
+     the pulse pills: skew the box, counter-skew the label */
   .work-btn { background:rgba(247,244,243,.06); border:1px solid rgba(247,244,243,.28);
-              color:var(--smoke); border-radius:8px; padding:10px 18px; font-size:12.5px;
-              font-weight:600; letter-spacing:.05em; cursor:pointer; }
+              color:var(--smoke); border-radius:8px; padding:10px 12px; font-size:12px;
+              font-weight:600; letter-spacing:.05em; cursor:pointer;
+              transform:skewX(calc(-1 * var(--slant))); }
+  .work-btn > span { display:inline-block; transform:skewX(var(--slant)); }
   .work-btn:hover { border-color:var(--gold); color:var(--gold); }
 
   /* featured — low-profile: shelf object left, meta beside */
-  .featured { padding:22px 26px; }
-  .featured-inner { display:flex; gap:18px; margin-top:14px; }
+  .featured { padding:22px 26px;
+              --run:35px; /* tan(8°) × ~247px rendered height — retune if content changes */ }
+  .featured-inner { display:flex; gap:18px; }
   .cover { flex:0 0 110px; }
   .cover-art { width:110px; height:156px; border-radius:6px; position:relative;
                display:grid; place-items:end center; padding-bottom:12px;
@@ -245,18 +367,25 @@
   .coin.c2 { transition-delay:.08s; } .coin.c3 { transition-delay:.16s; }
   .pulse-items { display:flex; align-items:center; gap:12px; overflow:hidden;
                  min-width:0; white-space:nowrap; }
+  /* pills are ROUNDED parallelograms — the family skew with soft corners.
+     The skew lives on an inner shape because the FLIP slide owns the
+     outer element's transform. */
   .pulse-item { flex:0 0 auto; font-size:12.5px; line-height:1.4; color:#544e46;
-                background:rgba(31,27,22,.055); border-radius:999px; padding:6px 14px;
                 transition:transform .5s cubic-bezier(.22,.9,.3,1), opacity .35s ease; }
+  .pill-shape { display:inline-block; background:rgba(31,27,22,.055); border-radius:8px;
+                padding:6px 14px; transform:skewX(calc(-1 * var(--slant))); }
+  .pill-shape > span { display:inline-block; transform:skewX(var(--slant)); }
   .pulse-item:nth-child(2) { opacity:.68; }
   .pulse-item:nth-child(3) { opacity:.48; }
   .pulse-item:nth-child(4) { opacity:.34; }
   /* a live, joinable session is CONTENT, not a mode: a sticky gold pill at the
      head of the line, carrying its own Join action; the ticker flows behind it */
-  .pulse-item.live-pill { display:inline-flex; align-items:center; gap:10px;
-                          background:rgba(217,164,65,.18); color:#5c430f; font-weight:600; }
+  .live-shape { display:inline-flex; align-items:center; gap:10px; padding:6px 14px;
+                background:rgba(217,164,65,.18); color:#5c430f; font-weight:600;
+                border-radius:8px; transform:skewX(calc(-1 * var(--slant))); }
+  .live-shape > * { display:inline-block; transform:skewX(var(--slant)); }
   .live-pill .join { background:var(--gold); border:none; color:#241c08;
-                     border-radius:999px; padding:3px 11px; font-size:11px; font-weight:700;
+                     border-radius:3px; padding:3px 11px; font-size:11px; font-weight:700;
                      letter-spacing:.05em; cursor:pointer; }
 
   /* ── news noticeboard ───────────────────────────────────── */
@@ -275,6 +404,58 @@
              margin:6px 0 8px; line-height:1.2; }
   .news p { font-size:13.5px; line-height:1.6; color:#4c463e; }
   .news .link-gold { color:#9a7526; }
+
+  /* ── characters strip — CharacterManager.js's construction at the
+     PAGE's dial ──
+     The dashboard strip's tiling (tokens v3 decision 37), with the angle
+     swapped from the component's 18° to the page's 8° (QA 2026-08-29: 18°
+     read too obtuse beside the 8° plates). Same derivations, new dial —
+     tan(8°) = 0.1405, sin(8°) = 0.1392, cos(8°) = 0.9903:
+       fill rule: up to 3 characters + create (4 shells) fill the row →
+       W/H = 4·0.5625 + 0.1405 = 2.3905 (aspect below); at the 1362px
+       frame → H ≈ 570px, stride ≈ 320px
+       box width = (S+R)/S = 124.99% of shell
+       clip x-stops: R/(S+R) = 19.99% top, S/(S+R) = 80.01% bottom
+       seam shadow: 98° (90+8), anchor sin/(box·cos+sin) = 16.66%,
+       fixed 72px fade tail.
+     First card square-capped (no left neighbour → no seam shadow);
+     create card is the strip's last member, knocked-out. */
+  .char-row { margin-top:26px; }
+  /* the strip sits in a visible tray: news-card border color + rounding,
+     so the container reads as a defined space even when the row is
+     sparse (1–2 characters leave an empty trailing stride inside it).
+     overflow:hidden lets the tray's radius round the lead card's square
+     cap and whatever meets the right edge. */
+  .char-strip { display:flex; aspect-ratio:2.3905; overflow:hidden;
+                border:1px solid var(--parchment-border); border-radius:12px; }
+  .char-shell { position:relative; flex:0 0 auto; height:100%; aspect-ratio:9/16;
+                pointer-events:none; }
+  .char-card { position:absolute; top:0; bottom:0; left:0; width:124.99%;
+               border:none; padding:0; cursor:pointer; pointer-events:auto;
+               background:var(--graphite); text-align:left;
+               clip-path:polygon(19.99% 0, 100% 0, 80.01% 100%, 0 100%); }
+  .char-shell.first .char-card { clip-path:polygon(0 0, 100% 0, 80.01% 100%, 0 100%); }
+  /* greyscale-at-rest lives on the art layer only — name/badge stay
+     crisp; hover recolors and zooms the art inside the fixed frame */
+  .char-art { position:absolute; inset:0; background-size:cover; background-position:center;
+              filter:saturate(0); transition:filter .2s ease-out, transform .2s ease-out; }
+  .char-card:hover .char-art { filter:saturate(1); transform:scale(1.05); }
+  /* seam shadow on its own layer so hover can fade it while popped */
+  .char-seam { position:absolute; inset:0; pointer-events:none;
+               background:linear-gradient(98deg, rgba(0,0,0,.55) 16.66%, transparent calc(16.66% + 72px));
+               transition:opacity .2s ease-out; }
+  .char-card:hover .char-seam { opacity:0; }
+  .char-name { position:absolute; top:2rem; left:calc(19.99% + 1rem); right:1rem;
+               font-family:var(--nav); font-size:24px; font-weight:400; color:var(--smoke);
+               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .char-create .char-card { background:rgba(55,50,47,.25); }
+  .char-create-inner { position:absolute; inset:0; display:flex; flex-direction:column;
+                       align-items:center; justify-content:center; gap:14px; opacity:.5;
+                       transition:opacity .2s, transform .2s; }
+  .char-card:hover .char-create-inner { opacity:.8; transform:scale(1.05); }
+  .char-create-inner .plus { font-size:72px; color:var(--smoke); line-height:1; }
+  .char-create-inner h4 { font-family:var(--nav); font-size:24px; font-weight:400;
+                          color:var(--smoke); text-align:center; padding:0 20px; }
 
   /* ── footer ─────────────────────────────────────────────── */
   footer { border-top:1px solid #e2ddd6; }
@@ -343,10 +524,13 @@
 
   <!-- hero + invite stack -->
   <section class="hero">
-    <div class="hero-art"></div>
+    <div class="hero-frame">
+      <div class="hero-art"></div>
+      <div class="hero-panel"></div>
+    </div>
     <div class="hero-content">
       <div class="hero-meta">
-        <span class="chip">GM</span>
+        <span class="chip"><span>GM</span></span>
         <span><span class="live-dot"></span>Session live &middot; 3 players at the table</span>
       </div>
       <h2>Coriolis</h2>
@@ -354,11 +538,13 @@
         navigate the tense politics of Coriolis station.</div>
     </div>
     <div class="hero-actions">
-      <button class="btn btn-ghost">INVITE PLAYER</button>
-      <button class="btn btn-gold">ENTER SESSION →</button>
+      <button class="btn btn-ghost"><span>NOTES</span></button>
+      <button class="btn btn-ghost"><span>INVITE PLAYER</span></button>
+      <button class="btn btn-gold"><span>ENTER SESSION →</span></button>
     </div>
 
     <div class="invite" id="inviteCard">
+      <div class="invite-plate">
       <div class="invite-art"></div>
       <div class="invite-body">
         <div class="invite-default">
@@ -366,8 +552,8 @@
           <h3>Blackwater Reach</h3>
           <div class="from">SarahTheDM invited you to this campaign</div>
           <div class="invite-actions">
-            <button class="btn btn-gold" onclick="acceptInvite()">ACCEPT</button>
-            <button class="btn btn-ghost" onclick="startDecline()">DECLINE</button>
+            <button class="btn btn-gold" onclick="acceptInvite()"><span>ACCEPT</span></button>
+            <button class="btn btn-ghost" onclick="startDecline()"><span>DECLINE</span></button>
           </div>
         </div>
         <div class="invite-confirm">
@@ -375,10 +561,11 @@
           <h3>Blackwater Reach</h3>
           <p>Decline this invite? SarahTheDM would need to invite you again.</p>
           <div class="invite-actions">
-            <button class="btn btn-danger" onclick="confirmDecline()">YES, DECLINE</button>
-            <button class="btn btn-ghost" onclick="cancelDecline()">KEEP IT</button>
+            <button class="btn btn-danger" onclick="confirmDecline()"><span>YES, DECLINE</span></button>
+            <button class="btn btn-ghost" onclick="cancelDecline()"><span>KEEP IT</span></button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </section>
@@ -409,28 +596,33 @@
 
     <!-- 3/5: continue building + featured, stacked -->
     <div>
-      <section class="card working">
+      <div class="stack">
+        <div class="section-head">
+          <h3>Continue building</h3>
+        </div>
+        <section class="card working cut">
         <div class="working-art"></div>
         <div class="working-content">
-          <div class="card-head">
-            <span class="eyebrow">CONTINUE BUILDING</span>
+          <div class="working-head">
+            <h4>Shinfukyo</h4>
             <span class="muted">Last edited 2 hours ago</span>
           </div>
-          <h4>Shinfukyo</h4>
           <div class="note">World building notes for the eastern provinces and preliminary NPC
             stat blocks for the Shogun's guard.</div>
           <div class="working-actions">
-            <button class="work-btn">ASSETS</button>
-            <button class="work-btn">NOTES</button>
-            <button class="work-btn">WORKSHOP</button>
+            <button class="work-btn"><span>ASSETS</span></button>
+            <button class="work-btn"><span>WORKSHOP</span></button>
+            <button class="work-btn"><span>CAMPAIGN EDITOR</span></button>
           </div>
         </div>
-      </section>
+        </section>
+      </div>
 
-      <section class="card featured">
-        <div class="card-head">
-          <span class="eyebrow">FEATURED FROM THE MARKET</span>
+      <div class="stack">
+        <div class="section-head">
+          <h3>Featured from the Market</h3>
         </div>
+        <section class="card featured cut">
         <div class="featured-inner">
           <div class="cover">
             <div class="cover-art"><span>THE<br>SALT ROAD</span></div>
@@ -445,7 +637,54 @@
             <a class="link-gold" href="#">VIEW IN MARKET →</a>
           </div>
         </div>
-      </section>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- characters strip — mirrors the Characters tab (18°, its own component) -->
+  <div class="stack char-row">
+    <div class="section-head">
+      <h3>Your characters</h3>
+    </div>
+    <div class="char-strip">
+      <div class="char-shell first">
+        <button class="char-card">
+          <div class="char-art" style="background-image:
+            linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+            radial-gradient(90% 70% at 55% 30%, #7a5a3a 0%, rgba(122,90,58,0) 60%),
+            linear-gradient(150deg, #2a2018 10%, #4a3826 60%, #241a10)"></div>
+          <h3 class="char-name">Baldric</h3>
+        </button>
+      </div>
+      <div class="char-shell">
+        <button class="char-card">
+          <div class="char-art" style="background-image:
+            linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+            radial-gradient(90% 70% at 50% 28%, #3a6a5a 0%, rgba(58,106,90,0) 60%),
+            linear-gradient(150deg, #14201b 10%, #26443a 60%, #101a15)"></div>
+          <div class="char-seam"></div>
+          <h3 class="char-name">Wren</h3>
+        </button>
+      </div>
+      <div class="char-shell" id="charShell3">
+        <button class="char-card">
+          <div class="char-art" style="background-image:
+            linear-gradient(rgba(11,10,9,.15), rgba(11,10,9,.15)),
+            radial-gradient(90% 70% at 52% 30%, #5a4a7a 0%, rgba(90,74,122,0) 60%),
+            linear-gradient(150deg, #1a1624 10%, #362c4e 60%, #131020)"></div>
+          <div class="char-seam"></div>
+          <h3 class="char-name">Kazimir</h3>
+        </button>
+      </div>
+      <div class="char-shell char-create">
+        <button class="char-card">
+          <div class="char-create-inner">
+            <div class="plus">+</div>
+            <h4>Create New Character</h4>
+          </div>
+        </button>
+      </div>
     </div>
   </div>
 </main>
@@ -460,7 +699,7 @@
 </footer>
 
 <div class="controls">
-  <div class="lbl">MOCK CONTROLS — PULSE</div>
+  <div class="lbl">MOCK CONTROLS</div>
   <div class="row">
     <span>Activity</span>
     <input type="range" id="activity" min="0" max="100" value="10"
@@ -468,6 +707,11 @@
   </div>
   <label><input type="checkbox" id="liveToggle" onchange="setLive(this.checked)"> A session is live</label>
   <label><input type="checkbox" id="inviteToggle" onchange="toggleInvite(this.checked)"> Invite waiting</label>
+  <div class="row" style="margin-top:10px">
+    <span>Characters</span>
+    <button id="chars2" onclick="setCharCount(2)">2</button>
+    <button id="chars3" class="active" onclick="setCharCount(3)">3</button>
+  </div>
 </div>
 
 <script>
@@ -494,7 +738,7 @@
     const olds = [...itemsEl.children].map(el => [el, el.getBoundingClientRect().left]);
     const item = document.createElement('span');
     item.className = 'pulse-item';
-    item.textContent = text;
+    item.innerHTML = '<span class="pill-shape"><span>' + text + '</span></span>';
     if (animate) { item.style.opacity = '0'; item.style.transform = 'translateX(-16px)'; }
     // ambient events enter beside the dot — but never ahead of a live pill
     const anchor = (livePill && livePill.isConnected) ? livePill.nextSibling : itemsEl.firstChild;
@@ -544,7 +788,7 @@
     if (on && !livePill) {
       livePill = document.createElement('span');
       livePill.className = 'pulse-item live-pill';
-      livePill.innerHTML = 'Coriolis is live · 3 at the table <button class="join">JOIN</button>';
+      livePill.innerHTML = '<span class="live-shape"><span>Coriolis is live · 3 at the table</span><button class="join">JOIN</button></span>';
       livePill.style.opacity = '0'; livePill.style.transform = 'translateX(-16px)';
       itemsEl.prepend(livePill);
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -565,6 +809,14 @@
     inviteCard.classList.remove('leaving', 'confirming');
     document.body.classList.toggle('show-invite', show);
   }
+  /* ── characters strip: card size is FIXED by the 4-shell fill rule —
+     dropping to 2 characters leaves the trailing stride empty ── */
+  function setCharCount(count) {
+    document.getElementById('charShell3').style.display = count === 3 ? '' : 'none';
+    document.getElementById('chars2').classList.toggle('active', count === 2);
+    document.getElementById('chars3').classList.toggle('active', count === 3);
+  }
+  setCharCount(2);   // start on the 2-character state (under review 2026-08-29)
   /* ── user chip menu (replaces avatar coin + separate logout) ── */
   function toggleUserMenu(clickEvent) {
     clickEvent.stopPropagation();
