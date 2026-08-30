@@ -243,6 +243,110 @@ owning their scope.)
 Market stays placeholded throughout (a VISIBLE placeholder — decision 2026-08-29 —
 activated in stage 4).
 
+## SHIPPED — delivery steps 1 & 2 (2026-08-29 → 2026-08-30)
+
+> Branch `feature/home-page-shell`, commits `09ea0dd`, `8ca1d48`, `640eb29`, `98b6ee0`.
+> Extraction plans: [implementation/step-01-home-shell.md](implementation/step-01-home-shell.md)
+> and [implementation/step-01b-session-slice-and-game-vocab.md](implementation/step-01b-session-slice-and-game-vocab.md).
+>
+> **Nothing above this section has been edited to match** — the plans record what we
+> intended and when, this section records what actually shipped. Where they disagree, this
+> section is the newer truth and the divergence is deliberate history.
+
+### Delivery step 1 — Home shell + route flip (plan 01: all four acceptance criteria met)
+
+- **Route flip**: bare `/dashboard` is Home; the forced `?tab=campaigns` redirect is gone.
+  Every `?tab=` URL still resolves, and all 11 external writer call sites were untouched.
+- **Chrome**: wordmark anchors Home (later replaced by `tabletop-logo-w.png`); house icon
+  and standalone logout button removed; user chip opens [Account, Sign out].
+- **Home surface**: greeting + live clock, hero card, working-on card, characters hand,
+  and honest placeholders for pulse / news / market. 8° plate geometry extracted to a
+  shared module deriving every clip, seam and contact shadow from one angle.
+- **Gold is an official token** (`COLORS.gold`, `--gold`, Tailwind `gold`), with
+  `FAVORITE_COLOR` and `--favorite` aliasing it.
+- **Demo campaign retired**: auto-grant block and `has_received_demo` removed end-to-end,
+  column dropped.
+
+**Delivered ahead of plan** (both approved in-flight):
+- **Hero ships genuinely state-aware** — true live/idle from the sessions the client
+  already holds, plus in-place START/RESUME, rather than plan 01's placeholder live dot.
+- **Invite deck with tuck + switcheroo landed here**, pulled forward from step 5, because
+  the mutations, events and socket→query-invalidation bridge already existed.
+
+**Added at implementation, not in any plan:**
+- **Hero eligibility is session-triggered** — a campaign with no live-able session cannot
+  hero (decision record row added). Groundwork for
+  [05-campaign-create-and-publish.md](05-campaign-create-and-publish.md).
+- **`create_campaign=1` param** opening the existing create modal, mirroring the
+  `expand_campaign_id` pattern.
+
+### Phase D — session slice + vocabulary (added mid-flight 2026-08-30)
+
+- `session_model.py` moved from `campaign/model/` into `modules/session/model/`.
+- Create-session endpoint moved to **`POST /api/sessions/`** (was `/api/campaigns/sessions`).
+- **`active_game_id` retired entirely** — column, aggregate field, event payload key and
+  both FE readers. `status == ACTIVE` is the receipt; `session.id` is the address. Start
+  now asserts api-game echoes our session id, turning an implicit contract into a tripwire.
+- **`updated_at` proxy fix**: session create/delete no longer write the campaign row, so
+  session lifecycle stops moving the working-on card's "last edited".
+- Dead `GameInvites` / `InviteStatus` phantom deleted; conftest fixtures renamed off
+  games-era vocabulary; superseded comments cleared.
+- **CLAUDE.md gained a "Game vs Session" boundary section** recording the semantic rule.
+
+### Pulled forward from step 3 (truth PRs)
+
+- **`campaigns.last_played_at`** — column, `mark_played()` stamped when a session goes
+  live, backfilled from `MAX(sessions.started_at)`, exposed on both campaign responses.
+  The hero now ranks on real play recency; the Campaigns tab's permanent "Never" (a
+  shipped defect) is fixed as a side effect.
+- **`onupdate=func.now()` removed from `campaigns.updated_at`** — commands own the
+  timestamp, not the ORM. This is what made the new column safe to write.
+- `screen_name` bounded to `varchar(30)`, matching the limit the aggregate always
+  enforced, surfaced in all three FE inputs with live counters.
+
+### Delivery step 2 — launcher + tab bar retirement
+
+- **App-select launcher**: 9-dot button, 2×2 surface grid, and a WORKSHOP section whose
+  tool entries read from the workshop's own `TOOLS`/`TOOL_ROUTES` so they can never drift
+  from the index. **Revised: the workshop index is KEPT** as a destination (the section
+  header opens it) — supersedes the plan's "REPLACES the workshop index view".
+- **`TabNav.js`, `SubNav.js` and the orphaned `SessionsManager.js` deleted.**
+- **`tab=account` dead-end fixed** — those notification types route to `/account`.
+- Launcher marks the surface you're already on (white label + gold diamond) without
+  disabling it; the 9-dot glyph is a hand-drawn SVG of nine diamonds — a documented
+  exception to the Font-Awesome rule, since FA Free has no 3×3 dot grid.
+
+### Chrome work beyond the epic's scope (2026-08-30)
+
+Undertaken on Matt's direction during QA; the epic's "Account page redo is future work"
+entry is knowingly overtaken in part.
+
+- **`UserChrome`** — user identity as an 8° capsule (name on the dark face, identity
+  colour full-bleed into the slanted end, presence pip as a corner chip). Replaced
+  `UserDisc` in the header chip, social friend + request rows, and `FriendsManager`.
+  `UserDisc` survives for the one genuine circle use (the 16px lookup result).
+- **Account page restructured**: profile capsule, email/account-id as stacked meta
+  plates, identity colour moved up and its swatches rebuilt as 8° cards.
+- **Social panel**: add-friend, copy-tag, input and both CTAs reshaped as parallelograms;
+  copy-tag promoted from hint to control.
+- **Long-standing bug fixed** — the social panel now closes on outside click. It listens
+  on `pointerdown`, not `mousedown`, because Headless UI cancels `pointerdown` on its menu
+  buttons, which suppresses the synthesised `mousedown` entirely.
+- `Dropdown` gained `compact` / `panel` skins, deliberately decoupled so header styling
+  never reaches the notes editor's menus.
+
+### Known deferred / not shipped
+
+- **Pause is deliberately absent from the hero** — it needs game-runtime support and still
+  lives in the Campaigns tab. Not an oversight.
+- **Focus-visible rings are suppressed** on all three header controls. Restoring them
+  properly needs shape-following rings, not the browser default rectangle.
+- **Unexercised QA**: reduced-motion behaviour, horizontal scroll at narrow widths, and
+  the "Nothing at the table yet" hero variant (needs a campaign whose sessions are all
+  FINISHED — its copy is also unreviewed).
+- **`active_sessions`**: audit found nothing reads it. Recommendation is deletion rather
+  than the planned `active_session_id` replacement — see step 3 above.
+
 ## Out of scope (this epic)
 
 - **Honorable mention — Account page redo.** The header rework (user chip → [Account,

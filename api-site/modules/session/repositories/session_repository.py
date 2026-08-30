@@ -61,6 +61,19 @@ class SessionRepository:
         )
         return self._model_to_aggregate(model) if model else None
 
+    def get_stopping_sessions(self) -> List[SessionEntity]:
+        """Sessions stranded mid-ETL (STOPPING) — the boot reconciler's work list.
+
+        STOPPING is transient by design; a row still holding it when no ETL is
+        in flight means a process death interrupted a pause/finish.
+        """
+        models = (
+            self.db.query(SessionModel)
+            .filter(SessionModel.status == SessionStatus.STOPPING.value)
+            .all()
+        )
+        return [self._model_to_aggregate(model) for model in models]
+
     def get_expired_sessions(self, now: datetime) -> List[SessionEntity]:
         """ACTIVE sessions whose signed-URL lease has lapsed — the cleanup job's work list."""
         models = (

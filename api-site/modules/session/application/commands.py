@@ -762,6 +762,20 @@ class StartSession:
 
             logger.info(f"Session {session_id} ACTIVE")
 
+        except Exception as e:
+            # ANY error between STARTING and ACTIVE rolls back to INACTIVE.
+            # The try must end at activation: abort_start() is only legal on
+            # STARTING sessions, so it may never govern code past this point.
+            logger.error(f"Unexpected error starting session {session_id}: {e}")
+            session.abort_start()  # Domain method: STARTING → INACTIVE
+            self.session_repo.save(session)
+            logger.info(f"Session {session_id} rolled back to INACTIVE after error")
+            raise ValueError(f"Failed to start session: {str(e)}")
+
+        # The start has succeeded — everything below is side effects. Failures
+        # here are logged and swallowed: they must never roll back an ACTIVE
+        # session or make a successful start report as failed.
+        try:
             # 12. Stamp the campaign as played, then broadcast session_started to
             # all campaign members + DM (with notification)
             campaign = self.campaign_repo.get_by_id(session.campaign_id)
@@ -787,16 +801,13 @@ class StartSession:
                     await self.event_manager.broadcast(event_config)
 
                 logger.info(f"Broadcasting session_started event to {len(all_recipients)} recipients for session {session.id}")
+        except Exception as side_effect_error:
+            logger.warning(
+                f"Session {session_id} started, but a post-start side effect failed "
+                f"(last_played stamp or session_started broadcast): {side_effect_error}"
+            )
 
-            return session
-
-        except Exception as e:
-            # ANY error after STARTING should rollback to INACTIVE
-            logger.error(f"Unexpected error starting session {session_id}: {e}")
-            session.abort_start()  # Domain method: STARTING → INACTIVE
-            self.session_repo.save(session)
-            logger.info(f"Session {session_id} rolled back to INACTIVE after error")
-            raise ValueError(f"Failed to start session: {str(e)}")
+        return session
 
 
 # === Shared ETL helpers for PauseSession and FinishSession ===
@@ -1011,6 +1022,63 @@ async def _extract_and_sync_game_state(
         raise ValueError(f"Cannot complete session operation: {str(e)}")
 
 
+# Backoff for the phase-2 PostgreSQL write, seconds between attempts.
+# Fibonacci by decree, hardcoded by common sense.
+PHASE2_RETRY_DELAYS_SECONDS = [1, 2, 3]
+
+
+async def _save_session_with_retry(session_repo: SessionRepository, session: SessionEntity, session_id: UUID) -> Optional[Exception]:
+    """Attempt the phase-2 save, retrying through the backoff before giving up.
+
+    The extracted state and terminal status are already on the aggregate, so
+    each retry re-attempts the same single-commit write. Transient database
+    blips heal invisibly here — the session stays truthfully STOPPING while
+    the system keeps trying, instead of surfacing a retry loop to the user.
+
+    Returns None on success, or the final error once the delays are exhausted.
+    """
+    attempt_delays = [0] + PHASE2_RETRY_DELAYS_SECONDS
+    last_error = None
+    for attempt_number, delay_seconds in enumerate(attempt_delays, start=1):
+        if delay_seconds:
+            await asyncio.sleep(delay_seconds)
+        try:
+            session_repo.save(session)
+            if attempt_number > 1:
+                logger.info(f"Phase-2 save for session {session_id} succeeded on attempt {attempt_number}")
+            return None
+        except Exception as save_error:
+            last_error = save_error
+            # A failed commit poisons the SQLAlchemy session until rollback.
+            session_repo.db.rollback()
+            logger.warning(
+                f"Phase-2 save attempt {attempt_number} failed for session {session_id}: {save_error}"
+            )
+    return last_error
+
+
+def _abort_stuck_stop(session_repo: SessionRepository, session_id: UUID) -> bool:
+    """Best-effort STOPPING → ACTIVE rollback after phase 2 exhausted its retries.
+
+    Runs on a freshly fetched aggregate: the in-memory one already carries the
+    phase-2 payload and terminal status, and a rollback must not write any of
+    that. ACTIVE is true at this point — the hot game still exists, because
+    phase-3 cleanup only ever runs after a successful phase 2.
+    """
+    try:
+        fresh_session = session_repo.get_by_id(session_id)
+        fresh_session.abort_stop()
+        session_repo.save(fresh_session)
+        logger.error(f"Session {session_id} rolled back to ACTIVE after phase-2 write failures")
+        return True
+    except Exception as abort_error:
+        logger.critical(
+            f"Session {session_id} STUCK at STOPPING: the phase-2 write failed and the "
+            f"rollback to ACTIVE also failed: {abort_error}"
+        )
+        return False
+
+
 async def _async_cleanup_game(session_id: UUID):
     """
     Background task to delete the hot game in MongoDB (fire-and-forget).
@@ -1089,28 +1157,34 @@ class PauseSession:
             session_id, session, self.asset_repo, self.session_repo, self.character_repo
         )
 
-        # 4. PHASE 2: Write to PostgreSQL
-        try:
-            session.max_players = extracted.max_players
-            session.audio_config = extracted.audio_config
-            session.spotify_config = extracted.spotify_config
-            session.map_config = extracted.map_config
-            session.image_config = extracted.image_config
-            session.active_display = extracted.active_display
-            session.adventure_log = extracted.adventure_log
-            session.map_token_state = extracted.map_token_state
+        # 4. PHASE 2: Write to PostgreSQL — one commit carrying the extracted
+        # state and the INACTIVE transition, retried through the backoff. If
+        # every attempt fails, roll the session back to ACTIVE: the game is
+        # still hot (phase-3 cleanup only runs after a successful write), so
+        # the pause can simply be attempted again.
+        session.max_players = extracted.max_players
+        session.audio_config = extracted.audio_config
+        session.spotify_config = extracted.spotify_config
+        session.map_config = extracted.map_config
+        session.image_config = extracted.image_config
+        session.active_display = extracted.active_display
+        session.adventure_log = extracted.adventure_log
+        session.map_token_state = extracted.map_token_state
+        session.deactivate()  # Sets INACTIVE, stopped_at = now
 
-            session.deactivate()  # Sets INACTIVE, stopped_at = now
-            self.session_repo.save(session)
-            logger.info(f"Session {session_id} marked INACTIVE in PostgreSQL")
-
-        except Exception as pg_error:
-            logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
-            logger.error(f"MongoDB game for session {session_id} PRESERVED for manual retry")
+        save_error = await _save_session_with_retry(self.session_repo, session, session_id)
+        if save_error:
+            logger.error(f"PostgreSQL write failed for {session_id} after retries: {save_error}")
+            if _abort_stuck_stop(self.session_repo, session_id):
+                raise ValueError(
+                    f"Failed to pause the session — it is still live and can be "
+                    f"paused again. Error: {str(save_error)}"
+                )
             raise ValueError(
-                f"Failed to save session data. Game preserved in MongoDB. "
-                f"Please try pausing the session again. Error: {str(pg_error)}"
+                f"Failed to pause the session and it could not be returned to live. "
+                f"Game preserved in MongoDB — needs admin attention. Error: {str(save_error)}"
             )
+        logger.info(f"Session {session_id} marked INACTIVE in PostgreSQL")
 
         # 5. Broadcast session_paused event
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
@@ -1224,28 +1298,31 @@ class FinishSession:
             session_id, session, self.asset_repo, self.session_repo, self.character_repo
         )
 
-        # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED
-        try:
-            session.max_players = extracted.max_players
-            session.audio_config = extracted.audio_config
-            session.spotify_config = extracted.spotify_config
-            session.map_config = extracted.map_config
-            session.image_config = extracted.image_config
-            session.active_display = extracted.active_display
-            session.adventure_log = extracted.adventure_log
-            session.map_token_state = extracted.map_token_state
+        # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED — same retry +
+        # rollback contract as PauseSession's phase 2.
+        session.max_players = extracted.max_players
+        session.audio_config = extracted.audio_config
+        session.spotify_config = extracted.spotify_config
+        session.map_config = extracted.map_config
+        session.image_config = extracted.image_config
+        session.active_display = extracted.active_display
+        session.adventure_log = extracted.adventure_log
+        session.map_token_state = extracted.map_token_state
+        session.mark_finished()  # Sets FINISHED, stopped_at = now
 
-            session.mark_finished()  # Sets FINISHED, stopped_at = now
-            self.session_repo.save(session)
-            logger.info(f"Session {session_id} marked FINISHED in PostgreSQL")
-
-        except Exception as pg_error:
-            logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
-            logger.error(f"MongoDB game for session {session_id} PRESERVED for manual retry")
+        save_error = await _save_session_with_retry(self.session_repo, session, session_id)
+        if save_error:
+            logger.error(f"PostgreSQL write failed for {session_id} after retries: {save_error}")
+            if _abort_stuck_stop(self.session_repo, session_id):
+                raise ValueError(
+                    f"Failed to finish the session — it is still live and can be "
+                    f"finished again. Error: {str(save_error)}"
+                )
             raise ValueError(
-                f"Failed to save session data. Game preserved in MongoDB. "
-                f"Please try finishing the session again. Error: {str(pg_error)}"
+                f"Failed to finish the session and it could not be returned to live. "
+                f"Game preserved in MongoDB — needs admin attention. Error: {str(save_error)}"
             )
+        logger.info(f"Session {session_id} marked FINISHED in PostgreSQL")
 
         # 8. Broadcast session_finished event to all campaign members (silent state update)
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
