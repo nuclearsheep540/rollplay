@@ -22,6 +22,7 @@ from modules.characters.domain.character_aggregate import (
     SkillProficiency,
 )
 from modules.characters.repositories.character_repository import CharacterRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.characters.repositories.edition_repository import EditionRepository
 from shared.rulesets.registry import RulesetRegistry
 
@@ -92,19 +93,42 @@ def rebuild_character_skills(character: CharacterAggregate, registry: RulesetReg
 
 
 class CreateCharacterDraft:
-    """POST /api/characters/draft — opens a blank character row in draft state."""
+    """POST /api/characters/draft — opens a blank character row in draft state.
+
+    Capacity is slot-based: the draft takes the lowest free slot below the
+    user's max_slots. The database's unique (user_id, slot) constraint is the
+    hard enforcement — two concurrent creates racing for the same slot lose
+    at commit, not silently.
+    """
 
     def __init__(
         self,
         repository: CharacterRepository,
         edition_repository: EditionRepository,
         registry: RulesetRegistry,
+        user_repository: UserRepository,
     ):
         self.repository = repository
         self.edition_repository = edition_repository
         self.registry = registry
+        self.user_repository = user_repository
 
     def execute(self, *, user_id: UUID, edition_code: str, name: str) -> CharacterAggregate:
+        user = self.user_repository.get_by_id(user_id)
+        if user is None:
+            raise ValueError("User not found")
+
+        occupied = set(self.repository.get_occupied_slots(user_id))
+        free_slot = next(
+            (candidate for candidate in range(user.max_slots) if candidate not in occupied),
+            None,
+        )
+        if free_slot is None:
+            raise ValueError(
+                f"Character limit reached ({user.max_slots} slots on this account). "
+                f"Delete a character to make room."
+            )
+
         edition = self.edition_repository.get_by_code(edition_code)
         if edition is None or not edition.is_active:
             raise ValueError(f"Unknown or inactive edition '{edition_code}'")
@@ -116,6 +140,7 @@ class CreateCharacterDraft:
             edition_id=edition.id,
             edition_code=edition.code,
             character_name=name,
+            slot=free_slot,
         )
         self.repository.save(draft)
         return draft

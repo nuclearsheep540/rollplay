@@ -4,7 +4,7 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMap, faImage, faMusic, faShieldHalved, faClapperboard } from '@fortawesome/free-solid-svg-icons';
 
-const TOOLS = [
+export const TOOLS = [
   {
     id: 'maps',
     label: 'Map Config',

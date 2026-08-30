@@ -50,6 +50,28 @@ router = APIRouter(tags=["sessions"])
 
 # === Session CRUD ===
 
+@router.post("/", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+async def create_session(
+    request: CreateSessionRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    event_manager: EventManager = Depends(get_event_manager)
+):
+    """Create a new session within a campaign"""
+    try:
+        command = CreateSession(session_repo, campaign_repo, event_manager)
+        session = await command.execute(
+            name=request.name,
+            campaign_id=request.campaign_id,
+            host_id=user_id,
+            max_players=request.max_players
+        )
+        return GetSessionById(session_repo).execute(session.id)  # type: ignore[arg-type]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get("/my-sessions", response_model=SessionListResponse)
 async def get_my_sessions(
     user_id: UUID = Depends(get_current_user_id),
@@ -161,7 +183,7 @@ async def start_session(
     3. Fetches campaign assets from library
     4. Generates fresh presigned URLs for all assets (parallel)
     5. Calls api-game to create MongoDB active_session with assets + URLs
-    6. Sets session status to ACTIVE with active_game_id
+    6. Sets session status to ACTIVE
     """
     try:
         command = StartSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo, s3_service)

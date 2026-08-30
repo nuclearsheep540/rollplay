@@ -3,31 +3,9 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Optional
 from uuid import UUID
-from enum import Enum
 import re
-
-class InviteStatus(str, Enum):
-    """
-    When inviting a player to a game
-    we store the status of the invite
-    """
-
-    PENDING = "pending"
-    ACCEPTED = "accepted"
-    DECLINED = "declined"
-
-    def __str__(self) -> str:
-        return self.value
-
-@dataclass
-class GameInvites:
-    """Represents a game invite for a user"""
-    game_id: UUID
-    game_host: str
-    game_name: str
-    invite_status: InviteStatus
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -62,9 +40,8 @@ class UserAggregate:
     friend_code: Optional[str] = None  # DEPRECATED - use account_name + account_tag
     account_name: Optional[str] = None  # Immutable username (e.g., "claude")
     account_tag: Optional[str] = None  # 4-digit discriminator (e.g., "2345")
-    game_invites: Optional[List[GameInvites]] = None
-    has_received_demo: bool = False  # Track if user has received their demo campaign
     color: Optional[str] = None  # Identity color hex from USER_COLORS; None = not chosen
+    max_slots: int = 4  # Character capacity; DB CHECK caps at 8
 
     @property
     def account_identifier(self) -> Optional[str]:
@@ -123,7 +100,6 @@ class UserAggregate:
         self.screen_name = ""
         self.account_name = None
         self.account_tag = None
-        self.has_received_demo = False
         self.last_login = utc_now()
 
     def record_login(self):
@@ -177,6 +153,19 @@ class UserAggregate:
         if color not in USER_COLORS:
             raise ValueError("Color must be one of the identity palette options")
         self.color = color
+
+    def set_max_slots(self, max_slots: int):
+        """Character capacity knob.
+
+        1-8: at least one slot so an account is never characterless by
+        configuration, and never past the slot ceiling baked into the
+        characters table. Decreasing does not delete characters — they keep
+        their slots and fall out of the visible roster (see the character
+        repository's visibility rule).
+        """
+        if not 1 <= max_slots <= 8:
+            raise ValueError("max_slots must be between 1 and 8")
+        self.max_slots = max_slots
 
     def set_account_name(self, account_name: str, account_tag: str):
         """

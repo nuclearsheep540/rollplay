@@ -78,7 +78,7 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_started(campaign_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, active_game_id: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
+    def session_started(campaign_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
         """
         Event: Host started a session (notifies every campaign member)
 
@@ -88,7 +88,6 @@ class SessionEvents:
             session_name: Session name
             campaign_id: Campaign ID
             campaign_name: Campaign name
-            active_game_id: Active game ID in MongoDB
             host_id: Session host user ID
             host_screen_name: Host display name
 
@@ -105,7 +104,6 @@ class SessionEvents:
                     "session_name": session_name,
                     "campaign_id": str(campaign_id),
                     "campaign_name": campaign_name,
-                    "active_game_id": active_game_id,
                     "host_id": str(host_id),
                     "host_screen_name": host_screen_name
                 },

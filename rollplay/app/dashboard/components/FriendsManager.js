@@ -17,7 +17,7 @@ import {
   faUsers
 } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
-import UserDisc from '@/app/shared/components/UserDisc'
+import UserChrome from '@/app/shared/components/UserChrome'
 import { Button } from './shared/Button'
 import { useFriendships } from '../hooks/useFriendships'
 import { useSendFriendRequest, useAcceptFriendRequest, useDeclineFriendRequest, useRemoveFriend } from '../hooks/mutations/useFriendshipMutations'
@@ -326,22 +326,13 @@ export default function FriendsManager({ user, fillHeight = false }) {
                 className="flex items-center justify-between p-3 rounded-sm border"
                 style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
               >
-                <div className="flex items-center gap-3">
-                  <UserDisc
-                    userId={friendship.friend_id}
-                    color={friendship.friend_color}
-                    name={friendship.friend_screen_name}
-                    className="w-10 h-10 text-lg"
-                  />
-                  <div>
-                    <p className="font-semibold" style={{color: THEME.textOnDark}}>
-                      {friendship.friend_screen_name || 'User'}
-                    </p>
-                    <p className="text-xs font-mono" style={{color: THEME.textSecondary}}>
-                      {friendship.friend_account_tag || 'No tag'}
-                    </p>
-                  </div>
-                </div>
+                <UserChrome
+                  userId={friendship.friend_id}
+                  color={friendship.friend_color}
+                  name={friendship.friend_screen_name}
+                  status={friendship.friend_account_tag || 'No tag'}
+                  size="md"
+                />
                 <button
                   onClick={() => removeFriend(friendship.friend_id)}
                   disabled={actionLoading[`remove-${friendship.friend_id}`]}

@@ -12,9 +12,14 @@ import CharacterManager from '@/app/dashboard/components/CharacterManager'
 import { AssetLibraryManager } from '@/app/asset_library'
 import { WorkshopManager } from '@/app/workshop'
 import DashboardLayout from '@/app/dashboard/components/DashboardLayout'
+import HomeManager from '@/app/dashboard/components/home/HomeManager'
 import AccountNameModal from '@/app/dashboard/components/AccountNameModal'
 import InDevWarningModal from '@/app/dashboard/components/InDevWarningModal'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
+
+// Valid `?tab=` values. Account lives at its own `/account` route, so it
+// isn't a dashboard tab. Anything else - including no tab at all - is Home.
+const VALID_TABS = ['characters', 'campaigns', 'library', 'workshop', 'market']
 
 function DashboardContent() {
   const searchParams = useSearchParams()
@@ -22,8 +27,10 @@ function DashboardContent() {
   const tabParam = searchParams.get('tab')
   const inviteCampaignId = searchParams.get('invite_campaign_id')
   const expandCampaignId = searchParams.get('expand_campaign_id')
-  const expandCharacterId = searchParams.get('expand_character_id')
-  const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
+  const openCreateCampaign = searchParams.get('create_campaign') === '1'
+  const [activeSection, setActiveSection] = useState(
+    VALID_TABS.includes(tabParam) ? tabParam : 'home'
+  )
   const [isChildExpanded, setIsChildExpanded] = useState(false)
   const [showInDevWarning, setShowInDevWarning] = useState(false)
 
@@ -49,11 +56,10 @@ function DashboardContent() {
     }
   }, [user, showSetupModal])
 
-  // Sync activeSection when URL tab parameter changes (e.g., from notification click)
+  // Sync activeSection when the URL tab parameter changes (e.g. from a
+  // notification click, or navigating back to bare /dashboard).
   useEffect(() => {
-    if (tabParam && tabParam !== activeSection) {
-      setActiveSection(tabParam)
-    }
+    setActiveSection(VALID_TABS.includes(tabParam) ? tabParam : 'home')
   }, [tabParam])
 
   // Reset expanded state when switching tabs (components manage their own expanded state)
@@ -77,11 +83,11 @@ function DashboardContent() {
     router.replace(newUrl)
   }
 
-  // Clear expand_character_id param from URL (called by CharacterManager
-  // after auto-expanding the matching drawer). Mirrors the campaigns flow.
-  const clearExpandCharacterId = () => {
+  // Clear create_campaign param from URL (called by CampaignManager after
+  // opening the form). Mirrors the expand flows.
+  const clearOpenCreateCampaign = () => {
     const current = new URLSearchParams(searchParams.toString())
-    current.delete('expand_character_id')
+    current.delete('create_campaign')
     const newUrl = current.toString() ? `/dashboard?${current.toString()}` : '/dashboard'
     router.replace(newUrl)
   }
@@ -105,11 +111,16 @@ function DashboardContent() {
 
   return (
     <DashboardLayout
-      activeSection={activeSection}
-      setActiveSection={setActiveSection}
       isChildExpanded={isChildExpanded}
       isChildFullBleed={activeSection === 'library' || activeSection === 'characters'}
     >
+      {/* Home Section - the default landing surface */}
+      {activeSection === 'home' && (
+        <section className="flex-1 flex flex-col min-h-0">
+          <HomeManager user={user} />
+        </section>
+      )}
+
       {/* Campaigns Section */}
       {activeSection === 'campaigns' && (
         <section className="flex-1 flex flex-col min-h-0">
@@ -120,20 +131,18 @@ function DashboardContent() {
             clearInviteCampaignId={clearInviteCampaignId}
             expandCampaignId={expandCampaignId}
             clearExpandCampaignId={clearExpandCampaignId}
+            openCreateCampaign={openCreateCampaign}
+            clearOpenCreateCampaign={clearOpenCreateCampaign}
             showToast={showToast}
           />
         </section>
       )}
 
-      {/* Characters Section */}
+      {/* Characters Section — the strip only; character views live at
+          /character/{id}, so there is no drawer or expanded state here. */}
       {activeSection === 'characters' && (
         <section className="flex-1 flex flex-col min-h-0">
-          <CharacterManager
-            user={user}
-            onExpandedChange={setIsChildExpanded}
-            expandCharacterId={expandCharacterId}
-            clearExpandCharacterId={clearExpandCharacterId}
-          />
+          <CharacterManager user={user} />
         </section>
       )}
 

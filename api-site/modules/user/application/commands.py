@@ -90,6 +90,55 @@ class UpdateUserColor:
         return user
 
 
+class SetMaxSlots:
+    """Admin knob: change a user's character capacity (1-8).
+
+    Decreasing capacity hides characters in slots at or above the new limit —
+    rows are untouched and reappear if capacity is raised again — and ejects
+    those characters from any campaign they are locked to. The user keeps
+    campaign membership; only the character leaves, and the player can free a
+    visible slot and re-select later.
+
+    Refused outright while any affected campaign has a live session: ejecting
+    a character out of a running game would corrupt the table mid-play.
+    """
+
+    def __init__(self, user_repository: UserRepository, character_repository, session_repository):
+        self.user_repo = user_repository
+        self.character_repo = character_repository
+        self.session_repo = session_repository
+
+    def execute(self, *, user_id: UUID, max_slots: int) -> UserAggregate:
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError(f"User {user_id} not found")
+
+        user.set_max_slots(max_slots)
+
+        hidden_characters = self.character_repo.get_by_slot_at_or_above(user_id, max_slots)
+        locked = [c for c in hidden_characters if c.active_campaign is not None]
+
+        # All-or-nothing: check every affected campaign before ejecting any.
+        for character in locked:
+            if self.session_repo.get_active_session_for_campaign(character.active_campaign):
+                raise ValueError(
+                    f"Cannot reduce slots: character '{character.character_name}' is in a "
+                    f"campaign with a live session. Try again when the table is quiet."
+                )
+
+        for character in locked:
+            character.unlock_from_campaign()
+            self.character_repo.save(character)
+            logger.info(
+                f"SetMaxSlots: ejected character {character.id} from campaign "
+                f"(slot {character.slot} >= new max {max_slots})"
+            )
+
+        self.user_repo.save(user)
+        logger.info(f"SetMaxSlots: user {user_id} capacity set to {max_slots}")
+        return user
+
+
 class SoftDeleteUser:
     """
     Soft delete a user account with full cascade cleanup.

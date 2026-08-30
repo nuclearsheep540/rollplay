@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy import text
 
-from modules.campaign.model.session_model import Session as SessionModel, SessionJoinedUser
+from modules.session.model.session_model import Session as SessionModel, SessionJoinedUser
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 
 
@@ -60,6 +60,19 @@ class SessionRepository:
             .first()
         )
         return self._model_to_aggregate(model) if model else None
+
+    def get_stopping_sessions(self) -> List[SessionEntity]:
+        """Sessions stranded mid-ETL (STOPPING) — the boot reconciler's work list.
+
+        STOPPING is transient by design; a row still holding it when no ETL is
+        in flight means a process death interrupted a pause/finish.
+        """
+        models = (
+            self.db.query(SessionModel)
+            .filter(SessionModel.status == SessionStatus.STOPPING.value)
+            .all()
+        )
+        return [self._model_to_aggregate(model) for model in models]
 
     def get_expired_sessions(self, now: datetime) -> List[SessionEntity]:
         """ACTIVE sessions whose signed-URL lease has lapsed — the cleanup job's work list."""
@@ -109,7 +122,6 @@ class SessionRepository:
             # Update session fields
             model.name = aggregate.name
             model.status = aggregate.status.value
-            model.active_game_id = aggregate.active_game_id
             model.started_at = aggregate.started_at
             model.stopped_at = aggregate.stopped_at
             model.urls_expire_at = aggregate.urls_expire_at
@@ -134,7 +146,6 @@ class SessionRepository:
                 campaign_id=aggregate.campaign_id,
                 host_id=aggregate.host_id,
                 status=aggregate.status.value,
-                active_game_id=aggregate.active_game_id,
                 created_at=aggregate.created_at,
                 started_at=aggregate.started_at,
                 stopped_at=aggregate.stopped_at,
@@ -239,7 +250,6 @@ class SessionRepository:
             started_at=model.started_at,
             stopped_at=model.stopped_at,
             urls_expire_at=model.urls_expire_at,
-            active_game_id=model.active_game_id,
             joined_users=joined_user_ids,
             max_players=model.max_players,
             audio_config=model.audio_config,

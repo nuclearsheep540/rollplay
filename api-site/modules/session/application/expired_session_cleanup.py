@@ -11,6 +11,13 @@ and the first pass after boot catches anything that expired during downtime (the
 query is "past due", not "fires at the moment"). Each due session is closed via
 the existing PauseSession command, acting as the session host.
 
+The first pass also reconciles sessions stranded at STOPPING: that state is
+transient by design (an ETL in flight), so a row still holding it at boot means
+a process death interrupted a pause/finish. The game is still hot in MongoDB —
+phase-3 cleanup only runs after a successful cold write — so rolling the session
+back to ACTIVE is true, and the lease sweep can then pause it properly. Safe at
+boot only: a single-instance service has no in-flight ETLs at startup.
+
 Started as a single asyncio task from the FastAPI lifespan handler in main.py.
 """
 
@@ -67,10 +74,34 @@ async def _run_cleanup_pass() -> None:
         db.close()
 
 
+def _reconcile_stuck_stopping_sessions() -> None:
+    """Boot-time pass: roll sessions stranded at STOPPING back to ACTIVE."""
+    db = SessionLocal()
+    try:
+        session_repo = SessionRepository(db)
+        stranded = session_repo.get_stopping_sessions()
+        for session in stranded:
+            try:
+                session.abort_stop()
+                session_repo.save(session)
+                logger.warning(
+                    f"Boot reconciliation: session {session.id} was stranded at STOPPING "
+                    f"(interrupted pause/finish) — rolled back to ACTIVE"
+                )
+            except Exception:
+                logger.exception(f"Boot reconciliation: failed to roll back session {session.id}")
+    finally:
+        db.close()
+
+
 async def run_expired_session_cleanup(stop_event: asyncio.Event) -> None:
     """Cleanup loop — sleeps between passes, exits promptly when stop_event is set."""
     interval = settings.EXPIRED_SESSION_CLEANUP_INTERVAL
     logger.info(f"Expired-session cleanup started (interval: {interval}s)")
+    try:
+        _reconcile_stuck_stopping_sessions()
+    except Exception:
+        logger.exception("Boot reconciliation of STOPPING sessions failed; continuing")
     while not stop_event.is_set():
         try:
             await _run_cleanup_pass()

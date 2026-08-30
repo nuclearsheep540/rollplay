@@ -66,6 +66,7 @@ def _make(user_id, edition_id, **overrides) -> CharacterAggregate:
         creation_step=None,
         created_at=now,
         updated_at=now,
+        slot=0,
     )
     defaults.update(overrides)
     return CharacterAggregate(**defaults)
@@ -138,9 +139,9 @@ class TestSaveAndGet:
 class TestQueries:
     def test_get_by_user_id_orders_by_updated_at_desc(self, character_repo, create_user, seed_default_edition):
         user = create_user("two@example.com")
-        first = _make(user.id, seed_default_edition, character_name="First")
+        first = _make(user.id, seed_default_edition, character_name="First", slot=0)
         character_repo.save(first)
-        second = _make(user.id, seed_default_edition, character_name="Second")
+        second = _make(user.id, seed_default_edition, character_name="Second", slot=1)
         character_repo.save(second)
 
         results = character_repo.get_by_user_id(user.id)
@@ -153,7 +154,7 @@ class TestQueries:
         attached.lock_to_campaign(campaign_id)
         character_repo.save(attached)
 
-        unattached = _make(user.id, seed_default_edition, character_name="Unattached")
+        unattached = _make(user.id, seed_default_edition, character_name="Unattached", slot=1)
         character_repo.save(unattached)
 
         results = character_repo.get_by_active_campaign(campaign_id)
@@ -195,3 +196,43 @@ class TestDelete:
         character_repo.save(c)
         with pytest.raises(ValueError, match="locked"):
             character_repo.delete(c.id)
+
+
+class TestSlotVisibility:
+    """Capacity slots: the roster shows only slots below the user's max_slots."""
+
+    def test_shrunk_max_slots_hides_high_slot_characters(
+        self, character_repo, user_repo, create_user, seed_default_edition
+    ):
+        user = create_user("slots-owner@example.com")
+        for slot_number in range(3):
+            character_repo.save(_make(
+                user.id, seed_default_edition,
+                character_name=f"Slotted {slot_number}", slot=slot_number,
+            ))
+
+        assert len(character_repo.get_by_user_id(user.id)) == 3
+
+        user.set_max_slots(2)
+        user_repo.save(user)
+
+        visible = character_repo.get_by_user_id(user.id)
+        assert len(visible) == 2
+        assert all(character.slot < 2 for character in visible)
+
+        # Nothing was deleted — raising capacity brings them back.
+        user.set_max_slots(4)
+        user_repo.save(user)
+        assert len(character_repo.get_by_user_id(user.id)) == 3
+
+    def test_soft_delete_frees_the_slot(
+        self, character_repo, create_user, seed_default_edition
+    ):
+        user = create_user("slots-free@example.com")
+        character_id = character_repo.save(_make(
+            user.id, seed_default_edition, character_name="Doomed", slot=0,
+        ))
+
+        assert character_repo.get_occupied_slots(user.id) == [0]
+        character_repo.delete(character_id)
+        assert character_repo.get_occupied_slots(user.id) == []

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session as DbSession, selectinload
 
 from modules.session.repositories.session_repository import SessionRepository
 from modules.session.api.schemas import SessionResponse, RosterPlayerResponse
-from modules.campaign.model.session_model import Session as SessionModel, SessionJoinedUser
+from modules.session.model.session_model import Session as SessionModel, SessionJoinedUser
 from modules.user.model.user_model import User
 from modules.characters.model.character_model import Character
 from modules.characters.model.character_class_model import CharacterClassEntry  # noqa: F401
@@ -71,7 +71,6 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
         created_at=model.created_at,
         started_at=model.started_at,
         stopped_at=model.stopped_at,
-        active_game_id=model.active_game_id,
         joined_users=joined_user_ids,
         roster=roster,
         player_count=len(joined_user_ids),

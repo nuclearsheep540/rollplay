@@ -62,6 +62,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime]
     color: Optional[str] = None  # Identity color hex (USER_COLORS palette); None = not chosen
+    max_slots: int = 4  # Character capacity — the FE reflects this, the backend enforces it
 
 
 class PublicUserResponse(BaseModel):

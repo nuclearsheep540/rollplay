@@ -212,6 +212,11 @@ class InventoryItem:
 # --------------------------------------------------------------------------- #
 
 
+# Absolute slot ceiling, mirrored by ck_characters_slot_range in the DB.
+# users.max_slots (<= this) governs how many a given account may occupy.
+HARD_SLOT_CEILING = 8
+
+
 @dataclass
 class CharacterAggregate:
     """Aggregate root for one character.
@@ -272,6 +277,10 @@ class CharacterAggregate:
     created_at: datetime
     updated_at: datetime
     is_deleted: bool = False
+    # Capacity slot (0-based). Held for life; never reshuffled. None while
+    # soft-deleted. The absolute ceiling is HARD_SLOT_CEILING; how many of
+    # those slots a user may occupy is users.max_slots.
+    slot: Optional[int] = None
 
     # Library MediaAsset (asset_type='image') the character uses as its
     # avatar. ``None`` ⇒ frontend shows the default /heroes.png. We also stash
@@ -324,6 +333,7 @@ class CharacterAggregate:
         edition_id: int,
         edition_code: str,
         character_name: str,
+        slot: int,
     ) -> "CharacterAggregate":
         """Open a new draft character — only the minimum fields are required.
 
@@ -334,10 +344,13 @@ class CharacterAggregate:
             raise ValueError("Character name is required")
         if len(character_name.strip()) > 50:
             raise ValueError("Character name too long (max 50)")
+        if slot < 0 or slot >= HARD_SLOT_CEILING:
+            raise ValueError(f"Character slot must be 0-{HARD_SLOT_CEILING - 1}")
         now = datetime.utcnow()
         return cls(
             id=None,
             user_id=user_id,
+            slot=slot,
             edition_id=edition_id,
             edition_code=edition_code,
             active_campaign=None,
@@ -441,6 +454,7 @@ class CharacterAggregate:
 
     def soft_delete(self) -> None:
         self.is_deleted = True
+        self.slot = None  # frees the capacity slot
         self._touch()
 
     def lock_to_campaign(self, campaign_id: UUID) -> None:

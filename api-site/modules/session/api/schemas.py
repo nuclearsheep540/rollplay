@@ -42,7 +42,6 @@ class SessionResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime]
     stopped_at: Optional[datetime]
-    active_game_id: Optional[str]  # MongoDB ObjectID when game is running
     joined_users: List[UUID]  # Users in session roster
     roster: List[RosterPlayerResponse]  # Enriched roster with character details
     player_count: int  # Count of joined_users

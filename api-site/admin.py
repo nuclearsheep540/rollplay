@@ -51,7 +51,7 @@ from modules.characters.model.character_inventory_model import CharacterInventor
 from modules.characters.model.character_choices_log_model import CharacterChoiceLog  # noqa: F401
 from modules.campaign.model.campaign_model import Campaign  # noqa: F401
 from modules.campaign.model.campaign_member_model import CampaignMember  # noqa: F401
-from modules.campaign.model.session_model import Session, SessionJoinedUser  # noqa: F401
+from modules.session.model.session_model import Session, SessionJoinedUser  # noqa: F401
 from modules.friendship.model.friend_request_model import FriendRequestModel  # noqa: F401
 from modules.friendship.model.friendship_model import FriendshipModel  # noqa: F401
 from modules.events.model.notification_model import Notification  # noqa: F401
@@ -63,6 +63,8 @@ from modules.library.model.image_asset_model import ImageAssetModel  # noqa: F40
 from modules.library.model.preset_model import PresetModel  # noqa: F401
 from integrations.spotify.models import SpotifyAccount  # noqa: F401
 from modules.session.application.commands import PauseSession
+from modules.characters.repositories.character_repository import CharacterRepository
+from modules.user.application.commands import SetMaxSlots, UserNotFoundError
 from modules.session.repositories.session_repository import SessionRepository
 from modules.user.repositories.user_repository import UserRepository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
@@ -222,6 +224,35 @@ def pause_session(session_id):
             raise click.ClickException(str(reason))
 
         click.echo(f"Session {session.id} ('{session.name}') paused — state persisted, resumable.")
+    finally:
+        db.close()
+
+
+@admin.command("set-max-slots")
+@click.argument("email")
+@click.argument("max_slots", type=int)
+def set_max_slots(email, max_slots):
+    """Set a user's character capacity (1-8) by email.
+
+    Decreasing hides characters above the new limit (rows untouched) and
+    ejects them from their campaigns; refused while any affected campaign has
+    a live session. This command is the knob — a raw UPDATE changes the number
+    but skips the ejection.
+    """
+    db = SessionLocal()
+    try:
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_email(email)
+        if not user:
+            raise click.ClickException(f"No user with email {email}")
+
+        command = SetMaxSlots(user_repo, CharacterRepository(db), SessionRepository(db))
+        try:
+            command.execute(user_id=user.id, max_slots=max_slots)
+        except (ValueError, UserNotFoundError) as reason:
+            raise click.ClickException(str(reason))
+
+        click.echo(f"{email}: max_slots set to {max_slots}")
     finally:
         db.close()
 

@@ -291,10 +291,10 @@ class AcceptCampaignInvite:
             # Sync player_name + campaign_role to api-game. The role is always SPECTATOR right
             # after accept_invite (character not yet selected) — passing it explicitly so
             # MongoDB's player_metadata carries it for runtime checks.
-            if session.active_game_id:
+            if session.is_active():
                 role = campaign.get_role(player_id)
                 await self._sync_player_to_game(
-                    session.active_game_id,
+                    str(session.id),
                     player_id,
                     player_name,
                     role.value if role else "spectator",
@@ -655,8 +655,10 @@ class SelectCharacterForCampaign:
 
     async def _notify_active_session(self, campaign_id: UUID, user_id: UUID, character):
         """If the campaign has a live session, push character change to api-game."""
+        # The query already filters to ACTIVE, which is itself the record that
+        # hot state exists in api-game.
         active_session = self.session_repo.get_active_session_for_campaign(campaign_id)
-        if not active_session or not active_session.active_game_id:
+        if not active_session:
             return
 
         player_name = ""
@@ -684,12 +686,12 @@ class SelectCharacterForCampaign:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.put(
-                    f"http://api-game:8081/game/{active_session.active_game_id}/player/character",
+                    f"http://api-game:8081/game/{active_session.id}/player/character",
                     json=character_data,
                     timeout=5.0
                 )
                 if response.status_code == 200:
-                    logger.info(f"Hot update: character {character.id} synced to active session {active_session.active_game_id}")
+                    logger.info(f"Hot update: character {character.id} synced to active session {active_session.id}")
                 else:
                     logger.warning(f"Hot update failed ({response.status_code}): {response.text}")
         except Exception as e:

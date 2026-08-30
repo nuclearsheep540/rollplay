@@ -12,7 +12,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCopy, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 import { USER_COLORS, resolveUserColor } from '@/app/utils/userColors'
-import UserDisc from '@/app/shared/components/UserDisc'
+import UserChrome from '@/app/shared/components/UserChrome'
+import { SKEW_BOX, SKEW_LABEL, platePolygon } from '@/app/styles/plateGeometry'
 import { Button } from './shared/Button'
 
 const SPOTIFY_GREEN = '#1DB954'
@@ -23,6 +24,35 @@ function SpotifyGlyph({ size = 20, color = '#fff' }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.52 17.34c-.24.36-.66.48-1.02.24-2.82-1.74-6.36-2.1-10.56-1.14-.42.12-.78-.18-.9-.54-.12-.42.18-.78.54-.9 4.56-1.02 8.52-.6 11.64 1.32.42.18.48.66.3 1.02zm1.44-3.3c-.3.42-.84.6-1.26.3-3.24-1.98-8.16-2.58-11.94-1.38-.48.12-1.02-.12-1.14-.6-.12-.48.12-1.02.6-1.14 4.38-1.32 9.78-.66 13.5 1.62.36.18.6.78.24 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.1 9.3c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.32-1.26 11.34-1.02 15.72 1.5.54.3.72 1.02.42 1.56-.3.42-1.02.66-1.5.36z"/>
     </svg>
+  )
+}
+
+/**
+ * A single account meta field as a slanted plate — label on the flat left
+ * face, value carrying across it. The miniature of the working-on card.
+ */
+function MetaPlate({ label, value, mono = false }) {
+  return (
+    <div
+      className="flex items-center gap-4 px-4 py-2.5"
+      style={{
+        backgroundColor: THEME.bgSecondary,
+        clipPath: `polygon(${platePolygon(14)})`,
+      }}
+    >
+      <span
+        className="w-28 flex-none text-[11px] font-semibold uppercase tracking-widest"
+        style={{ color: THEME.textAccent }}
+      >
+        {label}
+      </span>
+      <span
+        className={`min-w-0 flex-1 truncate text-sm ${mono ? 'font-mono text-xs' : ''}`}
+        style={{ color: THEME.textOnDark }}
+      >
+        {value}
+      </span>
+    </div>
   )
 }
 
@@ -224,23 +254,53 @@ export default function ProfileManager({ user, onUserUpdate }) {
         Your Profile
       </h2>
 
-      {/* User Info Display — the shared UserDisc, at avatar size. Initial
-          prefers the immutable account handle (same precedence as the nav
-          account icon), then screen name, then email. */}
-      <div className="flex items-center mb-6">
-        <UserDisc
+      {/* Identity capsule — avatar reads into the name, the same UserChrome
+          the header and friend rows use. */}
+      <div className="mb-5">
+        <UserChrome
           userId={user.id}
           color={user.color}
-          name={user.account_name || user.screen_name || user.email}
-          className="w-16 h-16 text-3xl mr-4 border-2 border-black/40"
+          name={user.screen_name || user.email.split('@')[0]}
+          size="lg"
         />
-        <div>
-          <p className="text-xl font-semibold" style={{color: THEME.textOnDark}}>
-            {user.screen_name || user.email.split('@')[0]}
-          </p>
-          <p className="text-sm" style={{color: THEME.textSecondary}}>{user.email}</p>
-          <p className="text-xs font-mono" style={{color: THEME.textSecondary}}>{user.id}</p>
+      </div>
+
+      {/* Meta plates — email and account id, off the identity block. */}
+      <div className="mb-6 space-y-2">
+        <MetaPlate label="Email" value={user.email} />
+        <MetaPlate label="Account ID" value={user.id} mono />
+      </div>
+
+      {/* Identity colour — moved up beside the identity it colours; each
+          swatch is a card in the page's 8 degree family. */}
+      <div className="mb-6">
+        <h3 className="mb-2 text-sm font-semibold uppercase" style={{color: THEME.textAccent}}>
+          Identity Colour
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {USER_COLORS.map((paletteColor) => {
+            const selected = paletteColor === resolveUserColor(user.color, user.id)
+            return (
+              <button
+                key={paletteColor}
+                onClick={() => updateColor(paletteColor)}
+                disabled={updatingColor}
+                aria-label={`Set identity colour ${paletteColor}`}
+                aria-pressed={selected}
+                className="h-10 w-14 rounded-lg disabled:opacity-50"
+                style={{
+                  backgroundColor: paletteColor,
+                  transform: SKEW_BOX,
+                  outline: selected ? `2px solid ${THEME.textOnDark}` : 'none',
+                  outlineOffset: '2px',
+                }}
+              />
+            )
+          })}
         </div>
+        <p className="mt-2 text-xs" style={{color: THEME.textSecondary}}>
+          Colours your account chip and how friends see you
+        </p>
       </div>
 
       {/* Account Settings */}
@@ -275,6 +335,7 @@ export default function ProfileManager({ user, onUserUpdate }) {
               value={screenName || user.screen_name || ''}
               onChange={(e) => setScreenName(e.target.value)}
               placeholder={user.screen_name || "Enter your screen name"}
+              maxLength={30}
               className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
               style={{
                 backgroundColor: THEME.bgSecondary,
@@ -327,34 +388,6 @@ export default function ProfileManager({ user, onUserUpdate }) {
             </div>
             <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
               Your unique identifier for friend requests (cannot be changed)
-            </p>
-          </div>
-
-          {/* Identity Color — curated palette; saves on click */}
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{color: THEME.textOnDark}}>
-              Identity Color <span style={{color: THEME.textSecondary}}>(Account icon & how friends see you)</span>
-            </label>
-            <div className="flex gap-2 flex-wrap">
-              {USER_COLORS.map((paletteColor) => {
-                const selected = paletteColor === resolveUserColor(user.color, user.id)
-                return (
-                  <button
-                    key={paletteColor}
-                    onClick={() => updateColor(paletteColor)}
-                    disabled={updatingColor}
-                    aria-label={`Set identity color ${paletteColor}`}
-                    className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 disabled:opacity-50"
-                    style={{
-                      backgroundColor: paletteColor,
-                      borderColor: selected ? THEME.textOnDark : 'rgba(0, 0, 0, 0.4)',
-                    }}
-                  />
-                )
-              })}
-            </div>
-            <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
-              Colors your account icon and your disc in friends&apos; social panes
             </p>
           </div>
         </div>

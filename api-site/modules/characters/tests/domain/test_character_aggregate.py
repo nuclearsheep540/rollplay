@@ -60,7 +60,7 @@ def _make(**overrides) -> CharacterAggregate:
 class TestDraftAndFinalize:
     def test_create_draft_populates_minimum_fields(self):
         uid = uuid4()
-        c = CharacterAggregate.create_draft(user_id=uid, edition_id=1, edition_code="srd_5_2_1", character_name="Draft")
+        c = CharacterAggregate.create_draft(user_id=uid, edition_id=1, edition_code="srd_5_2_1", character_name="Draft", slot=0)
         assert c.is_draft is True
         assert c.creation_step == "edition"
         assert c.user_id == uid
@@ -70,15 +70,15 @@ class TestDraftAndFinalize:
 
     def test_create_draft_rejects_blank_name(self):
         with pytest.raises(ValueError, match="required"):
-            CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="   ")
+            CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="   ", slot=0)
 
     def test_finalize_fails_with_missing_fields(self):
-        c = CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="Draft")
+        c = CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="Draft", slot=0)
         with pytest.raises(ValueError, match="species_code"):
             c.finalize()
 
     def test_finalize_succeeds_when_complete(self):
-        c = CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="Done")
+        c = CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="Done", slot=0)
         c.species_code = "human"
         c.background_code = "soldier"
         c.class_entries = [ClassEntry("fighter", 1, True)]

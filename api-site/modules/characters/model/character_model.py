@@ -5,12 +5,14 @@ import uuid
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
     Integer,
     SmallInteger,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -28,9 +30,21 @@ class Character(Base):
     """
 
     __tablename__ = "characters"
+    __table_args__ = (
+        # Character capacity is slot-based: a live character occupies one of a
+        # user's slots for life (slots are never reshuffled); soft-delete NULLs
+        # the slot, freeing it. The unique constraint makes over-occupancy
+        # impossible at the database, including under concurrent creates —
+        # NULLs never collide, so deleted rows are exempt. 8 is the universe
+        # ceiling; the per-user limit is users.max_slots, enforced at slot
+        # assignment in the application layer.
+        UniqueConstraint("user_id", "slot", name="uq_characters_user_slot"),
+        CheckConstraint("slot IS NULL OR (slot >= 0 AND slot < 8)", name="ck_characters_slot_range"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    slot = Column(SmallInteger, nullable=True)  # NULL = soft-deleted (not occupying capacity)
     edition_id = Column(Integer, ForeignKey("editions.id"), nullable=False)
     active_in_campaign_id = Column(
         UUID(as_uuid=True),

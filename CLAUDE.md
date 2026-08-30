@@ -78,7 +78,7 @@ api-site/
 │   │   │   └── campaign_events.py
 │   │   ├── model/
 │   │   │   ├── campaign_model.py
-│   │   │   └── session_model.py
+│   │   │   └── campaign_member_model.py
 │   │   ├── repositories/campaign_repository.py
 │   │   └── dependencies/providers.py
 │   ├── session/                   # Game session lifecycle (start/pause/finish)
@@ -91,6 +91,8 @@ api-site/
 │   │   ├── domain/
 │   │   │   ├── session_aggregate.py
 │   │   │   └── session_events.py
+│   │   ├── model/
+│   │   │   └── session_model.py   # Session + SessionJoinedUser
 │   │   ├── repositories/session_repository.py
 │   │   └── dependencies/providers.py
 │   ├── library/                   # Asset management (maps, music, SFX, images)
@@ -252,8 +254,12 @@ Users are invited to **campaigns** (accept/decline flow), not individual game se
 ### Automatic Session Enrollment
 When a DM creates a game session, all `campaign.player_ids` are automatically added to `game.invited_user_ids`. No player action required.
 
-### Sessions Tab (Read-Only)
-The Sessions tab only shows **active** game sessions. Players can view session info and enter via "Enter" button. Character selection modal triggers if no character is selected. All game management (create/start/stop/delete) happens in the Campaigns tab.
+### Session Access (no Sessions tab)
+There is no Sessions surface — the old read-only Sessions tab and its `SessionsManager.js` were removed 2026-08-30. Sessions are reached through:
+- **Home hero**: the ranked campaign shows live state; GM gets START/RESUME/ENTER in place, players get JOIN when live.
+- **Campaigns tab drawer**: all session management (create/start/pause/finish/delete) lives in the expanded campaign card.
+- **Social panel**: friends' live sessions in shared campaigns offer an Enter button.
+Character selection still gates entry where required (modal in the campaign drawer).
 
 ## Frontend Architecture - Functional Slice Pattern
 
@@ -519,6 +525,25 @@ location /api/auth { ... }
 - **Does**: Manage atomic game state in MongoDB, handle game WebSocket connections, broadcast state changes
 - **Does NOT**: Know about campaigns/users/site concepts, read from PostgreSQL
 - **Tech**: MongoDB, WebSocket
+
+### "Game" vs "Session" — the vocabulary boundary
+
+**"Game" means hot runtime, and nothing else.** api-site builds and stores campaigns and
+sessions — cold domain data in PostgreSQL. The moment api-site hands a session to api-game
+and it goes hot in MongoDB, that is a *game*: the live runtime.
+
+The word is a boundary marker. Seeing `game` in api-site code means "something is running
+in api-game right now" — so it belongs only on calls that cross to api-game
+(`_sync_player_to_game`) or on ETL state moving between hot and cold
+(`_extract_and_sync_game_state`, `game_grid_config`). Cold-side code must never wear game
+vocabulary. Note the tables were renamed `games` → `sessions` in 2026; leftover `game`
+naming on cold-side code is that history, not a distinction.
+
+**One session, one game, one id.** api-game keys its hot document by the session's own id
+(`create_room(room_id=request.session_id)`), so `session.id` addresses the game and
+`status == ACTIVE` — set only after api-game confirms the game is up — records that a game
+exists. There is deliberately no second identifier: a `sessions.active_game_id` column was
+retired 2026-08-30 because it duplicated both facts.
 
 ### HTTP-Based ETL (Session Lifecycle)
 **Game Start** (Cold→Hot): api-site gathers state from PostgreSQL → HTTP POST to api-game → MongoDB document created → game status set to ACTIVE

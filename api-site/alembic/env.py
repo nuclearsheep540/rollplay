@@ -36,7 +36,7 @@ try:
     from modules.characters.model.character_choices_log_model import CharacterChoiceLog
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.campaign_member_model import CampaignMember
-    from modules.campaign.model.session_model import Session, SessionJoinedUser
+    from modules.session.model.session_model import Session, SessionJoinedUser
     from modules.friendship.model.friend_request_model import FriendRequestModel
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.events.model.notification_model import Notification

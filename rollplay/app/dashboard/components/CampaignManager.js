@@ -219,7 +219,7 @@ function PartyMemberCard({
   )
 }
 
-export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, showToast }) {
+export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, openCreateCampaign, clearOpenCreateCampaign, showToast }) {
   const router = useRouter()
   const queryClient = useQueryClient()
 
@@ -494,6 +494,20 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     router.push(`/game?room_id=${game.session_id || game.id}`)
   }
 
+  // Open the campaign form on a blank campaign. Shared by the create tile and
+  // the `create_campaign` URL param Home links to.
+  const openNewCampaignForm = () => {
+    setCampaignForm({
+      title: '',
+      description: '',
+      heroImage: '/campaign-tile-bg.png',
+      heroImageAssetId: null,
+      sessionName: '',
+      editingCampaign: null,
+    })
+    setCampaignFormOpen(true)
+  }
+
   // Create a new campaign
   const createCampaign = async () => {
     if (!user || !campaignForm.title.trim()) return
@@ -656,6 +670,14 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       clearExpandCampaignId?.()
     }
   }, [expandCampaignId, campaigns, loading])
+
+  // Open the create form from the URL param Home's build card links to.
+  useEffect(() => {
+    if (openCreateCampaign && !loading) {
+      openNewCampaignForm()
+      clearOpenCreateCampaign?.()
+    }
+  }, [openCreateCampaign, loading])
 
   // Auto-open character modal from sessionStorage (after returning from character creation)
   useEffect(() => {
@@ -1954,7 +1976,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                 style={{ maxWidth: '1410px', marginLeft: 'auto', marginRight: 'auto' }}
               >
                 <button
-                  onClick={() => { setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, sessionName: '', editingCampaign: null }); setCampaignFormOpen(true) }}
+                  onClick={openNewCampaignForm}
                   className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
                   style={{
                     backgroundColor: 'transparent'

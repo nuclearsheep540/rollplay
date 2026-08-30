@@ -870,3 +870,22 @@ class TestDiscard:
         auth_as(owner.id)
         response = client.delete(f"/api/characters/draft/{uuid4()}")
         assert response.status_code == 404
+
+
+def test_character_cap_blocks_fifth_character(client, auth_as, create_user):
+    """An account holds at most four live characters, drafts included."""
+    user = create_user("cap-owner@example.com")
+    auth_as(user.id)
+    for character_number in range(4):
+        response = client.post(
+            "/api/characters/draft",
+            json={"edition_code": "srd_5_2_1", "name": f"Character {character_number + 1}"},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.post(
+        "/api/characters/draft",
+        json={"edition_code": "srd_5_2_1", "name": "One too many"},
+    )
+    assert response.status_code == 400
+    assert "Character limit reached" in response.json()["detail"]
