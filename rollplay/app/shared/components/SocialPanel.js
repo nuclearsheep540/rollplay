@@ -157,7 +157,8 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
 
   const handleEnterSession = (session) => {
     setIsOpen(false)
-    router.push(`/game?room_id=${session.active_game_id || session.id}`)
+    // api-game keys the live game by the session id
+    router.push(`/game?room_id=${session.id}`)
   }
 
   const handleNotificationNavigate = (notification) => {

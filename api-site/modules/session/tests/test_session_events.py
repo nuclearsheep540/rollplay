@@ -41,7 +41,6 @@ class TestSessionStarted:
             session_name="Session 12",
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
-            active_game_id="abc123",
             host_id=campaign["dm_id"],
             host_screen_name="Matt",
         )
@@ -59,7 +58,6 @@ class TestSessionStarted:
             session_name="Session 12",
             campaign_id=campaign_id,
             campaign_name="Curse of Strahd",
-            active_game_id="abc123",
             host_id=campaign["dm_id"],
             host_screen_name="Matt",
         )
@@ -95,7 +93,6 @@ class TestSessionPaused:
         started = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             campaign_name="Curse of Strahd",
-            active_game_id="abc123",
             host_id=campaign["dm_id"],
             host_screen_name="Matt",
             **common,
@@ -133,7 +130,6 @@ class TestSessionFinished:
         started = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             campaign_name="Curse of Strahd",
-            active_game_id="abc123",
             host_id=campaign["dm_id"],
             host_screen_name="Matt",
             **common,
@@ -171,7 +167,6 @@ class TestPayloadShape:
             session_name="Session 12",
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
-            active_game_id="abc123",
             host_id=campaign["dm_id"],
             host_screen_name="Matt",
         )

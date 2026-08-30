@@ -7,8 +7,6 @@ Session ORM Models - PostgreSQL persistence layer
 Ubiquitous Language:
 - Session = The scheduled/planned play instance (this model)
 - Game = The live multiplayer experience (handled by api-game/MongoDB)
-
-Note: The 'active_game_id' field stores the MongoDB ObjectID when a game is running.
 """
 
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
@@ -42,8 +40,8 @@ class Session(Base):
     """
     Session entity - represents a scheduled play instance.
 
-    When status is ACTIVE, an active game exists in MongoDB (api-game service).
-    The active_game_id field stores the MongoDB document ID for the live game state.
+    When status is ACTIVE, a live game exists in MongoDB (api-game service),
+    keyed by this session's id.
     """
     __tablename__ = 'sessions'
 
@@ -56,7 +54,6 @@ class Session(Base):
     started_at = Column(DateTime(timezone=True))
     stopped_at = Column(DateTime(timezone=True))
     urls_expire_at = Column(DateTime(timezone=True))  # Signed asset-URL lease deadline; expiry sweeper auto-pauses past-due sessions
-    active_game_id = Column(String(100))  # MongoDB active_session objectID (when game is running)
     max_players = Column(Integer, default=8, nullable=False)  # Seat count in active game (1-8)
     audio_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted audio channel config from ETL
     spotify_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted DM Spotify BGM block from ETL (track/context/level)

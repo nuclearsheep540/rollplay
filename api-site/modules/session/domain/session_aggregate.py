@@ -85,7 +85,6 @@ class SessionEntity:
         started_at: Optional[datetime] = None,  # time ETL successfully started the session
         stopped_at: Optional[datetime] = None,  # time ETL successfully stopped the session
         urls_expire_at: Optional[datetime] = None,  # signed asset-URL lease deadline, stamped at signing time in StartSession
-        active_game_id: Optional[str] = None,  # MongoDB active_session objectID (when game is running)
         joined_users: Optional[List[UUID]] = None,  # User IDs in roster (auto-enrolled from campaign)
         max_players: int = 8,  # Seat count in active game (1-8)
         audio_config: Optional[dict] = None,  # Persisted audio channel config (tracks, volume, looping)
@@ -106,7 +105,6 @@ class SessionEntity:
         self.started_at = started_at
         self.stopped_at = stopped_at
         self.urls_expire_at = urls_expire_at
-        self.active_game_id = active_game_id
         self.joined_users = joined_users if joined_users is not None else []
         self.max_players = self._validate_max_players(max_players)
         self.audio_config = audio_config
@@ -252,8 +250,11 @@ class SessionEntity:
 
         self.status = SessionStatus.STARTING
 
-    def activate(self, active_game_id: str, urls_expire_at: Optional[datetime] = None) -> None:
-        """Mark session as ACTIVE with its MongoDB game ID (called after successful start).
+    def activate(self, urls_expire_at: Optional[datetime] = None) -> None:
+        """Mark session as ACTIVE (called only after api-game confirms the game is up).
+
+        ACTIVE is the record that hot state exists in api-game; the game is keyed by
+        this session's own id, so there is no separate game reference to store.
 
         urls_expire_at is the signed asset-URL lease deadline, computed at signing time
         (a few seconds before this call) — the expiry sweeper auto-pauses past it.
@@ -262,7 +263,6 @@ class SessionEntity:
             raise ValueError("Can only activate STARTING sessions")
 
         self.status = SessionStatus.ACTIVE
-        self.active_game_id = active_game_id
         self.started_at = datetime.utcnow()
         self.urls_expire_at = urls_expire_at
 
@@ -283,7 +283,6 @@ class SessionEntity:
 
         self.status = SessionStatus.INACTIVE
         self.stopped_at = datetime.utcnow()
-        self.active_game_id = None  # Clear MongoDB game reference
         self.urls_expire_at = None  # Lease ends with the game; re-stamped on next start
 
     def finish(self) -> None:
@@ -317,7 +316,6 @@ class SessionEntity:
 
         self.status = SessionStatus.FINISHED
         self.stopped_at = datetime.utcnow()
-        self.active_game_id = None  # Clear MongoDB game reference
         self.urls_expire_at = None  # Lease ends with the game
 
     # --- Error Recovery Methods ---

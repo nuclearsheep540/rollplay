@@ -78,7 +78,7 @@ api-site/
 │   │   │   └── campaign_events.py
 │   │   ├── model/
 │   │   │   ├── campaign_model.py
-│   │   │   └── session_model.py
+│   │   │   └── campaign_member_model.py
 │   │   ├── repositories/campaign_repository.py
 │   │   └── dependencies/providers.py
 │   ├── session/                   # Game session lifecycle (start/pause/finish)
@@ -91,6 +91,8 @@ api-site/
 │   │   ├── domain/
 │   │   │   ├── session_aggregate.py
 │   │   │   └── session_events.py
+│   │   ├── model/
+│   │   │   └── session_model.py   # Session + SessionJoinedUser
 │   │   ├── repositories/session_repository.py
 │   │   └── dependencies/providers.py
 │   ├── library/                   # Asset management (maps, music, SFX, images)
@@ -519,6 +521,25 @@ location /api/auth { ... }
 - **Does**: Manage atomic game state in MongoDB, handle game WebSocket connections, broadcast state changes
 - **Does NOT**: Know about campaigns/users/site concepts, read from PostgreSQL
 - **Tech**: MongoDB, WebSocket
+
+### "Game" vs "Session" — the vocabulary boundary
+
+**"Game" means hot runtime, and nothing else.** api-site builds and stores campaigns and
+sessions — cold domain data in PostgreSQL. The moment api-site hands a session to api-game
+and it goes hot in MongoDB, that is a *game*: the live runtime.
+
+The word is a boundary marker. Seeing `game` in api-site code means "something is running
+in api-game right now" — so it belongs only on calls that cross to api-game
+(`_sync_player_to_game`) or on ETL state moving between hot and cold
+(`_extract_and_sync_game_state`, `game_grid_config`). Cold-side code must never wear game
+vocabulary. Note the tables were renamed `games` → `sessions` in 2026; leftover `game`
+naming on cold-side code is that history, not a distinction.
+
+**One session, one game, one id.** api-game keys its hot document by the session's own id
+(`create_room(room_id=request.session_id)`), so `session.id` addresses the game and
+`status == ACTIVE` — set only after api-game confirms the game is up — records that a game
+exists. There is deliberately no second identifier: a `sessions.active_game_id` column was
+retired 2026-08-30 because it duplicated both facts.
 
 ### HTTP-Based ETL (Session Lifecycle)
 **Game Start** (Cold→Hot): api-site gathers state from PostgreSQL → HTTP POST to api-game → MongoDB document created → game status set to ACTIVE

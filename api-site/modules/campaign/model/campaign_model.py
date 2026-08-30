@@ -21,7 +21,11 @@ class Campaign(Base):
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     edition_id = Column(Integer, ForeignKey('editions.id'), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    # No onupdate: the aggregate owns this via update_timestamp(), so it moves
+    # only when a command actually edits the campaign. Letting the ORM stamp it
+    # meant unrelated writes (a session being created) read as an edit.
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_played_at = Column(DateTime(timezone=True), nullable=True)  # Stamped when a session goes live
 
     # Relationships
     sessions = relationship("Session", back_populates="campaign", cascade="all, delete-orphan")

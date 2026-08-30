@@ -97,8 +97,11 @@ body {
   --asset-sfx: #A98FC0;
   --asset-image: #7FA3B8;
 
+  /* Highlight accent - primary CTAs, live state, favorites */
+  --gold: #D9A441;
+
   /* Library favorite star */
-  --favorite: #D9A441;
+  --favorite: var(--gold);
 
   /* Hover shade for items sitting on dark panels */
   --surface-hover: #2B2724;
@@ -1781,4 +1784,152 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 .right-drawer-expand-btn:hover {
   background: rgba(0, 0, 0, 0.85);
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* Home landing page
+   ========================================================================== */
+
+/* Breathing dot — the pulse source, and the hero's live indicator. Period is
+   driven per-consumer via --breath; glow colour via --breathe-glow. */
+@keyframes home-breathe {
+  0%, 100% {
+    opacity: 0.35;
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 10px 2px var(--breathe-glow, rgba(217, 164, 65, 0.45));
+  }
+}
+
+.home-breathe {
+  animation: home-breathe var(--breath, 4s) ease-in-out infinite;
+}
+
+/* Card CTAs — per-variant hover, matching the design mock: gold brightens,
+   ghost lifts its border only, and the build card's outline buttons go gold.
+   These live here rather than inline so :hover can reach border-color. */
+.home-btn-gold {
+  background: var(--gold);
+  color: #241C08;
+  /* Constant 2px transparent border so gaining the live ring never resizes it. */
+  border: 2px solid transparent;
+}
+
+.home-btn-gold:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.home-btn-ghost {
+  background: rgba(20, 18, 16, 0.35);
+  color: var(--palette-smoke);
+  border: 1px solid rgba(247, 244, 243, 0.35);
+}
+
+.home-btn-ghost:hover:not(:disabled) {
+  border-color: rgba(247, 244, 243, 0.6);
+}
+
+.home-btn-outline {
+  background: rgba(247, 244, 243, 0.06);
+  color: var(--palette-smoke);
+  border: 1px solid rgba(247, 244, 243, 0.28);
+}
+
+.home-btn-outline:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.home-btn-danger {
+  background: #7A2F2A;
+  color: #F3DED9;
+  border: 2px solid transparent;
+}
+
+.home-btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* Live CTA glow — a white glint travelling the button's parallelogram border.
+   Solid gold paints the padding box, the conic sweep the border box, so only
+   the 2px transparent border shows the glint. The registered custom property
+   lets plain keyframes interpolate the angle, so no rAF loop is needed. The
+   sweep's resting stops are gold, not transparent: a transparent track would
+   show the art behind the button and read as the button shrinking. */
+@property --glow-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes home-glow-spin {
+  to { --glow-angle: 360deg; }
+}
+
+.home-cta-live {
+  background:
+    linear-gradient(var(--gold), var(--gold)) padding-box,
+    conic-gradient(from var(--glow-angle), var(--gold) 0%, var(--palette-smoke) 11%, var(--gold) 24%) border-box;
+  border: 2px solid transparent;
+  box-shadow: 0 0 16px 1px rgba(247, 244, 243, 0.35);
+  animation: home-glow-spin 2.4s linear infinite;
+}
+
+/* Pending invite marker — two full oscillations inside the first second,
+   then rest for the remainder of the loop. */
+@keyframes home-invite-wiggle {
+  0%    { transform: rotate(0deg); }
+  4.2%  { transform: rotate(20deg); }
+  12.5% { transform: rotate(-20deg); }
+  20.8% { transform: rotate(20deg); }
+  29.2% { transform: rotate(-20deg); }
+  33.3% { transform: rotate(0deg); }
+  100%  { transform: rotate(0deg); }
+}
+
+.home-invite-alert {
+  transform-origin: 50% 100%;
+  animation: home-invite-wiggle 3s ease-in-out infinite;
+}
+
+/* Page clock colon — blinks with the seconds, driven by the clock tick. */
+.home-clock-colon {
+  transition: opacity 150ms;
+}
+
+.home-clock-colon.dim {
+  opacity: 0.2;
+}
+
+/* Character hand — dealt order, first card on top; hovering lifts one out
+   of the hand. Depth comes in per-card so :hover can still win. */
+.home-char-shell {
+  z-index: var(--hand-depth, 1);
+}
+
+.home-char-shell:hover {
+  z-index: 10;
+}
+
+/* A demoted card is still live in the deck, not disabled beneath the other —
+   only its actions go inert, so a click on its band can't fire them. */
+.home-deck-demoted button {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-breathe {
+    animation: none;
+    opacity: 0.85;
+  }
+  .home-cta-live {
+    animation: none;
+  }
+  .home-invite-alert {
+    animation: none;
+  }
+  .home-clock-colon.dim {
+    opacity: 1;
+  }
 }

@@ -129,6 +129,7 @@ class CampaignRepository:
             campaign_model.hero_image = aggregate.hero_image
             campaign_model.hero_image_asset_id = aggregate.hero_image_asset_id
             campaign_model.updated_at = aggregate.updated_at
+            campaign_model.last_played_at = aggregate.last_played_at
 
             # Sync members join table
             self._sync_members(campaign_model, aggregate)
@@ -159,6 +160,7 @@ class CampaignRepository:
                 edition_id=default_edition_id,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
+                last_played_at=aggregate.last_played_at,
             )
             self.db.add(campaign_model)
 
@@ -253,6 +255,7 @@ class CampaignRepository:
             created_by=model.created_by,
             created_at=model.created_at,
             updated_at=model.updated_at,
+            last_played_at=model.last_played_at,
             session_ids=session_ids,
             members=members
         )

@@ -78,6 +78,7 @@ class CampaignResponse(BaseModel):
     host_screen_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    last_played_at: Optional[datetime] = None
     sessions: List = []  # Sessions fetched separately via session module
     invited_player_ids: List[str] = []
     player_ids: List[str] = []
@@ -103,6 +104,7 @@ class CampaignSummaryResponse(BaseModel):
     host_screen_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    last_played_at: Optional[datetime] = None
     total_sessions: int = 0
     active_sessions: int = 0
     invited_player_ids: List[str] = []

@@ -51,7 +51,7 @@ from modules.characters.model.character_inventory_model import CharacterInventor
 from modules.characters.model.character_choices_log_model import CharacterChoiceLog  # noqa: F401
 from modules.campaign.model.campaign_model import Campaign  # noqa: F401
 from modules.campaign.model.campaign_member_model import CampaignMember  # noqa: F401
-from modules.campaign.model.session_model import Session, SessionJoinedUser  # noqa: F401
+from modules.session.model.session_model import Session, SessionJoinedUser  # noqa: F401
 from modules.friendship.model.friend_request_model import FriendRequestModel  # noqa: F401
 from modules.friendship.model.friendship_model import FriendshipModel  # noqa: F401
 from modules.events.model.notification_model import Notification  # noqa: F401

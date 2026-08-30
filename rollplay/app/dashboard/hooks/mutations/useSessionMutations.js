@@ -13,25 +13,22 @@ export function useCreateSession() {
 
   return useMutation({
     mutationFn: async ({ campaignId, name, maxPlayers }) => {
-      const gameData = {
+      const sessionData = {
         name: name?.trim() || 'Session 1',
         max_players: maxPlayers,
         campaign_id: `${campaignId}`,
       }
 
-      const response = await authFetch(
-        `/api/campaigns/sessions?campaign_id=${campaignId}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(gameData),
-        }
-      )
+      const response = await authFetch('/api/sessions/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(sessionData),
+      })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to create game')
+        throw new Error(errorData.detail || 'Failed to create session')
       }
 
       return response.json()

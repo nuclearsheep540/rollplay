@@ -22,8 +22,9 @@ class CampaignAggregate:
     """
     Campaign Aggregate Root
 
-    Campaigns organize sessions and manage players.
-    Session is now a separate aggregate - Campaign only stores session_ids.
+    Campaigns organize sessions and manage players. Session is its own
+    aggregate, referenced by id; the ids are read from the sessions table's
+    campaign_id foreign key, never stored on the campaign row.
 
     Membership:
     - Each user has exactly one role per campaign (enforced by unique constraint).
@@ -39,6 +40,9 @@ class CampaignAggregate:
     updated_at: datetime
     hero_image_asset_id: Optional[UUID] = None
     hero_image_asset_meta: Optional[HeroImageAssetMeta] = None
+    # When this campaign was last played, stamped when a session goes live.
+    # Distinct from updated_at, which tracks edits to the campaign itself.
+    last_played_at: Optional[datetime] = None
     session_ids: List[UUID] = field(default_factory=list)
     members: Dict[UUID, CampaignRole] = field(default_factory=dict)
 
@@ -144,6 +148,11 @@ class CampaignAggregate:
 
     # --- Session Management ---
 
+    # session_ids is read-derived from the sessions table's campaign_id foreign
+    # key, so these methods validate and adjust the in-memory view only. They
+    # deliberately leave updated_at alone: a session's lifecycle is not an edit
+    # to the campaign, and the card that reads updated_at means "last edited".
+
     def add_session(self, session_id: UUID) -> None:
         """Add a session reference to this campaign."""
         if session_id in self.session_ids:
@@ -154,13 +163,11 @@ class CampaignAggregate:
             raise ValueError(f"Campaign cannot exceed {max_sessions_per_campaign} sessions")
 
         self.session_ids.append(session_id)
-        self.update_timestamp()
 
     def remove_session(self, session_id: UUID) -> bool:
         """Remove a session reference from this campaign."""
         if session_id in self.session_ids:
             self.session_ids.remove(session_id)
-            self.update_timestamp()
             return True
         return False
 
@@ -195,6 +202,13 @@ class CampaignAggregate:
     def update_timestamp(self):
         """Update the last modified timestamp"""
         self.updated_at = datetime.utcnow()
+
+    def mark_played(self):
+        """Stamp the campaign as played (a session went live).
+
+        Deliberately does not touch updated_at: playing is not editing.
+        """
+        self.last_played_at = datetime.utcnow()
 
     def get_total_sessions(self) -> int:
         """Get total number of sessions in campaign"""

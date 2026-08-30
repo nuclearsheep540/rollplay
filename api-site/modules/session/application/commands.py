@@ -33,7 +33,7 @@ from modules.user.model.user_model import User
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.repositories.campaign_repository import CampaignRepository
-from modules.campaign.model.session_model import SessionJoinedUser
+from modules.session.model.session_model import SessionJoinedUser
 from modules.session.domain.token_merge import merge_token_boards
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.library.repositories.asset_repository import MediaAssetRepository
@@ -118,9 +118,9 @@ class CreateSession:
         # Save session first to get ID
         self.session_repo.save(session)
 
-        # Add session reference to campaign
+        # Validates the campaign's session limit. Not persisted: the link lives
+        # on the session row's campaign_id.
         campaign.add_session(session.id)
-        self.campaign_repo.save(campaign)
 
         # Broadcast session_created event to all campaign members (silent state update)
         # Get host user for screen name
@@ -213,9 +213,8 @@ class DeleteSession:
         # Delete session (repository validates business rules)
         self.session_repo.delete(session_id)
 
-        # Remove session reference from campaign
+        # In-memory view only; the row is already gone with the session.
         campaign.remove_session(session_id)
-        self.campaign_repo.save(campaign)
 
         return True
 
@@ -611,7 +610,7 @@ class StartSession:
         1. Validates session ownership and status
         2. Sets session status to STARTING
         3. Calls api-game to create MongoDB active_session
-        4. Sets session status to ACTIVE with active_game_id
+        4. Sets session status to ACTIVE
 
         Raises:
             ValueError: If validation fails or api-game call fails
@@ -744,22 +743,32 @@ class StartSession:
                 logger.error(f"api-game error {response.status_code}: {error_detail}")
                 raise ValueError(f"Failed to create game: {error_detail}")
 
-            # 10. Parse response
+            # 10. Parse response. api-game keys the hot document by the session id
+            # we sent, and every later hot call addresses it that way — so a
+            # mismatch here would silently break player sync and cleanup.
             start_response = SessionStartResponse(**response.json())
-            active_game_id = start_response.session_id
+            if start_response.session_id != str(session.id):
+                raise ValueError(
+                    f"api-game returned session id {start_response.session_id}, "
+                    f"expected {session.id}"
+                )
 
-            # 11. Mark ACTIVE with the MongoDB game ID; stamp the seed the
-            # boards actually started from (decision 24 — the merge's diff
-            # base for the next start and the in-play guard's reference)
+            # 11. Mark ACTIVE; stamp the seed the boards actually started from
+            # (decision 24 — the merge's diff base for the next start and the
+            # in-play guard's reference)
             session.map_token_seed = map_token_seed
-            session.activate(active_game_id, urls_expire_at)
+            session.activate(urls_expire_at)
             self.session_repo.save(session)
 
-            logger.info(f"Session {session_id} ACTIVE with game {active_game_id}")
+            logger.info(f"Session {session_id} ACTIVE")
 
-            # 12. Broadcast session_started event to all campaign members + DM (with notification)
+            # 12. Stamp the campaign as played, then broadcast session_started to
+            # all campaign members + DM (with notification)
             campaign = self.campaign_repo.get_by_id(session.campaign_id)
             if campaign:
+                campaign.mark_played()
+                self.campaign_repo.save(campaign)
+
                 # Include DM in recipient list (DM gets confirmation toast)
                 all_recipients = campaign.get_all_member_ids()
 
@@ -769,7 +778,6 @@ class StartSession:
                     session_name=session.name,
                     campaign_id=session.campaign_id,
                     campaign_name=campaign.title,
-                    active_game_id=active_game_id,
                     host_id=host_id,
                     host_screen_name=host_user.screen_name or "Unknown"  # never email (PII)
                 )
@@ -1003,16 +1011,17 @@ async def _extract_and_sync_game_state(
         raise ValueError(f"Cannot complete session operation: {str(e)}")
 
 
-async def _async_cleanup_game(active_game_id: str, session_id: UUID):
+async def _async_cleanup_game(session_id: UUID):
     """
-    Background task to delete MongoDB session (fire-and-forget).
+    Background task to delete the hot game in MongoDB (fire-and-forget).
 
-    If this fails, the hourly cron job will clean up orphaned sessions.
+    api-game keys the game by our session id, so that id addresses it.
+    If this fails, the hourly cron job will clean up orphaned games.
     """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(
-                f"http://api-game:8081/game/session/{active_game_id}",
+                f"http://api-game:8081/game/session/{session_id}",
                 params={"keep_logs": False},
                 timeout=5.0
             )
@@ -1021,11 +1030,11 @@ async def _async_cleanup_game(active_game_id: str, session_id: UUID):
             logger.info(f"Background cleanup successful for session {session_id}")
         else:
             logger.warning(f"MongoDB cleanup failed for {session_id}: {response.text}")
-            logger.warning(f"Cron job will clean up game {active_game_id}")
+            logger.warning(f"Cron job will clean up the game for session {session_id}")
 
     except Exception as e:
         logger.warning(f"Background cleanup failed for {session_id}: {e}")
-        logger.warning(f"Cron job will clean up game {active_game_id}")
+        logger.warning(f"Cron job will clean up the game for session {session_id}")
 
 
 class PauseSession:
@@ -1082,8 +1091,6 @@ class PauseSession:
 
         # 4. PHASE 2: Write to PostgreSQL
         try:
-            active_game_id_to_cleanup = session.active_game_id
-
             session.max_players = extracted.max_players
             session.audio_config = extracted.audio_config
             session.spotify_config = extracted.spotify_config
@@ -1093,13 +1100,13 @@ class PauseSession:
             session.adventure_log = extracted.adventure_log
             session.map_token_state = extracted.map_token_state
 
-            session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
+            session.deactivate()  # Sets INACTIVE, stopped_at = now
             self.session_repo.save(session)
             logger.info(f"Session {session_id} marked INACTIVE in PostgreSQL")
 
         except Exception as pg_error:
             logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
-            logger.error(f"MongoDB session {session.active_game_id} PRESERVED for manual retry")
+            logger.error(f"MongoDB game for session {session_id} PRESERVED for manual retry")
             raise ValueError(
                 f"Failed to save session data. Game preserved in MongoDB. "
                 f"Please try pausing the session again. Error: {str(pg_error)}"
@@ -1124,7 +1131,7 @@ class PauseSession:
             logger.info(f"Broadcasting session_paused event to {len(all_recipients)} recipients for session {session.id}")
 
         # 6. PHASE 3: Background cleanup (fire-and-forget)
-        asyncio.create_task(_async_cleanup_game(active_game_id_to_cleanup, session_id))
+        asyncio.create_task(_async_cleanup_game(session_id))
 
         logger.info(f"Session {session_id} paused successfully, cleanup scheduled")
         return session
@@ -1219,8 +1226,6 @@ class FinishSession:
 
         # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED
         try:
-            active_game_id_to_cleanup = session.active_game_id
-
             session.max_players = extracted.max_players
             session.audio_config = extracted.audio_config
             session.spotify_config = extracted.spotify_config
@@ -1230,13 +1235,13 @@ class FinishSession:
             session.adventure_log = extracted.adventure_log
             session.map_token_state = extracted.map_token_state
 
-            session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None
+            session.mark_finished()  # Sets FINISHED, stopped_at = now
             self.session_repo.save(session)
             logger.info(f"Session {session_id} marked FINISHED in PostgreSQL")
 
         except Exception as pg_error:
             logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
-            logger.error(f"MongoDB session {session.active_game_id} PRESERVED for manual retry")
+            logger.error(f"MongoDB game for session {session_id} PRESERVED for manual retry")
             raise ValueError(
                 f"Failed to save session data. Game preserved in MongoDB. "
                 f"Please try finishing the session again. Error: {str(pg_error)}"
@@ -1259,7 +1264,7 @@ class FinishSession:
             logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
 
         # 9. PHASE 3: Background cleanup (fire-and-forget)
-        asyncio.create_task(_async_cleanup_game(active_game_id_to_cleanup, session_id))
+        asyncio.create_task(_async_cleanup_game(session_id))
 
         logger.info(f"Session {session_id} finished successfully, cleanup scheduled")
         return session

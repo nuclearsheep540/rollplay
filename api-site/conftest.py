@@ -222,8 +222,8 @@ def user_repo(db_session: Session):
 
 
 @pytest.fixture
-def game_repo(db_session: Session):
-    """Game repository with test database"""
+def session_repo(db_session: Session):
+    """Session repository with test database"""
     return SessionRepository(db_session)
 
 
@@ -298,24 +298,24 @@ def create_campaign(campaign_repo: CampaignRepository):
 
 
 @pytest.fixture
-def create_game(game_repo: SessionRepository):
+def create_session(session_repo: SessionRepository):
     """
-    Factory fixture to create test games.
+    Factory fixture to create test sessions.
 
     Usage:
-        game = create_game(campaign_id=campaign.id, host_id=user.id, name="Test Game")
+        session = create_session(campaign_id=campaign.id, host_id=user.id, name="Test Session")
     """
-    def _create_game(campaign_id: uuid.UUID, host_id: uuid.UUID, name: str = "Test Game", max_players: int = 6):
-        game = SessionEntity.create(
+    def _create_session(campaign_id: uuid.UUID, host_id: uuid.UUID, name: str = "Test Session", max_players: int = 6):
+        session = SessionEntity.create(
             name=name,
             campaign_id=campaign_id,
             host_id=host_id,
             max_players=max_players
         )
-        game_repo.save(game)
-        return game
+        session_repo.save(session)
+        return session
 
-    return _create_game
+    return _create_session
 
 
 @pytest.fixture

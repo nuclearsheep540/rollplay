@@ -21,10 +21,6 @@ from .schemas import (
     CampaignSetRoleResponse,
     HeroImageAssetInfo,
 )
-from modules.session.api.schemas import (
-    CreateSessionRequest, SessionResponse
-)
-from modules.session.application.queries import GetSessionById
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
@@ -109,8 +105,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
     username/character detail (same source the dashboard's member list uses).
     Without them, ``members`` is left empty.
     """
-    # Campaign now only stores session_ids, not full session objects
-    # Frontend should fetch sessions separately from /api/sessions/campaign/{id}
+    # Sessions are fetched separately from /api/sessions/campaign/{id}
 
     # Look up DM screen name if user_repo provided
     dm_id = campaign.dm_id
@@ -136,6 +131,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
+        last_played_at=campaign.last_played_at,
         sessions=[],  # Sessions fetched separately via session module
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
@@ -169,6 +165,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: Option
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
+        last_played_at=campaign.last_played_at,
         total_sessions=campaign.get_total_sessions(),
         active_sessions=0,  # TODO: Query session module for active count
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
@@ -176,30 +173,6 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: Option
         member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
         invited_count=campaign.get_invited_count()
     )
-
-# Session is a child of campaign so we'll define the POST here
-@router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(
-    request: CreateSessionRequest,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    campaign_repo: CampaignRepository = Depends(campaign_repository),
-    event_manager: EventManager = Depends(get_event_manager)
-):
-    """Create a new session within a campaign"""
-
-    try:
-        command = CreateSession(session_repo, campaign_repo, event_manager)
-        session = await command.execute(
-            name=request.name,
-            campaign_id=request.campaign_id,
-            host_id=user_id,
-            max_players=request.max_players
-        )
-        return GetSessionById(session_repo).execute(session.id)  # type: ignore[arg-type]
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
 
 # Campaign endpoints
 @router.post("/", response_model=CampaignResponse)
@@ -250,45 +223,10 @@ async def get_user_campaigns(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    event_manager: EventManager = Depends(get_event_manager),
     s3_service: S3Service = Depends(get_s3_service)
 ):
     """Get all campaigns where user is host or member"""
     try:
-        # Create demo campaign for first-time users (only once per account)
-        if not current_user.has_received_demo:
-            DEMO_CAMPAIGN_TEMPLATE = {
-                "title": "Shadows of the Astral Forge",
-                "description": "The world of Elyndor has been thrown off balance after a celestial fracture split the night sky, showering the land with star-shards—ancient cosmic fragments pulsing with unstable energy. These shards have awakened long-dormant ruins, warped creatures into monstrous forms, and drawn power-hungry factions into open conflict.\n\nAt the heart of the chaos lies the Astral Forge, an ancient floating sanctum said to predate the gods themselves. Legends speak of its power to reshape reality—or unmake it entirely. Now, with star-shards acting as keys to its gates, the race is on.\n\nYour party begins as a ragtag group of outcasts, each touched by the celestial event in strange and personal ways. As you delve into crumbling temples, forge uneasy alliances, and battle eldritch horrors, you'll uncover the true nature of the shards—and the terrible cost of wielding their power.",
-                "hero_image": "/floating-city.png",
-                "session_name": "Demo Session"
-            }
-            try:
-                command = CreateCampaign(campaign_repo)
-                campaign = command.execute(
-                    host_id=current_user.id,
-                    title=DEMO_CAMPAIGN_TEMPLATE["title"],
-                    description=DEMO_CAMPAIGN_TEMPLATE["description"],
-                    hero_image=DEMO_CAMPAIGN_TEMPLATE["hero_image"]
-                )
-
-                # Always create session with campaign
-                session_command = CreateSession(session_repo, campaign_repo, event_manager)
-                await session_command.execute(
-                    name=DEMO_CAMPAIGN_TEMPLATE["session_name"],
-                    campaign_id=campaign.id,
-                    host_id=current_user.id,
-                    max_players=8
-                )
-            except Exception:
-                # Don't fail the request if demo creation fails
-                pass
-
-            # Mark user as having received demo (even if creation failed, don't retry)
-            current_user.has_received_demo = True
-            user_repo.save(current_user)
-
         query = GetUserCampaigns(campaign_repo)
         campaigns = query.execute(current_user.id)
 

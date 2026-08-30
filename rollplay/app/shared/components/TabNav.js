@@ -43,8 +43,11 @@ const PAGE_BG = COLORS.smoke
  * @param {Function} onTabChange - Called with tab id on selection
  */
 export default function TabNav({ tabs, activeTab, onTabChange }) {
-  const selectedIndex = tabs.findIndex((t) => t.id === activeTab)
-  const activeIdx = selectedIndex === -1 ? 0 : selectedIndex
+  const selectedIndex = tabs.findIndex((tab) => tab.id === activeTab)
+  // Home is the unmarked state: no tab id matches, so nothing renders as
+  // active. TabGroup still needs a real index for its controlled prop.
+  const hasActiveTab = selectedIndex !== -1
+  const activeIdx = hasActiveTab ? selectedIndex : 0
 
   // Refs + state for measuring the active tab. We measure the *tab's*
   // bounding rect (not the label) so every tab produces the same
@@ -77,7 +80,7 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
     // can't spawn a page-level horizontal scrollbar.
     <div className="w-full overflow-x-hidden">
       <TabGroup
-        selectedIndex={selectedIndex === -1 ? 0 : selectedIndex}
+        selectedIndex={activeIdx}
         onChange={(index) => onTabChange(tabs[index].id)}
       >
         {/* Container is capped at 1410 px to match the dashboard's
@@ -119,6 +122,7 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
           {/* Active-tab highlight — positioned + sized from a runtime
               measurement of the active label. Soft-faded at the ends
               to echo the base rule's tapered terminals. */}
+          {hasActiveTab && (
           <div
             aria-hidden="true"
             className="absolute pointer-events-none"
@@ -141,6 +145,7 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                 'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)',
             }}
           />
+          )}
 
           <TabList className="relative flex items-end">
             {tabs.map((tab, i) => (
@@ -154,7 +159,7 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                 className="group relative z-10 flex-1 flex flex-col items-center gap-0 outline-none cursor-pointer"
               >
                 {({ selected, hover, focus }) => {
-                  const isActiveLike = selected
+                  const isActiveLike = selected && hasActiveTab
                   return (
                     <>
                       {/* Label sits above the rule. Opacity steps are

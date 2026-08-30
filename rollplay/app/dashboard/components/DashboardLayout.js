@@ -6,13 +6,15 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
 import SubNav from '../../shared/components/SubNav'
 
 /**
  * Dashboard-specific shell - just the tab nav + main content. The page
  * chrome (site header, auth bootstrap, event subscription) lives in
  * `app/(authenticated)/layout.js`, which wraps every authenticated page.
+ *
+ * Bare `/dashboard` is Home: no tab is written to the URL and no tab
+ * renders as active. Tab URLs are reached by explicit navigation only.
  */
 export default function DashboardLayout({
   children,
@@ -35,25 +37,6 @@ export default function DashboardLayout({
     { id: 'workshop', label: 'Workshop' },
     { id: 'market', label: 'Market' },
   ]
-
-  // Valid `?tab=` values on the dashboard. Account lives at its own
-  // `/account` route now, so it's not a dashboard tab.
-  const VALID_TABS = ['characters', 'campaigns', 'library', 'workshop', 'market']
-
-  // Initialize activeSection from URL parameter - run only once on mount
-  useEffect(() => {
-    const tabParam = searchParams.get('tab')
-    if (tabParam && VALID_TABS.includes(tabParam)) {
-      setActiveSection(tabParam)
-    } else if (!tabParam) {
-      // If no tab parameter, set default and update URL
-      const current = new URLSearchParams(Array.from(searchParams.entries()))
-      current.set('tab', 'campaigns')
-      const search = current.toString()
-      router.replace(`/dashboard?${search}`)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Intentionally empty - only run on mount
 
   const switchSection = (targetId) => {
     setActiveSection(targetId)
