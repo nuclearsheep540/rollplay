@@ -21,20 +21,24 @@ export default function SiteHeader({ children }) {
       className="flex-shrink-0 border-b py-4 px-4 sm:px-8 md:px-10"
       style={{ backgroundColor: COLORS.carbon, borderBottomColor: THEME.borderSubtle }}
     >
-      {/* Contents align to the dashboard's content frame (the TabNav's
-          max-w-[1410px]) rather than the viewport edges, so on ultrawide
-          monitors the nav cluster — and anything anchored to it, like the
-          Social panel — stays adjacent to the actual content. */}
+      {/* Contents align to the dashboard's 1410px content frame rather than
+          the viewport edges, so on ultrawide monitors the nav cluster — and
+          anything anchored to it, like the Social panel — stays adjacent to
+          the actual content. */}
       <div className="mx-auto w-full max-w-[1410px] flex justify-between items-center">
-        {/* Logo — the app's home anchor */}
+        {/* Logo — the app's home anchor. Height-driven so the intrinsic
+            5.46:1 ratio sets the width. */}
         <Link
           href="/dashboard"
           aria-label="Home"
           title="Home"
-          className="text-2xl flex items-center font-[family-name:var(--font-inter)] hover:opacity-80 transition-opacity"
-          style={{ color: COLORS.smoke, fontWeight: 700 }}
+          className="flex items-center hover:opacity-80 transition-opacity"
         >
-          <span>TABLETOP</span><span style={{ color: COLORS.silver }}>TAVERN</span>
+          <img
+            src="/tabletop-logo-w.png"
+            alt="Tabletop Tavern"
+            className="h-8 w-auto"
+          />
         </Link>
 
         {/* Right side nav area — passed in per-page */}

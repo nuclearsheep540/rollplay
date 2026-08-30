@@ -14,6 +14,9 @@ import { ToastNotification } from './ToastNotification'
 import { formatPanelMessage, getNavigationTab } from '../config/eventConfig'
 import { formatRelativeTime } from '../utils/formatTime'
 import UserDisc from './UserDisc'
+import UserChrome from './UserChrome'
+import { THEME, COLORS } from '@/app/styles/colorTheme'
+import { SKEW_BOX, SKEW_LABEL } from '@/app/dashboard/components/home/plateGeometry'
 import { Button } from '@/app/dashboard/components/shared/Button'
 import { useFriendships } from '@/app/dashboard/hooks/useFriendships'
 import { useCampaigns } from '@/app/dashboard/hooks/useCampaigns'
@@ -181,7 +184,10 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
     setIsOpen(false)
     const tab = getNavigationTab(notification.event_type)
     if (!tab) return
-    if (tab === 'campaigns' && notification.data?.campaign_id) {
+    // Account is its own route, not a dashboard tab.
+    if (tab === 'account') {
+      router.push('/account')
+    } else if (tab === 'campaigns' && notification.data?.campaign_id) {
       if (notification.event_type === 'campaign_invite_received') {
         router.push(`/dashboard?tab=${tab}&invite_campaign_id=${notification.data.campaign_id}`)
       } else {
@@ -348,29 +354,24 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                 return (
                   <div
                     key={friend.id}
-                    className="flex items-center gap-3 px-4 py-2 hover:bg-interactive-hover/10 transition-colors"
+                    className="flex items-center gap-3 px-4 py-1.5 hover:bg-interactive-hover/10 transition-colors"
                   >
-                    {/* Offline dimming lives on the identity elements, NOT the
+                    {/* Offline dimming lives on the identity capsule, NOT the
                         row container — container opacity would flatten the
                         whole subtree, making the invite dropdown translucent */}
-                    <UserDisc
+                    <UserChrome
                       userId={friend.friend_id}
                       color={friend.friend_color}
                       name={friend.friend_screen_name}
-                      className={`w-8 h-8 text-sm ${!friend.is_online ? 'opacity-60' : ''}`}
-                    >
-                      <span
-                        className={`absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-secondary ${friend.is_online ? 'bg-feedback-success' : 'bg-border'}`}
-                      />
-                    </UserDisc>
-                    <span className={`flex-1 min-w-0 ${!friend.is_online ? 'opacity-60' : ''}`}>
-                      <span className="block text-sm text-content-on-dark truncate">{friend.friend_screen_name || 'Unknown'}</span>
-                      <span className="block text-xs text-content-secondary truncate">
-                        {liveSeat
+                      isOnline={friend.is_online}
+                      dimmed={!friend.is_online}
+                      className="min-w-0 flex-1"
+                      status={
+                        liveSeat
                           ? <>In session · <span className="text-content-on-dark">{liveSeat.campaignTitle}</span></>
-                          : friend.is_online ? 'Online' : 'Offline'}
-                      </span>
-                    </span>
+                          : friend.is_online ? 'Online' : 'Offline'
+                      }
+                    />
                     {liveSeat && (
                       <Button variant="primary" size="xs" onClick={() => handleEnterSession(liveSeat.session)}>
                         Enter
@@ -442,17 +443,14 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                 <div className="border-t border-border-subtle mt-2" />
                 <div className={sectionLabelClass}>Requests <span className="normal-case tracking-normal opacity-60">· {friendRequests.length} pending</span></div>
                 {friendRequests.map(request => (
-                  <div key={request.id} className="flex items-center gap-3 px-4 py-2">
-                    <UserDisc
+                  <div key={request.id} className="flex items-center gap-3 px-4 py-1.5">
+                    <UserChrome
                       userId={request.requester_id}
                       color={request.requester_color}
                       name={request.requester_screen_name}
-                      className="w-8 h-8 text-sm"
+                      status="sent you a friend request"
+                      className="min-w-0 flex-1"
                     />
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-sm text-content-on-dark truncate">{request.requester_screen_name || 'Unknown'}</span>
-                      <span className="block text-xs text-content-secondary">sent you a friend request</span>
-                    </span>
                     <Button variant="success" size="xs" onClick={() => handleAcceptRequest(request.requester_id)}>Accept</Button>
                     <Button variant="ghost" size="xs" onClick={() => handleDeclineRequest(request.requester_id)}>Decline</Button>
                   </div>
@@ -531,28 +529,48 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
             {isAddingFriend ? (
               <div>
                 <div className="flex gap-2">
-                  <input
-                    value={friendCode}
-                    onChange={(event) => { setFriendCode(event.target.value); setSentToName(null); setSendError(null) }}
-                    onKeyDown={(event) => {
-                      // Enter sends when the identifier is well-formed; Escape
-                      // must not bubble to the panel's close handler
-                      if (event.key === 'Enter' && isValidAccountIdentifier(friendCode.trim())) handleSendFriendRequest()
-                      if (event.key === 'Escape') { event.stopPropagation(); handleCancelAddFriend() }
-                    }}
-                    placeholder="name#1234"
-                    autoFocus
-                    className="flex-1 min-w-0 px-3 py-2 text-sm rounded-sm bg-surface-panel border border-border text-content-on-dark placeholder:text-content-secondary focus:outline-none focus:border-border-active"
-                  />
-                  <Button
-                    variant="primary"
-                    size="sm"
+                  {/* The wrapper carries the parallelogram; the input sits
+                      inside counter-skewed, since a skewed input skews its
+                      own text and caret with it. */}
+                  <div
+                    className="flex min-w-0 flex-1 items-center rounded-lg border border-border bg-surface-panel px-3 focus-within:border-border-active"
+                    style={{ transform: SKEW_BOX }}
+                  >
+                    <input
+                      value={friendCode}
+                      onChange={(event) => { setFriendCode(event.target.value); setSentToName(null); setSendError(null) }}
+                      onKeyDown={(event) => {
+                        // Enter sends when the identifier is well-formed; Escape
+                        // must not bubble to the panel's close handler
+                        if (event.key === 'Enter' && isValidAccountIdentifier(friendCode.trim())) handleSendFriendRequest()
+                        if (event.key === 'Escape') { event.stopPropagation(); handleCancelAddFriend() }
+                      }}
+                      placeholder="name#1234"
+                      autoFocus
+                      className="w-full min-w-0 bg-transparent py-2 text-sm text-content-on-dark placeholder:text-content-secondary focus:outline-none"
+                      style={{ transform: SKEW_LABEL }}
+                    />
+                  </div>
+                  <button
                     disabled={!isValidAccountIdentifier(friendCode.trim()) || sendRequestMutation.isPending}
                     onClick={handleSendFriendRequest}
+                    className="flex-none rounded-lg border px-3 py-2 text-sm transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      transform: SKEW_BOX,
+                      backgroundColor: THEME.bgSecondary,
+                      color: THEME.textAccent,
+                      borderColor: THEME.borderActive,
+                    }}
                   >
-                    Add
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={handleCancelAddFriend}>Cancel</Button>
+                    <span className="inline-block" style={{ transform: SKEW_LABEL }}>Add</span>
+                  </button>
+                  <button
+                    onClick={handleCancelAddFriend}
+                    className="flex-none rounded-lg border px-3 py-2 text-sm text-content-on-dark transition-colors hover:opacity-90"
+                    style={{ transform: SKEW_BOX, borderColor: COLORS.silver }}
+                  >
+                    <span className="inline-block" style={{ transform: SKEW_LABEL }}>Cancel</span>
+                  </button>
                 </div>
 
                 {/* Live lookup feedback / outcome — rendered only when there is
@@ -585,18 +603,35 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
               </div>
             ) : (
               <div className="flex items-center justify-between gap-2">
-                <Button variant="primary" onClick={() => setIsAddingFriend(true)}>
-                  <FontAwesomeIcon icon={faUserPlus} className="mr-2" />
-                  Add Friend
-                </Button>
+                <button
+                  onClick={() => setIsAddingFriend(true)}
+                  className="rounded-lg border px-4 py-2 text-sm transition-colors hover:opacity-90"
+                  style={{
+                    transform: SKEW_BOX,
+                    backgroundColor: THEME.bgSecondary,
+                    color: THEME.textAccent,
+                    borderColor: THEME.borderActive,
+                  }}
+                >
+                  <span className="inline-block" style={{ transform: SKEW_LABEL }}>
+                    <FontAwesomeIcon icon={faUserPlus} className="mr-2" />
+                    Add Friend
+                  </span>
+                </button>
                 {user?.account_identifier && (
                   <button
                     onClick={handleCopyOwnTag}
-                    className="flex items-center gap-1.5 text-xs text-content-secondary hover:text-content-on-dark transition-colors"
+                    className="rounded-lg border border-border px-4 py-2 text-sm text-content-secondary transition-colors hover:border-border-active hover:text-content-on-dark"
+                    style={{ transform: SKEW_BOX }}
                     title="Copy your tag to share"
                   >
-                    {copiedTag ? 'Copied!' : user.account_identifier}
-                    <FontAwesomeIcon icon={faCopy} className="h-3 w-3" />
+                    <span
+                      className="inline-flex items-center gap-2"
+                      style={{ transform: SKEW_LABEL }}
+                    >
+                      {copiedTag ? 'Copied!' : user.account_identifier}
+                      <FontAwesomeIcon icon={faCopy} className="h-3.5 w-3.5" />
+                    </span>
                   </button>
                 )}
               </div>

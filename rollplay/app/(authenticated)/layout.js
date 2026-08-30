@@ -11,13 +11,14 @@ import { faRightFromBracket, faUser } from '@fortawesome/free-solid-svg-icons'
 
 import SiteHeader from '@/app/shared/components/SiteHeader'
 import SocialPanel from '@/app/shared/components/SocialPanel'
+import AppLauncher from '@/app/shared/components/AppLauncher'
 import Dropdown from '@/app/shared/components/Dropdown'
 import { useAuth } from '@/app/dashboard/hooks/useAuth'
 import { useToast } from '@/app/shared/hooks/useToast'
 import { useAuthenticatedEvents } from '@/app/shared/hooks/useAuthenticatedEvents'
 import { AuthenticatedContext } from '@/app/shared/providers/AuthenticatedContext'
 import { THEME } from '@/app/styles/colorTheme'
-import UserDisc from '@/app/shared/components/UserDisc'
+import UserChrome from '@/app/shared/components/UserChrome'
 
 function AuthenticatedShell({ children }) {
   const router = useRouter()
@@ -72,27 +73,21 @@ function AuthenticatedShell({ children }) {
             toasts={toasts}
             onDismissToast={dismissToast}
           />
+          <AppLauncher />
           <Dropdown
             size="panel"
             trigger={
               <button
                 aria-label="Account menu"
-                className="flex items-center gap-2.5 px-2 py-1 rounded-sm hover:bg-white/[0.07] transition-colors"
+                className="flex items-center hover:opacity-90 transition-opacity focus:outline-none"
               >
-                <span
-                  className="text-sm font-semibold"
-                  style={{ color: THEME.textOnDark }}
-                >
-                  {chipName}
-                </span>
-                {/* Same UserDisc as friend rows and the account page, so
-                    colour and treatment never drift. Keep w-9: a smaller box
-                    lets the border-2 ring eat into the coloured fill. */}
-                <UserDisc
+                {/* Name reads into the colour block, which runs off the
+                    capsule's slanted end. */}
+                <UserChrome
                   userId={auth.user?.id}
                   color={auth.user?.color}
-                  name={auth.user?.account_name || auth.user?.screen_name || auth.user?.email}
-                  className="w-9 h-9 text-base border-2 border-black/40"
+                  name={chipName}
+                  avatarSide="end"
                 />
               </button>
             }

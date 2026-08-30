@@ -121,8 +121,6 @@ function DashboardContent() {
 
   return (
     <DashboardLayout
-      activeSection={activeSection}
-      setActiveSection={setActiveSection}
       isChildExpanded={isChildExpanded}
       isChildFullBleed={activeSection === 'library' || activeSection === 'characters'}
     >
