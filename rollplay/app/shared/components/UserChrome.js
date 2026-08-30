@@ -53,13 +53,15 @@ export default function UserChrome({
       >
         {initial}
       </span>
-      {/* Presence pip — a chip flush into the wedge's top-right, sharp on that
-          corner so its two outer edges continue the wedge's own. No
-          counter-skew: it takes the capsule's lean like every other chip. */}
+      {/* Presence pip — a chip in the capsule's bottom outer corner, sharp on
+          that corner so its two outer edges continue the capsule's own. Which
+          corner depends on the side the avatar sits: the pip always hugs the
+          capsule's edge, never the seam against the name. No counter-skew: it
+          takes the capsule's lean like every other chip. */}
       {isOnline !== undefined && (
         <span
-          className={`absolute right-0 top-0 h-2 w-2 ${isOnline ? 'bg-feedback-success' : 'bg-border'}`}
-          style={{ borderRadius: '2px 0 2px 2px' }}
+          className={`absolute bottom-0 h-2 w-2 ${avatarFirst ? 'left-0' : 'right-0'} ${isOnline ? 'bg-feedback-success' : 'bg-border'}`}
+          style={{ borderRadius: avatarFirst ? '2px 2px 2px 0' : '2px 2px 0 2px' }}
         />
       )}
     </span>
