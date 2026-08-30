@@ -48,12 +48,12 @@ export default function HomeOnboardingHero({ hasCampaigns = false }) {
         style={{ minHeight: PLATE_HEIGHT_PX, color: COLORS.smoke }}
       >
         <h2 className="max-w-[420px] text-[38px] leading-tight font-[family-name:var(--font-metamorphous)]">
-          {hasCampaigns ? 'Nothing at the table yet' : 'Your adventures will live here'}
+          {hasCampaigns ? 'Nothing at the table yet' : 'Your next adventure will be here'}
         </h2>
         <p className="max-w-[420px] text-[14.5px] leading-relaxed" style={{ color: '#CFC9C2' }}>
           {hasCampaigns
             ? 'None of your campaigns have a session ready to play. Start one from the card below, and it will take its place here.'
-            : 'When a game master invites you to a campaign, the invitation arrives right here — and anything you build shows up below.'}
+            : 'Once you start a new adventure, or a game master invites you to one, it will appear here.'}
         </p>
       </div>
     </div>

@@ -4,6 +4,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPlus } from '@fortawesome/free-solid-svg-icons'
 
 import { useAvatarImage } from '@/app/shared/hooks/useAvatarImage'
 import { COLORS } from '@/app/styles/colorTheme'
@@ -96,11 +98,17 @@ function CreateCharacterCard({ onSelect }) {
           transformOrigin: '0 100%',
         }}
       >
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3.5 opacity-50 transition-all duration-200 group-hover:scale-105 group-hover:opacity-80">
-          <span className="text-7xl leading-none" style={{ color: COLORS.smoke }}>+</span>
+        {/* Knocked-out skin in the same dark treatment as the build card's
+            create variant — both are ghosts on the light page ground. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 transition-transform duration-200 group-hover:scale-105">
+          <FontAwesomeIcon
+            icon={faPlus}
+            className="text-5xl"
+            style={{ color: COLORS.graphite, opacity: 0.5 }}
+          />
           <h4
             className="px-5 text-center text-2xl font-[family-name:var(--font-metamorphous)]"
-            style={{ color: COLORS.smoke }}
+            style={{ color: COLORS.graphite }}
           >
             Create New<br />Character
           </h4>

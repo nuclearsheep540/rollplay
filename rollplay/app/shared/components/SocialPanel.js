@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Transition, Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -44,6 +44,7 @@ const BUZZ_COOLDOWN_MS = 20000
  */
 export default function SocialPanel({ user, toasts = [], onDismissToast }) {
   const router = useRouter()
+  const containerRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
   const [buzzCooldowns, setBuzzCooldowns] = useState({})
   const [cooldownProgress, setCooldownProgress] = useState({})
@@ -98,14 +99,28 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
 
   const onlineCount = friends.filter(friend => friend.is_online).length
 
-  // Escape closes; listener only lives while open
+  // Escape or a click outside closes; listeners only live while open. The
+  // trigger sits inside the container, so its own clicks still toggle rather
+  // than closing twice.
+  //
+  // Listens on pointerdown, not mousedown: Headless UI menu buttons (the
+  // account chip) toggle on pointerdown and preventDefault() it, which
+  // suppresses the compatibility mousedown the browser would have synthesised.
+  // A mousedown listener never hears those clicks at all.
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') setIsOpen(false)
     }
+    const handlePointerDown = (event) => {
+      if (!containerRef.current?.contains(event.target)) setIsOpen(false)
+    }
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
   }, [isOpen])
 
   // Buzz radial cooldown animation (ported from FriendsWidget)
@@ -257,7 +272,7 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
   const sectionLabelClass ='px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-widest text-content-secondary flex items-center gap-2'
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       {/* Toast anchor — inherited from the old NotificationBell: toasts grow leftward from the CTA */}
       {toasts.length > 0 && (
         <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 flex flex-row-reverse items-center">

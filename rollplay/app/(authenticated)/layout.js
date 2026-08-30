@@ -73,6 +73,7 @@ function AuthenticatedShell({ children }) {
             onDismissToast={dismissToast}
           />
           <Dropdown
+            size="panel"
             trigger={
               <button
                 aria-label="Account menu"

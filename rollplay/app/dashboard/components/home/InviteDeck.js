@@ -8,15 +8,22 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faExclamation } from '@fortawesome/free-solid-svg-icons'
 
 import { useAcceptInvite, useDeclineInvite } from '@/app/dashboard/hooks/mutations/useCampaignMutations'
+import { useHeroImage } from '@/app/dashboard/hooks/useHeroImage'
 import { COLORS } from '@/app/styles/colorTheme'
 import PlateButton from './PlateButton'
 import { PLATE_HEIGHT_PX, platePolygon } from './plateGeometry'
 
+// Green is the invite's own colour, and all you can see of it while tucked is
+// a band — so the card identifies itself as an invite rather than as a
+// campaign. The campaign's art fades in once the switcheroo brings it forward.
 const INVITE_ART_BASE = `
   radial-gradient(90% 110% at 22% 0%, #3D5A45 0%, rgba(61, 90, 69, 0) 55%),
   radial-gradient(80% 80% at 80% 90%, #22402C 0%, rgba(34, 64, 44, 0) 60%),
   linear-gradient(115deg, #0B120D 15%, #1D3024 60%, #0B120D 100%)
 `
+const INVITE_SCRIM = 'linear-gradient(100deg, rgba(6, 10, 7, 0.85) 25%, rgba(6, 10, 7, 0.3) 70%)'
+// Neutral once real art is showing, so the campaign's colours aren't tinted.
+const PROMOTED_SCRIM = 'linear-gradient(100deg, rgba(5, 4, 3, 0.82) 25%, rgba(5, 4, 3, 0.28) 70%)'
 
 // The two slots are places, not states: whichever card is tucked sits here
 // and carries the shadow, exposing a constant band along the other's slant.
@@ -56,6 +63,8 @@ export default function InviteDeck({ invites = [], children }) {
 
   const pending = invites.filter((invite) => !dismissedIds.includes(invite.id))
   const invite = pending[0]
+  // Called before the early return so hook order stays stable; handles undefined.
+  const { url: artUrl } = useHeroImage(invite)
 
   if (!invite) {
     return <div className="relative" style={{ minHeight: PLATE_HEIGHT_PX }}>{children}</div>
@@ -145,10 +154,21 @@ export default function InviteDeck({ invites = [], children }) {
           }}
         >
           <div className="absolute inset-0" style={{ background: INVITE_ART_BASE }} />
+          {artUrl && (
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{
+                backgroundImage: `url(${artUrl})`,
+                opacity: promoted ? 1 : 0,
+                transition: `opacity ${SWAP_MS}ms`,
+              }}
+            />
+          )}
           <div
             className="absolute inset-0"
             style={{
-              background: 'linear-gradient(100deg, rgba(6, 10, 7, 0.85) 25%, rgba(6, 10, 7, 0.3) 70%)',
+              background: promoted ? PROMOTED_SCRIM : INVITE_SCRIM,
+              transition: `background ${SWAP_MS}ms`,
             }}
           />
 
