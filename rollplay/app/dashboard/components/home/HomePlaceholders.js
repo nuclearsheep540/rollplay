@@ -38,7 +38,7 @@ export function PulseDivider() {
         }}
       >
         <span className="inline-block" style={{ transform: SKEW_LABEL }}>
-          All quiet in the tavern
+          All is quiet in the tavern...
         </span>
       </span>
       <div

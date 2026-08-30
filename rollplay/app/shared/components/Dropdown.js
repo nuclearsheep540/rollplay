@@ -15,7 +15,7 @@ const ALIGN_CLASSES = {
 }
 
 const VARIANT_CLASSES = {
-  default: 'text-content-on-dark',
+  default: '',
   danger: 'text-feedback-error',
 }
 
@@ -24,13 +24,18 @@ const VARIANT_CLASSES = {
 // Conflicting utilities are swapped wholesale rather than appended — Tailwind
 // resolves rounded-sm vs rounded-xl by stylesheet order, not string order.
 const SIZE_CLASSES = {
+  // Toolbar default — unchanged, and deliberately independent of the header's
+  // skin so restyling chrome never reaches the notes editor's menus.
   compact: {
     panel: 'mt-1 min-w-[180px] rounded-sm shadow-lg py-1',
-    item: 'px-3 py-2 text-sm',
+    item: 'px-3 py-2 text-sm text-content-on-dark data-[focus]:bg-interactive-hover',
   },
+  // Header chrome — matches the app launcher: knocked back at rest,
+  // brightening on hover over a 10% wash rather than a solid bar. Clears the
+  // header's bottom edge, like the social panel.
   panel: {
-    panel: 'mt-3 min-w-[220px] rounded-xl shadow-2xl py-2',
-    item: 'px-4 py-2.5 text-sm',
+    panel: 'mt-4 min-w-[220px] rounded-xl shadow-2xl py-2',
+    item: 'px-4 py-2.5 text-sm text-content-secondary data-[focus]:text-content-on-dark data-[focus]:bg-interactive-hover/10',
   },
 }
 
@@ -68,7 +73,7 @@ export default function Dropdown({ trigger, items, align = 'right', size = 'comp
             <MenuItem key={index} disabled={item.disabled}>
               <button
                 onClick={item.onClick}
-                className={`w-full text-left transition-all duration-100 flex items-center gap-2.5 ${skin.item} ${VARIANT_CLASSES[item.variant] || VARIANT_CLASSES.default} data-[focus]:bg-interactive-hover disabled:opacity-40 disabled:cursor-not-allowed`}
+                className={`w-full text-left transition-all duration-100 flex items-center gap-2.5 ${skin.item} ${VARIANT_CLASSES[item.variant] || VARIANT_CLASSES.default} disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 {item.icon && (
                   <FontAwesomeIcon icon={item.icon} className="w-4 text-center" />

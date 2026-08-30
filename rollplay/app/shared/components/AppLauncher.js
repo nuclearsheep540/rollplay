@@ -7,7 +7,7 @@ import { Fragment } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Popover, PopoverButton, PopoverPanel, Transition } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faFlag, faUsers, faBook, faStore } from '@fortawesome/free-solid-svg-icons'
+import { faBookOpen, faUsers, faFolderOpen, faStore } from '@fortawesome/free-solid-svg-icons'
 
 import { TOOLS, TOOL_ROUTES } from '@/app/workshop'
 import { THEME } from '@/app/styles/colorTheme'
@@ -15,9 +15,9 @@ import { THEME } from '@/app/styles/colorTheme'
 // The high-level surfaces, each still its own `?tab=` index view — the
 // launcher replaces the tab bar as the way in, not the destinations.
 const SURFACES = [
-  { label: 'Campaigns', icon: faFlag, tab: 'campaigns' },
+  { label: 'Campaigns', icon: faBookOpen, tab: 'campaigns' },
   { label: 'Characters', icon: faUsers, tab: 'characters' },
-  { label: 'Library', icon: faBook, tab: 'library' },
+  { label: 'Library', icon: faFolderOpen, tab: 'library' },
   { label: 'Market', icon: faStore, tab: 'market' },
 ]
 
@@ -83,7 +83,7 @@ export default function AppLauncher() {
       <PopoverButton
         aria-label="Apps"
         title="Apps"
-        className="flex items-center hover:opacity-80 transition-opacity focus:outline-none"
+        className="flex h-9 items-center hover:opacity-80 transition-opacity focus:outline-none"
         style={{ color: THEME.textSecondary }}
       >
         <AppGridIcon className="h-8 w-8" />
@@ -98,7 +98,7 @@ export default function AppLauncher() {
         leaveFrom="transform opacity-100 scale-100"
         leaveTo="transform opacity-0 scale-95"
       >
-        <PopoverPanel className="absolute right-0 z-50 mt-3 w-[324px] origin-top-right rounded-xl border border-border bg-surface-secondary shadow-2xl p-3.5 focus:outline-none">
+        <PopoverPanel className="absolute right-0 z-50 mt-4 w-[324px] origin-top-right rounded-xl border border-border bg-surface-secondary shadow-2xl p-3.5 focus:outline-none">
           {({ close }) => (
             <>
               <div className="grid grid-cols-2 gap-1.5">
