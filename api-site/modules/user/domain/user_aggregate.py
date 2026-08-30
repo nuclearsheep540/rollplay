@@ -41,6 +41,7 @@ class UserAggregate:
     account_name: Optional[str] = None  # Immutable username (e.g., "claude")
     account_tag: Optional[str] = None  # 4-digit discriminator (e.g., "2345")
     color: Optional[str] = None  # Identity color hex from USER_COLORS; None = not chosen
+    max_slots: int = 4  # Character capacity; DB CHECK caps at 8
 
     @property
     def account_identifier(self) -> Optional[str]:
@@ -152,6 +153,19 @@ class UserAggregate:
         if color not in USER_COLORS:
             raise ValueError("Color must be one of the identity palette options")
         self.color = color
+
+    def set_max_slots(self, max_slots: int):
+        """Character capacity knob.
+
+        1-8: at least one slot so an account is never characterless by
+        configuration, and never past the slot ceiling baked into the
+        characters table. Decreasing does not delete characters — they keep
+        their slots and fall out of the visible roster (see the character
+        repository's visibility rule).
+        """
+        if not 1 <= max_slots <= 8:
+            raise ValueError("max_slots must be between 1 and 8")
+        self.max_slots = max_slots
 
     def set_account_name(self, account_name: str, account_tag: str):
         """

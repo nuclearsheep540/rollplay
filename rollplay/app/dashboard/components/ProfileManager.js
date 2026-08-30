@@ -13,7 +13,7 @@ import { faCopy, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 import { USER_COLORS, resolveUserColor } from '@/app/utils/userColors'
 import UserChrome from '@/app/shared/components/UserChrome'
-import { SKEW_BOX, SKEW_LABEL, platePolygon } from '@/app/dashboard/components/home/plateGeometry'
+import { SKEW_BOX, SKEW_LABEL, platePolygon } from '@/app/styles/plateGeometry'
 import { Button } from './shared/Button'
 
 const SPOTIFY_GREEN = '#1DB954'
@@ -287,7 +287,7 @@ export default function ProfileManager({ user, onUserUpdate }) {
                 disabled={updatingColor}
                 aria-label={`Set identity colour ${paletteColor}`}
                 aria-pressed={selected}
-                className="h-10 w-14 rounded-lg transition-transform hover:scale-105 disabled:opacity-50"
+                className="h-10 w-14 rounded-lg disabled:opacity-50"
                 style={{
                   backgroundColor: paletteColor,
                   transform: SKEW_BOX,

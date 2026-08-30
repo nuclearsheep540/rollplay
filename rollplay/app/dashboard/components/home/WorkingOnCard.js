@@ -17,7 +17,7 @@ import {
   seamArtPolygon,
   seamContactShadow,
   WORKING_SEAM_PERCENT,
-} from './plateGeometry'
+} from '@/app/styles/plateGeometry'
 
 const WORKING_ART_BASE = `
   radial-gradient(90% 80% at 80% 100%, #4A2C10 0%, rgba(74, 44, 16, 0) 55%),

@@ -254,8 +254,12 @@ Users are invited to **campaigns** (accept/decline flow), not individual game se
 ### Automatic Session Enrollment
 When a DM creates a game session, all `campaign.player_ids` are automatically added to `game.invited_user_ids`. No player action required.
 
-### Sessions Tab (Read-Only)
-The Sessions tab only shows **active** game sessions. Players can view session info and enter via "Enter" button. Character selection modal triggers if no character is selected. All game management (create/start/stop/delete) happens in the Campaigns tab.
+### Session Access (no Sessions tab)
+There is no Sessions surface — the old read-only Sessions tab and its `SessionsManager.js` were removed 2026-08-30. Sessions are reached through:
+- **Home hero**: the ranked campaign shows live state; GM gets START/RESUME/ENTER in place, players get JOIN when live.
+- **Campaigns tab drawer**: all session management (create/start/pause/finish/delete) lives in the expanded campaign card.
+- **Social panel**: friends' live sessions in shared campaigns offer an Enter button.
+Character selection still gates entry where required (modal in the campaign drawer).
 
 ## Frontend Architecture - Functional Slice Pattern
 

@@ -54,6 +54,7 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
         created_at=user.created_at,
         last_login=user.last_login,
         color=user.color,
+        max_slots=user.max_slots,
     )
 
 
@@ -68,6 +69,7 @@ def _to_public_user_response(user: UserAggregate) -> PublicUserResponse:
         account_identifier=user.account_identifier,
         created_at=user.created_at,
         color=user.color,
+        max_slots=user.max_slots,
     )
 
 

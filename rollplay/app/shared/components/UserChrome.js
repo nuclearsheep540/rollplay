@@ -5,7 +5,7 @@
 
 import { resolveUserColor } from '@/app/utils/userColors'
 import { COLORS } from '@/app/styles/colorTheme'
-import { SKEW_BOX, SKEW_LABEL } from '@/app/dashboard/components/home/plateGeometry'
+import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 
 const SIZES = {
   sm: { box: 'h-9', avatar: 'w-9', initial: 'text-sm', name: 'text-sm', status: 'text-xs', pad: 'px-3' },

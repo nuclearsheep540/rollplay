@@ -4,7 +4,7 @@
 'use client'
 
 import { COLORS } from '@/app/styles/colorTheme'
-import { PLATE_HEIGHT_PX, platePolygon, seamContactShadow, seamPanelPolygon, HERO_SEAM_PERCENT } from './plateGeometry'
+import { PLATE_HEIGHT_PX, platePolygon, seamContactShadow, seamPanelPolygon, HERO_SEAM_PERCENT } from '@/app/styles/plateGeometry'
 
 const ONBOARDING_ART_BASE = `
   radial-gradient(120% 90% at 78% 8%, #6B4A2E 0%, rgba(107, 74, 46, 0) 34%),

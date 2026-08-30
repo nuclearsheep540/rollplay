@@ -109,6 +109,7 @@ export default function AppLauncher() {
                   <button
                     key={surface.tab}
                     type="button"
+                    aria-current={isCurrent ? 'page' : undefined}
                     onClick={() => go(`${DASHBOARD_PATH}?tab=${surface.tab}`, close)}
                     className={`flex flex-col items-center gap-2 rounded-lg px-2.5 pb-3 pt-4 transition-colors hover:bg-interactive-hover/10 hover:text-content-on-dark ${isCurrent ? 'text-content-on-dark' : 'text-content-secondary'}`}
                   >

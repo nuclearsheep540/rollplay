@@ -3,7 +3,7 @@
 
 'use client'
 
-import { SKEW_BOX, SKEW_LABEL } from './plateGeometry'
+import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 
 const SIZE_CLASSES = {
   md: 'px-[22px] py-3 text-[13px]',

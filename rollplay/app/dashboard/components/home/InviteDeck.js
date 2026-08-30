@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faExclamation } from '@fortawesome/free-solid-svg-icons'
 
@@ -11,7 +11,7 @@ import { useAcceptInvite, useDeclineInvite } from '@/app/dashboard/hooks/mutatio
 import { useHeroImage } from '@/app/dashboard/hooks/useHeroImage'
 import { COLORS } from '@/app/styles/colorTheme'
 import PlateButton from './PlateButton'
-import { PLATE_HEIGHT_PX, platePolygon } from './plateGeometry'
+import { PLATE_HEIGHT_PX, platePolygon } from '@/app/styles/plateGeometry'
 
 // Green is the invite's own colour, and all you can see of it while tucked is
 // a band — so the card identifies itself as an invite rather than as a
@@ -57,9 +57,17 @@ export default function InviteDeck({ invites = [], children }) {
   const [confirmingDecline, setConfirmingDecline] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [dismissedIds, setDismissedIds] = useState([])
+  const [actionError, setActionError] = useState(null)
 
   const acceptInvite = useAcceptInvite()
   const declineInvite = useDeclineInvite()
+
+  // dismissedIds only bridges the exit animation until the refetch drops the
+  // invite from the server data. Pruning it once that happens means a later
+  // re-invite to the same campaign shows up again.
+  useEffect(() => {
+    setDismissedIds((ids) => ids.filter((id) => invites.some((inv) => inv.id === id)))
+  }, [invites])
 
   const pending = invites.filter((invite) => !dismissedIds.includes(invite.id))
   const invite = pending[0]
@@ -81,15 +89,29 @@ export default function InviteDeck({ invites = [], children }) {
     }, DISMISS_MS)
   }
 
-  const accept = () => {
-    acceptInvite.mutate(invite.id)
-    dismiss()
+  // The card only leaves once the server has confirmed — a failed request
+  // keeps an actionable invite on the table instead of vanishing it.
+  const accept = async () => {
+    setActionError(null)
+    try {
+      await acceptInvite.mutateAsync(invite.id)
+      dismiss()
+    } catch (error) {
+      setActionError(error.message || 'Could not accept the invite — try again')
+    }
   }
 
-  const confirmDecline = () => {
-    declineInvite.mutate(invite.id)
-    dismiss()
+  const confirmDecline = async () => {
+    setActionError(null)
+    try {
+      await declineInvite.mutateAsync(invite.id)
+      dismiss()
+    } catch (error) {
+      setActionError(error.message || 'Could not decline the invite — try again')
+    }
   }
+
+  const actionPending = acceptInvite.isPending || declineInvite.isPending
 
   const inviteStyle = leaving
     ? {
@@ -190,8 +212,12 @@ export default function InviteDeck({ invites = [], children }) {
                   to invite you again.
                 </p>
                 <div className="flex gap-3.5">
-                  <PlateButton variant="danger" onClick={confirmDecline}>YES, DECLINE</PlateButton>
-                  <PlateButton onClick={() => setConfirmingDecline(false)}>KEEP IT</PlateButton>
+                  <PlateButton variant="danger" disabled={actionPending} onClick={confirmDecline}>
+                    {declineInvite.isPending ? 'DECLINING…' : 'YES, DECLINE'}
+                  </PlateButton>
+                  <PlateButton disabled={actionPending} onClick={() => setConfirmingDecline(false)}>
+                    KEEP IT
+                  </PlateButton>
                 </div>
               </>
             ) : (
@@ -200,10 +226,19 @@ export default function InviteDeck({ invites = [], children }) {
                   {invite.host_screen_name || 'A game master'} invited you to this campaign
                 </div>
                 <div className="flex gap-3.5">
-                  <PlateButton variant="gold" onClick={accept}>ACCEPT</PlateButton>
-                  <PlateButton onClick={() => setConfirmingDecline(true)}>DECLINE</PlateButton>
+                  <PlateButton variant="gold" disabled={actionPending} onClick={accept}>
+                    {acceptInvite.isPending ? 'ACCEPTING…' : 'ACCEPT'}
+                  </PlateButton>
+                  <PlateButton disabled={actionPending} onClick={() => setConfirmingDecline(true)}>
+                    DECLINE
+                  </PlateButton>
                 </div>
               </>
+            )}
+            {actionError && (
+              <div className="mt-3 text-[13px]" style={{ color: '#F3B8B0' }}>
+                {actionError}
+              </div>
             )}
           </div>
         </div>

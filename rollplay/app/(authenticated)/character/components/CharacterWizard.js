@@ -363,12 +363,10 @@ export default function CharacterWizard() {
         router.push(`/dashboard?tab=campaigns&expand_campaign_id=${returnCampaignId}`)
         return
       }
-      // Land on the dashboard Characters tab with the new character's drawer
-      // auto-expanded — same convention CampaignManager uses for
-      // ``expand_campaign_id``. Consolidates the "view a finalised character"
-      // surface into one place (the drawer), so /character/{id} acts as a
-      // deep link rather than the primary destination after creation.
-      router.push(`/dashboard?tab=characters&expand_character_id=${finalised.id}`)
+      // Land on the character's canonical view — /character/{id} is the ONE
+      // surface for viewing a character, whichever way you arrive (index
+      // strip, home hand, or fresh out of the wizard here).
+      router.push(`/character/${finalised.id}`)
     } catch (err) {
       // Errors surface inside ReviewStep via the mutation hook.
     }

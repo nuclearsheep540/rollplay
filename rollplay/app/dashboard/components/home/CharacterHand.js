@@ -9,7 +9,7 @@ import { faPlus } from '@fortawesome/free-solid-svg-icons'
 
 import { useAvatarImage } from '@/app/shared/hooks/useAvatarImage'
 import { COLORS } from '@/app/styles/colorTheme'
-import { SKEW_BOX, SKEW_LABEL, SLANT_RATIO } from './plateGeometry'
+import { SKEW_BOX, SKEW_LABEL, SLANT_RATIO } from '@/app/styles/plateGeometry'
 
 // A hand of physical cards, not a strip: each card is a free-standing
 // parallelogram built by skew, so its corners round for free.
@@ -35,7 +35,7 @@ function CharacterCard({ character, onSelect }) {
       type="button"
       aria-label={`View ${character.character_name || 'Unnamed'}`}
       onClick={onSelect}
-      className="group relative block h-full w-full cursor-pointer overflow-hidden rounded-md border-0 p-0 text-left transition-transform duration-200 ease-out hover:-translate-y-2"
+      className="group relative block h-full w-full cursor-pointer overflow-hidden rounded-md border-0 p-0 text-left"
       style={{
         backgroundColor: COLORS.graphite,
         transform: SKEW_BOX,
@@ -82,7 +82,7 @@ function CreateCharacterCard({ onSelect }) {
       type="button"
       aria-label="Create a new character"
       onClick={onSelect}
-      className="group relative block h-full w-full cursor-pointer overflow-hidden rounded-md border-0 p-0 transition-transform duration-200 ease-out hover:-translate-y-2"
+      className="group relative block h-full w-full cursor-pointer overflow-hidden rounded-md border-0 p-0"
       style={{
         // A card that isn't real yet casts no shadow.
         backgroundColor: 'rgba(55, 50, 47, 0.25)',
@@ -118,10 +118,17 @@ function CreateCharacterCard({ onSelect }) {
   )
 }
 
-/** The user's characters, dealt as a hand. Zero characters leaves the ghost alone. */
-export default function CharacterHand({ characters = [] }) {
+/**
+ * The user's characters, dealt as a hand. Zero characters leaves the ghost
+ * alone; at the account cap the ghost disappears, which also keeps the row
+ * inside the four-shell fill rule it was designed around.
+ */
+export default function CharacterHand({ characters = [], maxSlots = 4 }) {
   const router = useRouter()
-  const shellCount = characters.length + 1
+  // maxSlots comes off the user response — the backend enforces the cap,
+  // this only reflects it.
+  const showCreateCard = characters.length < maxSlots
+  const shellCount = characters.length + (showCreateCard ? 1 : 0)
 
   return (
     <div className="flex items-stretch" style={{ height: HAND_HEIGHT_PX }}>
@@ -141,16 +148,18 @@ export default function CharacterHand({ characters = [] }) {
           />
         </div>
       ))}
-      <div
-        className="home-char-shell relative flex-none"
-        style={{
-          width: CARD_WIDTH,
-          marginLeft: characters.length === 0 ? 0 : -CARD_OVERLAP_PX,
-          '--hand-depth': 1,
-        }}
-      >
-        <CreateCharacterCard onSelect={() => router.push('/character/create')} />
-      </div>
+      {showCreateCard && (
+        <div
+          className="home-char-shell relative flex-none"
+          style={{
+            width: CARD_WIDTH,
+            marginLeft: characters.length === 0 ? 0 : -CARD_OVERLAP_PX,
+            '--hand-depth': 1,
+          }}
+        >
+          <CreateCharacterCard onSelect={() => router.push('/character/create')} />
+        </div>
+      )}
     </div>
   )
 }

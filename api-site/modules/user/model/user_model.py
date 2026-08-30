@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from sqlalchemy import Column, String, DateTime, Boolean, Index, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, Column, String, DateTime, Boolean, Integer, Index, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -31,6 +31,9 @@ class User(Base):
     # not chosen (display falls back to a deterministic hash client-side).
     # Distinct from characters.color (in-game persona color).
     color = Column(String(7), nullable=True)
+    # Character capacity knob (slots on the characters table). Per-user raises
+    # are plain UPDATEs; the CHECK below is the hard ceiling nothing may pass.
+    max_slots = Column(Integer, nullable=False, server_default='4')
 
     # Relationships (for ORM convenience, not exposed to domain)
     campaigns = relationship("Campaign", back_populates="creator")
@@ -40,6 +43,7 @@ class User(Base):
     __table_args__ = (
         Index('idx_users_account_name_lower', func.lower(account_name)),
         UniqueConstraint('account_name', 'account_tag', name='uq_users_account_name_tag'),
+        CheckConstraint('max_slots >= 1 AND max_slots <= 8', name='ck_users_max_slots_range'),
     )
 
     def __repr__(self):

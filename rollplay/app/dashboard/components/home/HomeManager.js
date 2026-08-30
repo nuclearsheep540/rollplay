@@ -14,7 +14,7 @@ import HomeOnboardingHero from './HomeOnboardingHero'
 import InviteDeck from './InviteDeck'
 import WorkingOnCard from './WorkingOnCard'
 import { FeaturedFromMarket, NewsNoticeboard, PulseDivider } from './HomePlaceholders'
-import { PLATE_HEIGHT_PX } from './plateGeometry'
+import { PLATE_HEIGHT_PX } from '@/app/styles/plateGeometry'
 
 // Gold reads darker on the light page ground than it does on the plates.
 const SECTION_LABEL_GOLD = '#9A7526'
@@ -118,7 +118,7 @@ export default function HomeManager({ user }) {
           above the card tops and would otherwise eat the optical spacing. */}
       <div className="mt-[52px]">
         <SectionHead className="mb-[22px]">Your characters</SectionHead>
-        <CharacterHand characters={characters || []} />
+        <CharacterHand characters={characters || []} maxSlots={user?.max_slots ?? 4} />
       </div>
     </div>
   )

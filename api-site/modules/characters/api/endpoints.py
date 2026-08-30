@@ -50,6 +50,8 @@ from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
 )
 from modules.characters.repositories.character_repository import CharacterRepository
+from modules.user.repositories.user_repository import UserRepository
+from modules.user.dependencies.providers import user_repository as get_user_repository
 from modules.characters.repositories.edition_repository import EditionRepository
 from modules.library.dependencies.providers import get_media_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
@@ -358,10 +360,11 @@ async def create_draft(
     character_repo: CharacterRepository = Depends(get_character_repository),
     edition_repo: EditionRepository = Depends(get_edition_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    user_repo: UserRepository = Depends(get_user_repository),
     s3_service: S3Service = Depends(get_s3_service),
 ):
     try:
-        command = CreateCharacterDraft(character_repo, edition_repo, registry)
+        command = CreateCharacterDraft(character_repo, edition_repo, registry, user_repo)
         character = command.execute(
             user_id=user_id, edition_code=request.edition_code, name=request.name
         )

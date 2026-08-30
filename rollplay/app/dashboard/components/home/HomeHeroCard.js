@@ -19,7 +19,7 @@ import {
   SKEW_BOX,
   SKEW_LABEL,
   TEXT_SHADOW_ON_ART,
-} from './plateGeometry'
+} from '@/app/styles/plateGeometry'
 
 // The plate's own art, painted under any campaign image — so a campaign with
 // no art still reads as designed rather than as a missing asset.

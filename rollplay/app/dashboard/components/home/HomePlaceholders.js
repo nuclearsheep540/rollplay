@@ -6,7 +6,7 @@
 import { useRouter } from 'next/navigation'
 
 import { COLORS } from '@/app/styles/colorTheme'
-import { SKEW_BOX, SKEW_LABEL } from './plateGeometry'
+import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 
 // Parchment is the noticeboard's own skin — the page's single light card.
 // Stays local until the news module makes these systemic.

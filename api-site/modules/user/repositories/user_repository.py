@@ -47,7 +47,8 @@ class UserRepository:
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
-            color=model.color
+            color=model.color,
+            max_slots=model.max_slots
         )
 
     def get_by_email(self, email: str, include_deleted: bool = False) -> Optional[UserAggregate]:
@@ -71,7 +72,8 @@ class UserRepository:
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
-            color=model.color
+            color=model.color,
+            max_slots=model.max_slots
         )
 
     def _get_existing_friend_code(self, user_id: UUID) -> Optional[str]:
@@ -146,7 +148,8 @@ class UserRepository:
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
-            color=model.color
+            color=model.color,
+            max_slots=model.max_slots
         )
 
     def generate_unique_tag(self, account_name: str) -> str:
@@ -217,6 +220,7 @@ class UserRepository:
                 model.screen_name = aggregate.screen_name
                 model.last_login = aggregate.last_login
                 model.color = aggregate.color
+                model.max_slots = aggregate.max_slots
                 # Update account_name and account_tag if set on aggregate
                 if aggregate.account_name is not None:
                     model.account_name = aggregate.account_name
