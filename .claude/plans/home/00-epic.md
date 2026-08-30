@@ -338,7 +338,8 @@ entry is knowingly overtaken in part.
 ### Known deferred / not shipped
 
 - **Pause is deliberately absent from the hero** — it needs game-runtime support and still
-  lives in the Campaigns tab. Not an oversight.
+  lives in the Campaigns tab. Not an oversight. That support is now scoped as
+  [TODO-in-game-pause.md](TODO-in-game-pause.md) (high priority, 2026-08-30).
 - **Focus-visible rings are suppressed** on all three header controls. Restoring them
   properly needs shape-following rings, not the browser default rectangle.
 - **Unexercised QA**: reduced-motion behaviour, horizontal scroll at narrow widths, and
