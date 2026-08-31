@@ -5,7 +5,7 @@
 
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { faRightFromBracket, faUser } from '@fortawesome/free-solid-svg-icons'
 
@@ -24,6 +24,17 @@ function AuthenticatedShell({ children }) {
   const router = useRouter()
   const auth = useAuth()
   const { toasts, showToast, dismissToast } = useToast()
+
+  // A counter rather than a boolean: asking twice must open the panel twice,
+  // and a boolean would need resetting after every open.
+  const [socialOpenSignal, setSocialOpenSignal] = useState(0)
+  const openSocialPanel = useCallback(() => setSocialOpenSignal((count) => count + 1), [])
+
+  // Overlays that belong INSIDE the app chrome render into this region rather
+  // than over the whole viewport. Being a real element below the header is
+  // what puts them below the header — no height to measure, nothing to keep
+  // in sync if the header's contents change.
+  const contentRef = useRef(null)
 
   // One persistent WebSocket subscription for the whole authenticated
   // route group. Handlers live in useAuthenticatedEvents.
@@ -58,6 +69,8 @@ function AuthenticatedShell({ children }) {
         toasts,
         showToast,
         dismissToast,
+        openSocialPanel,
+        contentRef,
       }}
     >
       <div
@@ -72,8 +85,9 @@ function AuthenticatedShell({ children }) {
             user={auth.user}
             toasts={toasts}
             onDismissToast={dismissToast}
+            openSignal={socialOpenSignal}
           />
-          <AppLauncher />
+          <AppLauncher isAdmin={Boolean(auth.user?.is_admin)} />
           <Dropdown
             size="panel"
             trigger={
@@ -98,7 +112,9 @@ function AuthenticatedShell({ children }) {
           />
         </SiteHeader>
 
-        {children}
+        <div ref={contentRef} className="relative flex flex-1 flex-col min-h-0">
+          {children}
+        </div>
       </div>
     </AuthenticatedContext.Provider>
   )

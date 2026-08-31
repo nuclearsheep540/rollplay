@@ -40,6 +40,19 @@ export const EVENT_CONFIG = {
     navigationTab: 'account'
   },
 
+  // Presence — never persisted, so these are toast/line copy only.
+  'friend_online': {
+    toastMessage: 'A friend came online',
+    panelMessage: (data) => `${data.screen_name} came online`,
+    toastType: 'info'
+  },
+
+  'friend_offline': {
+    toastMessage: 'A friend went offline',
+    panelMessage: (data) => `${data.screen_name} went offline`,
+    toastType: 'info'
+  },
+
   'friend_buzzed': {
     toastMessage: 'Buzz!',
     panelMessage: (data) => `${data.buzzer_screen_name} buzzed you!`,

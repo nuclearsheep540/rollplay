@@ -58,27 +58,3 @@ class EventManager:
             command = CreateNotification(self.notification_repo)
             notification = command.execute(event.user_id, event.event_type, event.data)
             logger.info(f"Notification '{event.event_type}' persisted for user {user_id_str} (id: {notification.id})")
-
-
-class EventManagerSingleton:
-    """
-    Singleton wrapper for EventManager to ensure single instance.
-
-    This is necessary because EventManager needs to be shared across
-    all HTTP requests but initialized once with dependencies.
-    """
-    _instance = None
-
-    @classmethod
-    def initialize(cls, websocket_manager: EventConnectionManager, notification_repository: NotificationRepository):
-        """Initialize the singleton with dependencies"""
-        if cls._instance is None:
-            cls._instance = EventManager(websocket_manager, notification_repository)
-        return cls._instance
-
-    @classmethod
-    def get_instance(cls) -> EventManager:
-        """Get the singleton instance"""
-        if cls._instance is None:
-            raise RuntimeError("EventManager not initialized. Call initialize() first.")
-        return cls._instance

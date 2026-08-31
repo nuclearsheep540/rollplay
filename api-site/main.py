@@ -28,6 +28,7 @@ from modules.friendship.api.endpoints import router as friendship_router
 from modules.events.api.notification_endpoints import router as notification_router
 from modules.library.api.endpoints import router as library_router
 from modules.notes.api.endpoints import router as notes_router
+from modules.news.api.endpoints import router as news_router
 from modules.stream.api.endpoints import router as stream_router
 
 # Import integration routers (external-service ACLs, not core aggregates)
@@ -94,6 +95,7 @@ app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")
 app.include_router(library_router, prefix="/api/library", tags=["library"])
 app.include_router(notes_router, prefix="/api/notes", tags=["notes"])
+app.include_router(news_router, prefix="/api/news", tags=["news"])
 app.include_router(stream_router, prefix="/api/stream", tags=["stream"])
 app.include_router(spotify_router, prefix="/api/spotify", tags=["spotify"])
 

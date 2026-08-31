@@ -1933,3 +1933,447 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
     opacity: 1;
   }
 }
+
+/* ── News ────────────────────────────────────────────────────────────────
+   Authored editorial content. The article renders on the app's light ground
+   (parchment belongs to the Home card only), so these are ink-on-smoke. */
+
+.news-prose {
+  color: #3a342b;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.news-prose p {
+  margin: 0 0 18px;
+}
+
+.news-prose h2 {
+  font-family: var(--font-metamorphous), Georgia, serif;
+  font-size: 24px;
+  line-height: 1.3;
+  color: #181512;
+  margin: 30px 0 12px;
+}
+
+.news-prose h3 {
+  font-family: var(--font-metamorphous), Georgia, serif;
+  font-size: 19px;
+  line-height: 1.35;
+  color: #181512;
+  margin: 24px 0 10px;
+}
+
+.news-prose ul,
+.news-prose ol {
+  margin: 0 0 18px;
+  padding-left: 24px;
+}
+
+.news-prose ul { list-style: disc; }
+.news-prose ol { list-style: decimal; }
+.news-prose li { margin-bottom: 6px; }
+
+.news-prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 24px 0;
+}
+
+/* Selected image in the editor — ProseMirror's own selection class. */
+.news-prose img.ProseMirror-selectednode {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Like counter — the value IS the control, upvote-style. */
+.news-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: #9a7526;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.news-like-btn:disabled { cursor: default; }
+.news-like-btn:hover:not(:disabled) { background: rgba(154, 117, 38, 0.1); }
+
+.news-like-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  transition: transform 0.15s ease-out;
+}
+
+.news-like-btn svg.is-liked {
+  fill: currentColor;
+  transform: scale(1.15);
+}
+
+.news-article-close {
+  /* Absolute, not fixed: the close button belongs to the article panel, which
+     now lives inside the app's content region rather than over the viewport. */
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(55, 50, 47, 0.2);
+  border-radius: 8px;
+  background: rgba(247, 244, 243, 0.9);
+  color: #6b6459;
+  cursor: pointer;
+}
+
+.news-article-close:hover { border-color: var(--gold); color: #37322f; }
+
+.news-article-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-like-btn svg { transition: none; }
+}
+
+/* ── News editor ─────────────────────────────────────────────────────────
+   Admin authoring surface: parchment writing area, dark rails, the page's
+   8° parallelogram family on every control. */
+
+.news-index-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 19px 22px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.news-index-row:hover { background: rgba(247, 244, 243, 0.05); }
+
+.news-index-pip {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  background: var(--palette-silver);
+  transform: rotate(45deg);
+  opacity: 0.7;
+}
+
+.news-index-row:hover .news-index-pip { background: var(--gold); opacity: 1; }
+
+/* Tabs — EDIT / HOME CARD / ARTICLE, one-up */
+.news-tab {
+  padding: 9px 18px;
+  border: 1px solid rgba(31, 31, 31, 0.25);
+  border-radius: 8px;
+  background: none;
+  color: #4c463e;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: skewX(-8deg);
+  cursor: pointer;
+}
+
+.news-tab > span { display: inline-block; transform: skewX(8deg); }
+.news-tab:hover { border-color: var(--gold); }
+.news-tab.is-active { background: var(--gold); border-color: var(--gold); color: #241c08; }
+
+/* Formatting toolbar */
+.news-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 18px 0 4px;
+  padding: 5px 6px;
+  border: 1px solid #e5decf;
+  border-radius: 8px;
+  background: rgba(31, 31, 31, 0.02);
+}
+
+.news-tbtn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #4c463e;
+  cursor: pointer;
+}
+
+.news-tbtn:hover { background: rgba(31, 31, 31, 0.06); }
+.news-tbtn.is-active { background: rgba(217, 164, 65, 0.25); color: #241c08; }
+
+.news-tbtn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.news-tbtn-b { font-weight: 800; font-size: 14px; }
+.news-tbtn-i { font-family: Georgia, serif; font-style: italic; font-size: 15px; }
+.news-tbtn-h { font-weight: 800; font-size: 11px; }
+
+.news-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: #e5decf;
+}
+
+/* Banner slots */
+.news-banner-slot {
+  position: relative;
+  aspect-ratio: 21 / 9;
+  border: 1px dashed #d8cfbc;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.news-banner-slot.is-drop-target {
+  border: 1.5px dashed var(--gold);
+  background: rgba(217, 164, 65, 0.07);
+}
+
+.news-slot-config {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 2;
+  display: flex;
+  gap: 5px;
+}
+
+.news-cfg {
+  padding: 3px 8px;
+  border: 1px solid #d8cfbc;
+  border-radius: 4px;
+  background: rgba(251, 247, 239, 0.9);
+  color: #8a8378;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  transform: skewX(-8deg);
+  cursor: pointer;
+}
+
+.news-cfg > span { display: inline-block; transform: skewX(8deg); }
+.news-cfg.is-on { background: var(--gold); border-color: var(--gold); color: #241c08; }
+
+.news-drop-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #9a7526;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
+.news-slot-tag {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(251, 247, 239, 0.85);
+  color: #8a8378;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.news-slot-tools {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+}
+
+.news-slot-tools button {
+  padding: 3px 8px;
+  border: 1px solid #d8cfbc;
+  border-radius: 4px;
+  background: rgba(251, 247, 239, 0.9);
+  color: #6b6459;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.news-slot-tools button:hover { border-color: var(--gold); color: #241c08; }
+
+/* Image rail */
+.news-upload-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px;
+  border: 1px dashed rgba(247, 244, 243, 0.3);
+  border-radius: 8px;
+  background: none;
+  color: var(--palette-silver);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.news-upload-tile:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.news-upload-tile:disabled { opacity: 0.6; cursor: default; }
+
+.news-upload-tile svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.news-thumb {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: grab;
+  text-align: left;
+}
+
+.news-thumb:active { cursor: grabbing; }
+
+.news-thumb-tile {
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: 6px;
+  border: 1px solid rgba(247, 244, 243, 0.12);
+  background-color: rgba(247, 244, 243, 0.04);
+  background-size: cover;
+  background-position: center;
+}
+
+.news-thumb:hover .news-thumb-tile { border-color: var(--gold); }
+
+.news-thumb-name {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--palette-silver);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* NEW! flair — lives in the UPDATES section header, never on the card: the
+   banners are loud images bordering the content and a chip inside gets lost. */
+.news-new-chip {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2.5px 8px;
+  border-radius: 4px;
+  background: var(--gold);
+  color: #241c08;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  transform: skewX(-8deg);
+}
+
+.news-new-chip > span { display: inline-block; transform: skewX(8deg); }
+
+/* ── Pulse line ──────────────────────────────────────────────────────────
+   The ambient layer beneath the hero: a breathing source, avatar coins, and
+   quiet pills emitted from it. */
+
+.pulse-coin {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 1.5px solid var(--palette-smoke);
+  border-radius: 50%;
+  color: var(--palette-smoke);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pulse-coin-more {
+  background: rgba(31, 27, 22, 0.18);
+  color: #544e46;
+}
+
+.pulse-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(31, 27, 22, 0.055);
+  color: #544e46;
+  font-size: 12.5px;
+  line-height: 1.35;
+  transition: opacity 0.4s ease-out;
+}
+
+.pulse-pill-live {
+  background: rgba(217, 164, 65, 0.18);
+  color: #5c430f;
+  font-weight: 600;
+}
+
+.pulse-join {
+  padding: 3px 11px;
+  border: none;
+  border-radius: 3px;
+  background: var(--gold);
+  color: #241c08;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.pulse-join:hover { filter: brightness(1.06); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-pill { transition: none; }
+}

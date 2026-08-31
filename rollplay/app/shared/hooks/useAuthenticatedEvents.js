@@ -59,6 +59,14 @@ export function useAuthenticatedEvents(userId, showToast) {
       toast('friend_removed', m)
     },
 
+    // ── Presence events ──────────────────────────────────────────────
+    // is_online is computed on read, so a refetch is what repaints the dots.
+    friend_online: (m) => {
+      invalidation.invalidateFriendships()
+      toast('friend_online', m, (c, d) => c.panelMessage(d))
+    },
+    friend_offline: () => invalidation.invalidateFriendships(),
+
     // ── Buzz events (fun notification, no state refresh) ─────────────
     friend_buzzed: (m) => toast('friend_buzzed', m, (c, d) => c.panelMessage(d)),
     buzz_sent: (m) => toast('buzz_sent', m, (c, d) => c.panelMessage(d)),

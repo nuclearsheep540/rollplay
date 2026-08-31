@@ -1,10 +1,11 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 import boto3
 from botocore.config import Config
@@ -185,6 +186,102 @@ class S3Service:
                 return False
             logger.error(f"Error checking object existence: {e}")
             raise
+
+    def list_objects(self, prefix: str) -> List[dict]:
+        """
+        List objects under a prefix.
+
+        Used by the news module to browse its own shared image directory —
+        library media are listed from PostgreSQL instead, because they have
+        rows; news images deliberately have none.
+
+        Args:
+            prefix: Key prefix to list under (e.g. 'news_media/images/')
+
+        Returns:
+            List of {key, size, last_modified}, excluding directory-marker
+            objects (keys ending in '/'), newest first.
+
+        Raises:
+            ClientError: If the listing fails. Deliberately unhandled — a
+                caller cannot present a partial listing as a complete one.
+        """
+        try:
+            # list_objects_v2 caps at 1000 keys per call and signals more with
+            # IsTruncated. The news image directory is authored by hand and will
+            # not approach that, so a single page is the whole listing.
+            response = self.client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix
+            )
+        except ClientError as e:
+            logger.error(f"Failed to list objects under {prefix}: {e}")
+            raise
+
+        objects = []
+        for item in response.get('Contents', []):
+            if item['Key'].endswith('/'):
+                continue
+            objects.append({
+                'key': item['Key'],
+                'size': item['Size'],
+                'last_modified': item['LastModified'],
+            })
+
+        objects.sort(key=lambda item: item['last_modified'], reverse=True)
+        return objects
+
+    def put_object_json(self, key: str, payload: dict) -> None:
+        """
+        Write a JSON document to S3.
+
+        The news module's durability path: PostgreSQL serves reads, and this
+        keeps a complete copy of every post so a dropped dev database can be
+        restored rather than mourned.
+
+        Args:
+            key: Destination object key
+            payload: JSON-serializable document
+
+        Raises:
+            ClientError: If the write fails. Callers log and continue — a failed
+                backup must not fail the user's save; `restore-news` re-syncs.
+        """
+        try:
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(payload, default=str).encode('utf-8'),
+                ContentType='application/json',
+                CacheControl='no-cache',
+            )
+            logger.info(f"Wrote JSON document: {key}")
+        except ClientError as e:
+            logger.error(f"Failed to write JSON document {key}: {e}")
+            raise
+
+    def get_object_json(self, key: str) -> dict:
+        """
+        Read a JSON document from S3.
+
+        Args:
+            key: Object key to read
+
+        Returns:
+            The parsed document
+
+        Raises:
+            ClientError: If the object is missing or unreadable.
+            json.JSONDecodeError: If the object is not valid JSON — a corrupt
+                backup should stop a restore loudly, not import garbage.
+        """
+        try:
+            response = self.client.get_object(Bucket=self.bucket_name, Key=key)
+        except ClientError as e:
+            logger.error(f"Failed to read JSON document {key}: {e}")
+            raise
+
+        return json.loads(response['Body'].read().decode('utf-8'))
 
     @staticmethod
     def generate_key(user_id: str, filename: str, asset_type: str = "map") -> str:

@@ -16,6 +16,9 @@ import { createContext, useContext } from 'react'
  *   showScreenNameModal, setShowScreenNameModal
  *   handleLogout, setError
  *   toasts, showToast, dismissToast
+ *   openSocialPanel — asks the header's social panel to open
+ *   contentRef — the region below the header; overlays that should stay
+ *     within the app chrome portal into it instead of over the viewport
  *
  * Pages should not call `useAuth()` / `useToast()` / `useEvents()`
  * directly — the layout owns one instance of each so the WebSocket

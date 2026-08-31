@@ -63,6 +63,7 @@ class UserResponse(BaseModel):
     last_login: Optional[datetime]
     color: Optional[str] = None  # Identity color hex (USER_COLORS palette); None = not chosen
     max_slots: int = 4  # Character capacity — the FE reflects this, the backend enforces it
+    is_admin: bool = False  # Evaluated per request from the env allowlist; never stored
 
 
 class PublicUserResponse(BaseModel):
