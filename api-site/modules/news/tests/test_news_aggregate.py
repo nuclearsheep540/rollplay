@@ -91,21 +91,21 @@ class TestBannerSlots:
     def test_setting_a_slot(self):
         post = make_post()
 
-        post.update_content(banners={"banner_home_top": "news_media/images/top.png"})
+        post.update_content(banners={"banner_home_top": "news_media/shared_images/top.png"})
 
-        assert post.banner_home_top == "news_media/images/top.png"
+        assert post.banner_home_top == "news_media/shared_images/top.png"
 
     def test_slots_not_mentioned_are_left_alone(self):
         post = make_post()
-        post.update_content(banners={"banner_home_top": "news_media/images/top.png"})
+        post.update_content(banners={"banner_home_top": "news_media/shared_images/top.png"})
 
         post.update_content(title="A new title")
 
-        assert post.banner_home_top == "news_media/images/top.png"
+        assert post.banner_home_top == "news_media/shared_images/top.png"
 
     def test_an_explicit_none_clears_a_slot(self):
         post = make_post()
-        post.update_content(banners={"banner_home_top": "news_media/images/top.png"})
+        post.update_content(banners={"banner_home_top": "news_media/shared_images/top.png"})
 
         post.update_content(banners={"banner_home_top": None})
 
@@ -115,18 +115,18 @@ class TestBannerSlots:
         post = make_post()
 
         post.update_content(banners={
-            "banner_home_top": "news_media/images/card.png",
-            "banner_article_top": "news_media/images/article.png",
+            "banner_home_top": "news_media/shared_images/card.png",
+            "banner_article_top": "news_media/shared_images/article.png",
         })
 
-        assert post.banner_home_top == "news_media/images/card.png"
-        assert post.banner_article_top == "news_media/images/article.png"
+        assert post.banner_home_top == "news_media/shared_images/card.png"
+        assert post.banner_article_top == "news_media/shared_images/article.png"
 
     def test_unknown_slot_is_rejected(self):
         post = make_post()
 
         with pytest.raises(ValueError, match="Unknown banner slot"):
-            post.update_content(banners={"banner_sidebar": "news_media/images/x.png"})
+            post.update_content(banners={"banner_sidebar": "news_media/shared_images/x.png"})
 
 
 class TestBackupDocument:
@@ -134,7 +134,7 @@ class TestBackupDocument:
         post = make_post()
         post.update_content(
             doc={"type": "doc", "content": []},
-            banners={"banner_article_top": "news_media/images/a.png"},
+            banners={"banner_article_top": "news_media/shared_images/a.png"},
         )
         post.publish()
 
@@ -146,13 +146,13 @@ class TestBackupDocument:
         assert document["doc"] == post.doc
         assert document["published"] is True
         assert document["published_at"] is not None
-        assert document["banner_article_top"] == "news_media/images/a.png"
+        assert document["banner_article_top"] == "news_media/shared_images/a.png"
 
     def test_holds_no_signed_urls_or_user_references(self):
         """Stored documents must never contain anything that expires or that
         points at a database row — that is what makes restore-after-wipe work."""
         post = make_post()
-        post.update_content(banners={"banner_home_top": "news_media/images/a.png"})
+        post.update_content(banners={"banner_home_top": "news_media/shared_images/a.png"})
 
         document = post.to_document()
 
@@ -167,3 +167,87 @@ class TestBackupDocument:
         post.publish()
 
         assert json.loads(json.dumps(post.to_document()))["title"] == post.title
+
+
+class TestReplacingAnImageKey:
+    """When an image moves between scopes its key changes, and everything
+    pointing at it has to follow — banners and document alike.
+
+    The aggregate does this because the aggregate is what knows where an image
+    can be referenced from; a command rewriting a document by hand would have
+    to know the ProseMirror shape, and would drift the moment a new node type
+    could hold one.
+    """
+
+    def _document_with(self, key):
+        return {
+            "type": "doc",
+            "content": [
+                {"type": "paragraph"},
+                {"type": "image", "attrs": {"src": key}},
+            ],
+        }
+
+    def test_rewrites_a_banner_slot(self):
+        post = make_post()
+        post.update_content(banners={"banner_home_top": "old/key.png"})
+
+        assert post.replace_image_key("old/key.png", "new/key.png") is True
+        assert post.banner_home_top == "new/key.png"
+
+    def test_rewrites_every_slot_holding_the_key(self):
+        post = make_post()
+        post.update_content(banners={
+            "banner_home_top": "old/key.png",
+            "banner_article_top": "old/key.png",
+        })
+
+        post.replace_image_key("old/key.png", "new/key.png")
+
+        assert post.banner_home_top == "new/key.png"
+        assert post.banner_article_top == "new/key.png"
+
+    def test_leaves_other_slots_alone(self):
+        post = make_post()
+        post.update_content(banners={
+            "banner_home_top": "old/key.png",
+            "banner_home_bottom": "untouched/key.png",
+        })
+
+        post.replace_image_key("old/key.png", "new/key.png")
+
+        assert post.banner_home_bottom == "untouched/key.png"
+
+    def test_rewrites_an_image_inside_the_document(self):
+        post = make_post()
+        post.update_content(doc=self._document_with("old/key.png"))
+
+        assert post.replace_image_key("old/key.png", "new/key.png") is True
+        assert post.uses_image("new/key.png") is True
+        assert post.uses_image("old/key.png") is False
+
+    def test_reports_when_nothing_referenced_the_key(self):
+        post = make_post()
+
+        assert post.replace_image_key("old/key.png", "new/key.png") is False
+
+    def test_does_not_re_date_the_post(self):
+        """updated_at orders the editor index. A relocation is not an edit."""
+        post = make_post()
+        post.update_content(banners={"banner_home_top": "old/key.png"})
+        before = post.updated_at
+
+        post.replace_image_key("old/key.png", "new/key.png")
+
+        assert post.updated_at == before
+
+    def test_does_not_mutate_the_document_it_was_given(self):
+        """The document handed in may be the one a session is holding, so
+        rewriting it in place would smuggle the change into an unrelated save."""
+        original = self._document_with("old/key.png")
+        post = make_post()
+        post.update_content(doc=original)
+
+        post.replace_image_key("old/key.png", "new/key.png")
+
+        assert original["content"][1]["attrs"]["src"] == "old/key.png"

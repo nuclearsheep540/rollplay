@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 # The empty TipTap document. Built per call rather than shared as a module
@@ -11,6 +11,56 @@ from uuid import UUID, uuid4
 def empty_document() -> Dict[str, Any]:
     """A fresh, empty ProseMirror document — a new object every call."""
     return {"type": "doc", "content": [{"type": "paragraph"}]}
+
+
+def collect_image_keys(node: Any) -> List[str]:
+    """
+    Every image key referenced inside a ProseMirror document.
+
+    Image nodes hold the S3 KEY in `src` — never a URL — so this reads the
+    stored form directly and needs no signing to answer what a document uses.
+    """
+    keys = []
+
+    if isinstance(node, dict):
+        if node.get("type") == "image":
+            key = node.get("attrs", {}).get("src")
+            if key:
+                keys.append(key)
+        for child in node.get("content", []) or []:
+            keys.extend(collect_image_keys(child))
+    elif isinstance(node, list):
+        for child in node:
+            keys.extend(collect_image_keys(child))
+
+    return keys
+
+
+def replace_image_keys(node: Any, old_key: str, new_key: str) -> Any:
+    """
+    A copy of the document with every reference to ``old_key`` pointing at
+    ``new_key`` instead.
+
+    The write-side counterpart to collect_image_keys, used when an image moves
+    between scopes. Immutable, like every other document operation here: the
+    caller's document may be the one held in a session's identity map, and
+    rewriting it in place would smuggle the change into an unrelated save.
+    """
+    if isinstance(node, list):
+        return [replace_image_keys(child, old_key, new_key) for child in node]
+
+    if not isinstance(node, dict):
+        return node
+
+    rebuilt = dict(node)
+
+    if rebuilt.get("type") == "image" and (rebuilt.get("attrs") or {}).get("src") == old_key:
+        rebuilt["attrs"] = {**rebuilt["attrs"], "src": new_key}
+
+    if rebuilt.get("content"):
+        rebuilt["content"] = replace_image_keys(rebuilt["content"], old_key, new_key)
+
+    return rebuilt
 
 
 # Banner slots, keyed by the surface they render on. The editor names these
@@ -189,6 +239,49 @@ class NewsPostAggregate:
         self.published = False
         self.published_at = None
         self.updated_at = datetime.utcnow()
+
+    def uses_image(self, image_key: str) -> bool:
+        """
+        Whether this post references an image, as a banner or in its body.
+
+        Asked before an image is deleted: news images have no database row of
+        their own, so a post's own references ARE the only record that an image
+        is in use. Nothing else can be consulted.
+        """
+        if image_key in self.banner_keys().values():
+            return True
+
+        return image_key in collect_image_keys(self.doc)
+
+    def replace_image_key(self, old_key: str, new_key: str) -> bool:
+        """
+        Point every reference to an image at its new home.
+
+        Called when an image moves between scopes: the bytes are copied first,
+        then this rewrites what points at them, and only then is the original
+        deleted — so at no moment does this post reference something that is
+        not there.
+
+        Deliberately does NOT touch ``updated_at``. A relocation is not an
+        authorial edit, and updated_at orders the editor's index — moving an
+        image should not shuffle a draft to the top of the list.
+
+        Returns:
+            Whether anything referenced the old key
+        """
+        changed = False
+
+        for slot in BANNER_SLOTS:
+            if getattr(self, slot) == old_key:
+                setattr(self, slot, new_key)
+                changed = True
+
+        rewritten_doc = replace_image_keys(self.doc, old_key, new_key)
+        if rewritten_doc != self.doc:
+            self.doc = rewritten_doc
+            changed = True
+
+        return changed
 
     def banner_keys(self) -> Dict[str, Optional[str]]:
         """The four banner slots as a dict, for signing and serialization."""

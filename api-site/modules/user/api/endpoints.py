@@ -62,6 +62,7 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
         color=user.color,
         max_slots=user.max_slots,
         is_admin=is_admin_email(user.email),
+        pulse_events=user.active_pulse_events(),
     )
 
 

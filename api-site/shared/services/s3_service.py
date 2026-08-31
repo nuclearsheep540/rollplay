@@ -196,7 +196,7 @@ class S3Service:
         rows; news images deliberately have none.
 
         Args:
-            prefix: Key prefix to list under (e.g. 'news_media/images/')
+            prefix: Key prefix to list under (e.g. 'news_media/shared_images/')
 
         Returns:
             List of {key, size, last_modified}, excluding directory-marker
@@ -230,6 +230,38 @@ class S3Service:
 
         objects.sort(key=lambda item: item['last_modified'], reverse=True)
         return objects
+
+    def copy_object(self, source_key: str, destination_key: str) -> None:
+        """
+        Copy an object within the bucket.
+
+        S3 has no move, so relocating an object is a copy followed by a delete
+        — and the copy comes first deliberately, so a failure between the two
+        leaves a duplicate rather than a dangling reference.
+
+        Note this OVERWRITES silently: S3 reports no conflict when the
+        destination already exists. Callers that must not clobber check
+        `object_exists` first; nothing here can do it for them, because an
+        overwrite is legitimate for some callers and catastrophic for others.
+
+        Args:
+            source_key: The object to copy
+            destination_key: Where to put the copy
+
+        Raises:
+            ClientError: If S3 refuses. Deliberately unhandled — a caller must
+                not go on to delete the source of a copy that never landed.
+        """
+        try:
+            self.client.copy_object(
+                Bucket=self.bucket_name,
+                CopySource={'Bucket': self.bucket_name, 'Key': source_key},
+                Key=destination_key,
+            )
+            logger.info(f"Copied object: {source_key} -> {destination_key}")
+        except ClientError as e:
+            logger.error(f"Failed to copy {source_key} to {destination_key}: {e}")
+            raise
 
     def put_object_json(self, key: str, payload: dict) -> None:
         """

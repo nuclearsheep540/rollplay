@@ -3,7 +3,7 @@
 
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 
 # REQUEST SCHEMAS
@@ -64,6 +64,10 @@ class UserResponse(BaseModel):
     color: Optional[str] = None  # Identity color hex (USER_COLORS palette); None = not chosen
     max_slots: int = 4  # Character capacity — the FE reflects this, the backend enforces it
     is_admin: bool = False  # Evaluated per request from the env allowlist; never stored
+    # The user's pulse, hydrated from their own row — expired entries filtered
+    # out on the way. Rides this response so Home's pulse line survives a
+    # refresh without a request of its own.
+    pulse_events: List[Dict[str, Any]] = []
 
 
 class PublicUserResponse(BaseModel):

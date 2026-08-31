@@ -32,13 +32,28 @@ class UpdateNewsPostRequest(BaseModel):
     banner_article_bottom: Optional[str] = None
 
 
+class NewsImageMoveRequest(BaseModel):
+    """
+    `target_post_id` is the destination scope: null shares the image across
+    articles, a post id claims it for that one.
+    """
+    key: str = Field(..., min_length=1, max_length=500)
+    target_post_id: Optional[UUID] = None
+
+
 class PublishNewsPostRequest(BaseModel):
     published: bool = True
 
 
 class NewsImageUploadRequest(BaseModel):
+    """
+    `post_id` picks the scope: omitted uploads to the shared directory, present
+    uploads into that article's own folder. Absent and null mean the same thing
+    here — unlike the banner slots, there is no "leave alone" to distinguish.
+    """
     filename: str = Field(..., min_length=1, max_length=200)
     content_type: str = Field(..., min_length=1, max_length=100)
+    post_id: Optional[UUID] = None
 
 
 # ── Responses ────────────────────────────────────────────────────────────
@@ -107,6 +122,11 @@ class NewsImageResponse(BaseModel):
 
 class NewsImageListResponse(BaseModel):
     images: List[NewsImageResponse] = []
+
+
+class NewsImageMoveResponse(BaseModel):
+    """The image's new key — its old one no longer resolves."""
+    key: str
 
 
 class NewsImageUploadResponse(BaseModel):

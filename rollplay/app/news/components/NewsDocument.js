@@ -10,22 +10,31 @@ import HardBreak from '@tiptap/extension-hard-break'
 import Heading from '@tiptap/extension-heading'
 import Image from '@tiptap/extension-image'
 import Italic from '@tiptap/extension-italic'
+import Link from '@tiptap/extension-link'
 import Paragraph from '@tiptap/extension-paragraph'
 import Strike from '@tiptap/extension-strike'
+import Superscript from '@tiptap/extension-superscript'
 import Text from '@tiptap/extension-text'
 import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 import { BulletList, ListItem, OrderedList } from '@tiptap/extension-list'
+import { UndoRedo } from '@tiptap/extensions'
 import { useMemo } from 'react'
 
+import { BlockSpacing } from '@/app/shared/tiptap/blockSpacing'
+import { LineHeight } from '@/app/shared/tiptap/lineHeight'
+
 /**
- * The news extension set — shared by the read-only renderer here and the
- * editor, so what you author is exactly what publishes.
+ * What news documents are made of — shared by the read-only renderer here and
+ * by the editor, so what you author is exactly what publishes.
  *
  * The extension list IS the feature list: ProseMirror drops any node it has no
- * schema for, so this also bounds what a paste can bring in.
+ * schema for, so this also bounds what a paste can bring in. It is also how
+ * features are scoped per editor — notes builds its own list, so anything
+ * absent from that list simply does not exist in a note, with no route check
+ * or conditional anywhere.
  */
-export const NEWS_EXTENSIONS = [
+const NEWS_NODES_AND_MARKS = [
   Document,
   Paragraph,
   Text,
@@ -39,7 +48,60 @@ export const NEWS_EXTENSIONS = [
   OrderedList,
   ListItem,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
+  LineHeight,
+  BlockSpacing,
+  Superscript,
   Image,
+]
+
+/**
+ * Links are restricted to the protocols an article legitimately needs.
+ *
+ * News is authored content rendered to every user, so the schema — not the
+ * author — decides what a link may be. Anything else (javascript:, data:) is
+ * rejected at parse time rather than trusted and sanitised later.
+ */
+function isPublishableLink(url) {
+  try {
+    return ['http:', 'https:', 'mailto:'].includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
+
+const LINK_ATTRIBUTES = {
+  target: '_blank',
+  rel: 'noopener noreferrer nofollow',
+}
+
+/** Reading a published article: links behave like links. */
+export const NEWS_EXTENSIONS = [
+  ...NEWS_NODES_AND_MARKS,
+  Link.configure({
+    openOnClick: true,
+    autolink: true,
+    HTMLAttributes: LINK_ATTRIBUTES,
+    isAllowedUri: isPublishableLink,
+  }),
+]
+
+/**
+ * Writing an article: the reading set plus the two things only an author
+ * needs — an undo history, and links that place the cursor when clicked
+ * rather than navigating away mid-sentence.
+ *
+ * History is deliberately absent from the reading set: a published article is
+ * never edited, so a document nobody can change has nothing to undo.
+ */
+export const NEWS_EDITOR_EXTENSIONS = [
+  ...NEWS_NODES_AND_MARKS,
+  Link.configure({
+    openOnClick: false,
+    autolink: true,
+    HTMLAttributes: LINK_ATTRIBUTES,
+    isAllowedUri: isPublishableLink,
+  }),
+  UndoRedo,
 ]
 
 /**

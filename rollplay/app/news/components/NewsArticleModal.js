@@ -3,33 +3,27 @@
 
 'use client'
 
-import { Dialog, DialogPanel, Portal, Transition, TransitionChild } from '@headlessui/react'
+import { Dialog, DialogPanel, Transition, TransitionChild } from '@headlessui/react'
 import { Fragment, useEffect } from 'react'
 
 import NewsArticle from './NewsArticle'
 import { useMarkNewsRead } from '../hooks/useNews'
-import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import { COLORS } from '@/app/styles/colorTheme'
 
 /**
- * The article, as an overlay INSIDE the app chrome.
+ * The article, full-screen below the site header.
  *
- * It portals into the layout's content region rather than the document body,
- * so it covers the page but never the header — that comes from where it lives
- * in the DOM, not from measuring anything. Width follows the app's
- * content-safe zone (the max-width the header and Home already use).
- *
- * The header stays undimmed and reachable: clicking it fires Dialog's
- * outside-click, which closes the article. So the first click dismisses and a
- * second opens whatever was clicked — conventional overlay behaviour, and
- * honest, unlike a header that looks live while `inert` swallows every click.
+ * An ordinary fixed overlay like every other modal in the app, with one
+ * difference: it starts below the chrome instead of covering it, by
+ * subtracting the header's measured height (--site-header-height, published by
+ * the authenticated layout). The header therefore stays visible and clickable,
+ * and clicking it dismisses the article via Dialog's outside-click.
  *
  * Opening marks the post read — that receipt clears the NEW! flair in Home's
- * UPDATES header, so it fires on open rather than on some explicit control the
- * reader would have to find.
+ * UPDATES header, so it fires on open rather than on a control the reader
+ * would have to find.
  */
 export default function NewsArticleModal({ post, open, onClose }) {
-  const { contentRef } = useAuthenticated()
   const markRead = useMarkNewsRead()
 
   useEffect(() => {
@@ -41,55 +35,74 @@ export default function NewsArticleModal({ post, open, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id, post?.read])
 
+  // The fallback matters on the first paint, before the layout's effect has
+  // measured: without it the overlay would briefly start at the very top.
+  const belowHeader = {
+    top: 'var(--site-header-height, 69px)',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  }
+
   return (
-    <Portal.Group target={contentRef}>
-      <Transition appear show={open} as={Fragment}>
-        <Dialog as="div" className="absolute inset-0 z-40" onClose={onClose}>
+    <Transition appear show={open} as={Fragment}>
+      <Dialog as="div" className="relative z-40" onClose={onClose}>
+        <TransitionChild
+          as={Fragment}
+          enter="ease-out duration-200"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-150"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div
+            className="fixed"
+            style={{ ...belowHeader, backgroundColor: 'rgba(11, 10, 9, 0.5)' }}
+          />
+        </TransitionChild>
+
+        {/* The sheet itself never moves — padding here sets its inset from
+            the chrome, and the article scrolls inside it. */}
+        <div className="fixed flex justify-center p-8" style={belowHeader}>
           <TransitionChild
             as={Fragment}
             enter="ease-out duration-200"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
+            enterFrom="opacity-0 translate-y-2"
+            enterTo="opacity-100 translate-y-0"
             leave="ease-in duration-150"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
+            leaveFrom="opacity-100 translate-y-0"
+            leaveTo="opacity-0 translate-y-2"
           >
-            <div className="absolute inset-0" style={{ backgroundColor: 'rgba(11, 10, 9, 0.45)' }} />
-          </TransitionChild>
-
-          <div className="absolute inset-0 overflow-y-auto overscroll-contain">
-            <TransitionChild
-              as={Fragment}
-              enter="ease-out duration-200"
-              enterFrom="opacity-0 translate-y-2"
-              enterTo="opacity-100 translate-y-0"
-              leave="ease-in duration-150"
-              leaveFrom="opacity-100 translate-y-0"
-              leaveTo="opacity-0 translate-y-2"
+            <DialogPanel
+              className="relative flex max-h-full w-full max-w-[1180px] flex-col overflow-hidden rounded-xl"
+              style={{
+                backgroundColor: COLORS.smoke,
+                boxShadow: '0 24px 60px rgba(11, 10, 9, 0.4)',
+              }}
             >
-              {/* The content-safe zone: the same max-width and padding scale
-                  the header and every page surface use. */}
-              <DialogPanel
-                className="relative mx-auto min-h-full w-full max-w-[1410px] px-4 py-12 sm:px-8 md:px-10"
-                style={{ backgroundColor: COLORS.smoke }}
+              {/* Outside the scrolling region, so it stays put however far
+                  down the article the reader is. */}
+              <button
+                type="button"
+                onClick={onClose}
+                className="news-article-close"
+                aria-label="Close article"
               >
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="news-article-close"
-                  aria-label="Close article"
-                >
-                  <svg viewBox="0 0 24 24">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
+                <svg viewBox="0 0 24 24">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
 
+              {/* Extra right padding keeps the text clear of the scrollbar and
+                  of the close button above it. */}
+              <div className="overflow-y-auto overscroll-contain px-6 py-10 pr-14 sm:px-10 sm:pr-16 md:px-14 md:pr-20">
                 <NewsArticle post={post} />
-              </DialogPanel>
-            </TransitionChild>
-          </div>
-        </Dialog>
-      </Transition>
-    </Portal.Group>
+              </div>
+            </DialogPanel>
+          </TransitionChild>
+        </div>
+      </Dialog>
+    </Transition>
   )
 }

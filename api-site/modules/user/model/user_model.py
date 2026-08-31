@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from sqlalchemy import CheckConstraint, Column, String, DateTime, Boolean, Integer, Index, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from uuid import uuid4
@@ -24,6 +24,15 @@ class User(Base):
     account_tag = Column(String(4), nullable=True)  # 4-digit discriminator (e.g., "2345")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login = Column(DateTime, nullable=True)
+    # Stamped when the user's LAST events-socket connection closes, so a
+    # reconnect can tell a refresh from a genuine return. See
+    # UserAggregate.returned_after (the grace window lives there).
+    last_seen = Column(DateTime, nullable=True)
+    # The user's pulse: a bounded, self-expiring list of what just happened
+    # near them. A value, not a relation — capped at MAX_PULSE_EVENTS, always
+    # read as a whole set, and never joined against. server_default keeps
+    # existing rows valid without a backfill.
+    pulse_events = Column(JSONB, nullable=False, server_default='[]')
     is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete flag
     deleted_at = Column(DateTime, nullable=True)  # When soft deleted
     # Identity color (hex from the curated USER_COLORS palette). Paints the

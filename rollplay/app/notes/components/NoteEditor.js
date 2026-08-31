@@ -15,6 +15,7 @@ import Highlight from '@tiptap/extension-highlight'
 import Italic from '@tiptap/extension-italic'
 import Paragraph from '@tiptap/extension-paragraph'
 import Strike from '@tiptap/extension-strike'
+import Superscript from '@tiptap/extension-superscript'
 import Text from '@tiptap/extension-text'
 import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
@@ -35,11 +36,16 @@ import {
   faRotateLeft,
   faRotateRight,
   faStrikethrough,
+  faSuperscript,
+  faArrowsUpDown,
+  faParagraph,
   faUnderline,
 } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 
 import Dropdown from '@/app/shared/components/Dropdown'
+import { BLOCK_SPACINGS, BlockSpacing } from '@/app/shared/tiptap/blockSpacing'
+import { LINE_HEIGHTS, LineHeight } from '@/app/shared/tiptap/lineHeight'
 
 // Characters, not bytes — the server's real ceiling is 256KB of serialised JSON.
 // 60k characters is far more than a campaign's worth of notes and lands well
@@ -81,6 +87,9 @@ export default function NoteEditor({ initialContent, onChange, editable = true, 
       Italic,
       Underline,
       Strike,
+      Superscript,
+      LineHeight,
+      BlockSpacing,
       Highlight,
       Heading.configure({ levels: [1, 2, 3] }),
       BulletList,
@@ -158,6 +167,31 @@ export default function NoteEditor({ initialContent, onChange, editable = true, 
     onClick: () => editor.chain().focus().setTextAlign(option.value).run(),
   }))
 
+  // Line spacing is a block attribute, so the active one is read from the
+  // paragraph the cursor sits in rather than from a toggle's state.
+  const activeLineHeight = editor.getAttributes('paragraph').lineHeight || null
+
+  const lineHeightItems = LINE_HEIGHTS.map((option) => ({
+    label: option.label,
+    icon: activeLineHeight === option.value ? faCheck : undefined,
+    onClick: () =>
+      option.value
+        ? editor.chain().focus().setLineHeight(option.value).run()
+        : editor.chain().focus().unsetLineHeight().run(),
+  }))
+
+  // The gap after a block, as opposed to the leading within one.
+  const activeBlockSpacing = editor.getAttributes('paragraph').blockSpacing || null
+
+  const blockSpacingItems = BLOCK_SPACINGS.map((option) => ({
+    label: option.label,
+    icon: activeBlockSpacing === option.value ? faCheck : undefined,
+    onClick: () =>
+      option.value
+        ? editor.chain().focus().setBlockSpacing(option.value).run()
+        : editor.chain().focus().unsetBlockSpacing().run(),
+  }))
+
   return (
     <>
       {editable && (
@@ -231,6 +265,36 @@ export default function NoteEditor({ initialContent, onChange, editable = true, 
             title="Highlight"
             isActive={editor.isActive('highlight')}
             onClick={() => editor.chain().focus().toggleHighlight().run()}
+          />
+          <ToolButton
+            icon={faSuperscript}
+            title="Superscript"
+            isActive={editor.isActive('superscript')}
+            onClick={() => editor.chain().focus().toggleSuperscript().run()}
+          />
+
+          <ToolDivider />
+
+          <Dropdown
+            align="left"
+            items={lineHeightItems}
+            trigger={
+              <button type="button" className="notes-tool" title="Line height">
+                <FontAwesomeIcon icon={faArrowsUpDown} />
+                <FontAwesomeIcon icon={faChevronDown} className="notes-tool__caret" />
+              </button>
+            }
+          />
+
+          <Dropdown
+            align="left"
+            items={blockSpacingItems}
+            trigger={
+              <button type="button" className="notes-tool" title="Space after paragraph">
+                <FontAwesomeIcon icon={faParagraph} />
+                <FontAwesomeIcon icon={faChevronDown} className="notes-tool__caret" />
+              </button>
+            }
           />
 
           <ToolDivider />

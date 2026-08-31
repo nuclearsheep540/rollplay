@@ -4,9 +4,11 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 
 import { useFriendships } from '@/app/dashboard/hooks/useFriendships'
+import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
+import { getEventConfig } from '@/app/shared/config/eventConfig'
 import { findCurrentSession } from '@/app/dashboard/utils/homeRanking'
 import { COLORS } from '@/app/styles/colorTheme'
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
@@ -25,24 +27,25 @@ const SCORE_AT_FULL_TILT = 10
 
 // Coins are a glance, not a census — past this the line would crowd the page.
 const MAX_COINS = 5
-// Width-aware in spirit; a hard cap keeps the row from wrapping on the
-// narrowest desktop the page supports.
-const MAX_TICKER_PILLS = 3
 
 /**
  * The pulse — a line, not a region; a dimmer, not a switch.
  *
- * Reads only what the client already holds: friends from the friendships
- * query (kept fresh by the presence events), and the campaigns Home has
- * already fetched, passed down rather than refetched. Those campaigns are the
- * user's own memberships, which is how the privacy rule — never show a session
- * the user isn't in — is guaranteed structurally rather than remembered.
+ * Three sources, each the right shape for what it carries: friends and live
+ * sessions come from queries the client already holds (a now-state, so a
+ * snapshot is correct), while the ticker is fed by socket events the server
+ * flagged for the pulse (a happening, so a stream is correct).
+ *
+ * The campaigns come from Home rather than a refetch, and they are the user's
+ * own memberships — which is how the privacy rule, never show a session the
+ * user isn't in, is guaranteed structurally rather than remembered.
  *
  * A live session is CONTENT, not a state: it pins a gold pill carrying its own
  * Join and raises the activity floor, while the ticker keeps flowing behind it.
  */
 export default function PulseLine({ campaigns = [], onOpenSocial }) {
   const router = useRouter()
+  const { pulseEvents } = useAuthenticated()
   const { data: friendshipData } = useFriendships()
 
   const friends = useMemo(() => friendshipData?.accepted || [], [friendshipData])
@@ -58,7 +61,19 @@ export default function PulseLine({ campaigns = [], onOpenSocial }) {
     return null
   }, [campaigns])
 
-  const events = useRecentPulseEvents(onlineFriends, liveCampaign)
+  // Events arrive from the server, flagged by whichever factory raised them —
+  // the pulse renders what it is told rather than inferring activity from
+  // query data, so a silent event (a friend returning from a refresh) simply
+  // never gets here.
+  const events = useMemo(
+    () =>
+      pulseEvents.map((event, index) => ({
+        id: event.id,
+        text: getEventConfig(event.event_type)?.panelMessage(event.data) || '',
+        opacity: 1 - index * 0.28,
+      })),
+    [pulseEvents]
+  )
 
   const score =
     (liveCampaign ? WEIGHT_LIVE_SESSION : 0) + onlineFriends.length * WEIGHT_ONLINE_FRIEND
@@ -153,50 +168,5 @@ export default function PulseLine({ campaigns = [], onOpenSocial }) {
         style={{ background: 'linear-gradient(90deg, #D5CFC5, rgba(213, 207, 197, 0))' }}
       />
     </div>
-  )
-}
-
-/**
- * The ticker: friends who came online since this page loaded.
- *
- * A now-snapshot, not a history — nothing is persisted and nothing survives a
- * reload. Derived by diffing the online set rather than subscribing to the
- * socket directly, so the pulse has exactly one source of truth (the
- * friendships query the presence events already refresh).
- */
-function useRecentPulseEvents(onlineFriends, liveCampaign) {
-  const [events, setEvents] = useState([])
-  const knownOnlineRef = useRef(null)
-
-  useEffect(() => {
-    const currentlyOnline = new Set(onlineFriends.map((friend) => friend.friend_id))
-
-    // First pass establishes the baseline: everyone already online when the
-    // page opened did not "just arrive", and announcing them would be a lie.
-    if (knownOnlineRef.current === null) {
-      knownOnlineRef.current = currentlyOnline
-      return
-    }
-
-    const arrivals = onlineFriends.filter((friend) => !knownOnlineRef.current.has(friend.friend_id))
-    knownOnlineRef.current = currentlyOnline
-
-    if (arrivals.length === 0) return
-
-    setEvents((current) => {
-      const fresh = arrivals.map((friend) => ({
-        id: `${friend.friend_id}-${friend.friend_screen_name}-${current.length}`,
-        text: `${friend.friend_screen_name || 'A friend'} came online`,
-      }))
-
-      // Newest sits beside the dot; the oldest falls off the end.
-      return [...fresh, ...current].slice(0, MAX_TICKER_PILLS)
-    })
-  }, [onlineFriends])
-
-  // Older pills dim with age, so the line reads as flowing rather than listed.
-  return useMemo(
-    () => events.map((event, index) => ({ ...event, opacity: 1 - index * 0.28 })),
-    [events]
   )
 }

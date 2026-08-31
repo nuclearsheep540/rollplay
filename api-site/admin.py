@@ -147,7 +147,7 @@ def _build_pause_command(db, session_repo):
         user_repository=UserRepository(db),
         character_repository=None,  # pause doesn't use it
         campaign_repository=CampaignRepository(db),
-        event_manager=EventManager(event_connection_manager, NotificationRepository(db)),
+        event_manager=EventManager(event_connection_manager, NotificationRepository(db), UserRepository(db)),
         asset_repository=MediaAssetRepository(db),
     )
 

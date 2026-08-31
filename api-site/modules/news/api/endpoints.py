@@ -11,6 +11,8 @@ from modules.news.api.schemas import (
     CreateNewsPostRequest,
     NewsBannerUrls,
     NewsImageListResponse,
+    NewsImageMoveRequest,
+    NewsImageMoveResponse,
     NewsImageResponse,
     NewsImageUploadRequest,
     NewsImageUploadResponse,
@@ -21,13 +23,17 @@ from modules.news.api.schemas import (
     UpdateNewsPostRequest,
 )
 from modules.news.application.commands import (
-    NEWS_IMAGE_PREFIX,
     CreateNewsPost,
+    DeleteNewsImage,
     DeleteNewsPost,
+    ImageInUseError,
     MarkNewsPostRead,
+    MoveNewsImage,
     PublishNewsPost,
     ToggleNewsPostLike,
     UpdateNewsPost,
+    image_prefix,
+    is_news_image_key,
 )
 from modules.news.application.queries import (
     GetAllNewsPosts,
@@ -138,19 +144,29 @@ def _to_summary_response(post: NewsPostAggregate, news_repo: NewsRepository) -> 
 
 @router.get("/images/", response_model=NewsImageListResponse)
 async def list_news_images(
+    post_id: Optional[UUID] = None,
     _admin: UserAggregate = Depends(require_admin),
     s3_service: S3Service = Depends(get_s3_service),
 ):
     """
-    The shared news image directory.
+    One scope of the news image store.
+
+    Omit `post_id` for the shared directory — images an author made reusable.
+    Pass one for that article's own images, which live loose in its folder.
 
     News images live outside the asset library on purpose: they are platform
-    editorial media, owned by nobody, reused across posts.
+    editorial media with no owner and no MediaAsset row.
     """
-    objects = s3_service.list_objects(f"{NEWS_IMAGE_PREFIX}/")
+    objects = s3_service.list_objects(f"{image_prefix(post_id)}/")
 
     images = []
     for item in objects:
+        # An article's folder holds its document alongside its images. The
+        # document is not an image, and offering it as a tile — with a delete
+        # control on it — is how an article gets destroyed by accident.
+        if not is_news_image_key(item["key"]):
+            continue
+
         images.append(NewsImageResponse(
             key=item["key"],
             url=s3_service.generate_download_url(item["key"]),
@@ -161,6 +177,68 @@ async def list_news_images(
     return NewsImageListResponse(images=images)
 
 
+@router.delete("/images/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_news_image(
+    key: str,
+    _admin: UserAggregate = Depends(require_admin),
+    news_repo: NewsRepository = Depends(news_repository),
+    s3_service: S3Service = Depends(get_s3_service),
+):
+    """
+    Delete a news image, in either scope.
+
+    Refuses while any post still uses it, naming them. S3 offers no undo, and
+    the check runs for article-scoped images too — the folder is a strong hint
+    about who uses an image, not a proof.
+    """
+    command = DeleteNewsImage(news_repo, s3_service)
+
+    try:
+        command.execute(key)
+    except ImageInUseError as in_use:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "This image is still used by a post",
+                "posts": in_use.post_titles,
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/images/move", response_model=NewsImageMoveResponse)
+async def move_news_image(
+    request: NewsImageMoveRequest,
+    _admin: UserAggregate = Depends(require_admin),
+    news_repo: NewsRepository = Depends(news_repository),
+    s3_service: S3Service = Depends(get_s3_service),
+):
+    """
+    Move an image between scopes.
+
+    Sharing an article's own image is always allowed. Claiming a shared image
+    for one article is refused while another still renders it — the refusal
+    names them, in the same shape delete uses, so the editor can say which.
+    """
+    command = MoveNewsImage(news_repo, s3_service)
+
+    try:
+        new_key = command.execute(request.key, request.target_post_id)
+    except ImageInUseError as in_use:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Another post still uses this image",
+                "posts": in_use.post_titles,
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return NewsImageMoveResponse(key=new_key)
+
+
 @router.post("/images/upload-url", response_model=NewsImageUploadResponse)
 async def create_news_image_upload_url(
     request: NewsImageUploadRequest,
@@ -168,13 +246,17 @@ async def create_news_image_upload_url(
     s3_service: S3Service = Depends(get_s3_service),
 ):
     """
-    Presign a PUT into the news image directory.
+    Presign a PUT into one scope of the news image store.
+
+    `post_id` chooses the scope, and choosing it here is the whole point: an
+    image is shared or private from the moment it is uploaded, rather than
+    being shared by default and discovered to be so at delete time.
 
     Deliberately NOT the library's upload-confirm flow: there is no MediaAsset
     row to create, so the upload completes when S3 accepts the bytes.
     """
     safe_filename = "".join(c for c in request.filename if c.isalnum() or c in ".-_")
-    key = f"{NEWS_IMAGE_PREFIX}/{uuid4().hex[:8]}_{safe_filename}"
+    key = f"{image_prefix(request.post_id)}/{uuid4().hex[:8]}_{safe_filename}"
 
     upload_url = s3_service.generate_upload_url(key, request.content_type)
 

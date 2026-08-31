@@ -57,6 +57,10 @@ body {
   --palette-onyx: #0B0A09;
   --palette-graphite: #37322F;
   --palette-silver: #B5ADA6;
+  /* The news noticeboard/editor writing surface. Mirrors PARCHMENT in
+     app/news/newsTokens.js, which is where JS consumers read it. */
+  --parchment: #FBF7EF;
+  --parchment-border: #E5DECF;
 
   /* Surface - backgrounds */
   --surface-primary: #F7F4F3;      /* smoke - main page bg */
@@ -1973,6 +1977,12 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 .news-prose ul { list-style: disc; }
 .news-prose ol { list-style: decimal; }
 .news-prose li { margin-bottom: 6px; }
+/* ProseMirror wraps every list item's content in a <p>, so the paragraph rule
+   above lands INSIDE each bullet and stacks its 18px on top of the item's own
+   margin. Zeroing it is what makes a list read as a list rather than as a
+   column of separate paragraphs. Notes carries the same rule for the same
+   reason. */
+.news-prose li > p { margin: 0; }
 
 .news-prose img {
   display: block;
@@ -2022,9 +2032,11 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 }
 
 .news-article-close {
-  /* Absolute, not fixed: the close button belongs to the article panel, which
-     now lives inside the app's content region rather than over the viewport. */
+  /* Anchored to the sheet, which does not scroll — so it stays reachable
+     however far into the article the reader has gone. Above the scrolling
+     content, which passes beneath it. */
   position: absolute;
+  z-index: 2;
   top: 18px;
   right: 22px;
   z-index: 10;
@@ -2114,6 +2126,24 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   background: rgba(31, 31, 31, 0.02);
 }
 
+/* Pinned to the top of the page's scroll region while the article scrolls
+   beneath. The card's own 24px padding is cancelled with negative margins so
+   the bar spans the full card width — otherwise text slides through the gap
+   either side of it. Opaque, because anything translucent lets the article
+   show through as it passes under. */
+.news-toolbar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 18px -24px 4px;
+  padding: 8px 24px;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+  background: var(--parchment);
+  box-shadow: 0 6px 12px -8px rgba(31, 31, 31, 0.25);
+}
+
 .news-tbtn {
   display: grid;
   place-items: center;
@@ -2126,7 +2156,8 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   cursor: pointer;
 }
 
-.news-tbtn:hover { background: rgba(31, 31, 31, 0.06); }
+.news-tbtn:hover:not(:disabled) { background: rgba(31, 31, 31, 0.06); }
+.news-tbtn:disabled { opacity: 0.35; cursor: default; }
 .news-tbtn.is-active { background: rgba(217, 164, 65, 0.25); color: #241c08; }
 
 .news-tbtn svg {
@@ -2267,40 +2298,6 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   stroke-linecap: round;
 }
 
-.news-thumb {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: grab;
-  text-align: left;
-}
-
-.news-thumb:active { cursor: grabbing; }
-
-.news-thumb-tile {
-  display: block;
-  aspect-ratio: 16 / 10;
-  border-radius: 6px;
-  border: 1px solid rgba(247, 244, 243, 0.12);
-  background-color: rgba(247, 244, 243, 0.04);
-  background-size: cover;
-  background-position: center;
-}
-
-.news-thumb:hover .news-thumb-tile { border-color: var(--gold); }
-
-.news-thumb-name {
-  display: block;
-  margin-top: 5px;
-  overflow: hidden;
-  color: var(--palette-silver);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* NEW! flair — lives in the UPDATES section header, never on the card: the
    banners are loud images bordering the content and a chip inside gets lost. */
 .news-new-chip {
@@ -2376,4 +2373,231 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 
 @media (prefers-reduced-motion: reduce) {
   .pulse-pill { transition: none; }
+}
+
+/* News image picker — choosing from our own store, not the author's disk. */
+.news-picker-tile {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.news-picker-thumb {
+  display: block;
+  aspect-ratio: 16 / 10;
+  border: 1px solid rgba(247, 244, 243, 0.12);
+  border-radius: 6px;
+  background-color: rgba(247, 244, 243, 0.04);
+  background-size: cover;
+  background-position: center;
+  transition: border-color 0.15s;
+}
+
+.news-picker-tile:hover .news-picker-thumb { border-color: var(--gold); }
+
+.news-picker-tile.is-draggable { cursor: grab; }
+.news-picker-tile.is-draggable:active { cursor: grabbing; }
+
+.news-picker-name {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--palette-silver);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Superscript glyph and the line-spacing select in the editor toolbars. */
+.news-tbtn-sup { font-size: 13px; font-weight: 700; }
+.news-tbtn-sup sup { font-size: 9px; }
+
+.news-tbtn-select {
+  height: 30px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #4c463e;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.news-tbtn-select:hover { background: rgba(31, 31, 31, 0.06); }
+
+/* Links inside a news article. Gold ink so they read as ours, underlined so
+   they read as links without relying on colour alone. */
+.news-prose a {
+  color: #9a7526;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.news-prose a:hover { color: #7a5c1e; }
+
+/* Image picker tiles carry their own delete control, revealed on hover. */
+.news-picker-cell { position: relative; }
+
+.news-picker-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(11, 10, 9, 0.75);
+  color: var(--palette-smoke);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.news-picker-cell:hover .news-picker-delete { opacity: 1; }
+.news-picker-delete:hover { background: #b03030; }
+
+.news-picker-delete svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.news-picker-confirm {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(11, 10, 9, 0.85);
+}
+
+.news-picker-confirm-yes,
+.news-picker-confirm-no {
+  border: none;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.news-picker-confirm-yes { background: #b03030; color: #fff; }
+.news-picker-confirm-no { background: rgba(247, 244, 243, 0.15); color: var(--palette-smoke); }
+
+/* An image belongs to one article or to all of them, and the tabs are where
+   that is chosen — at upload, rather than discovered at delete time. */
+.news-scope-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 7px;
+  background: rgba(247, 244, 243, 0.05);
+}
+
+.news-scope-tab {
+  flex: 1;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--palette-silver);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.news-scope-tab:hover { color: var(--palette-smoke); }
+
+.news-scope-tab.is-active {
+  background: var(--gold);
+  color: #241c08;
+}
+
+.news-scope-note {
+  margin: 9px 0 11px;
+  color: var(--palette-silver);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+/* Sits beside the delete control, not inside a wrapper: the delete confirm
+   overlays the whole tile, and a positioned wrapper would become its
+   containing block and shrink it into the corner. */
+.news-picker-move {
+  position: absolute;
+  top: 6px;
+  right: 32px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(11, 10, 9, 0.75);
+  color: var(--palette-smoke);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.news-picker-cell:hover .news-picker-move { opacity: 1; }
+.news-picker-move:hover { background: var(--gold); color: #241c08; }
+.news-picker-move:disabled { opacity: 0.5; cursor: default; }
+
+.news-picker-move svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-scope-tab,
+  .news-picker-move { transition: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-picker-delete { transition: none; }
+}
+
+/* The image rail stays alongside the article while it scrolls. Its own top
+   aligns with the sticky toolbar in the adjacent column. */
+.news-image-rail {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+}
+
+/* Four rows of thumbnails, then scroll.
+
+   Derived rather than guessed: the rail is 290px wide with 18px padding, so
+   the grid is 254px; two columns with a 10px gap makes each tile 122px, and
+   the 16:10 ratio makes it ~76px tall. Add ~18px for the filename and the row
+   is ~94px; four rows plus three 10px gaps is ~406px. Capping the GRID rather
+   than the rail keeps the upload button and the caption always visible. */
+.news-rail-grid {
+  max-height: 406px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Room for the scrollbar so it never sits over a thumbnail's delete button. */
+  padding-right: 4px;
 }

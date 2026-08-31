@@ -14,16 +14,26 @@ import NewsArticle from '@/app/news/components/NewsArticle'
 import NewsBannerSlot from '@/app/news/components/NewsBannerSlot'
 import NewsCard from '@/app/news/components/NewsCard'
 import NewsEditorToolbar from '@/app/news/components/NewsEditorToolbar'
+import NewsImagePicker from '@/app/news/components/NewsImagePicker'
+import NewsLinkModal from '@/app/news/components/NewsLinkModal'
 import NewsImageRail from '@/app/news/components/NewsImageRail'
-import { NEWS_EXTENSIONS, resolveImageUrls, toStorageDoc } from '@/app/news/components/NewsDocument'
+import {
+  NEWS_EDITOR_EXTENSIONS,
+  resolveImageUrls,
+  toStorageDoc,
+} from '@/app/news/components/NewsDocument'
 import { GOLD_INK, INK, PARCHMENT, PARCHMENT_BORDER } from '@/app/news/newsTokens'
 import {
   useDeleteNewsPost,
-  useNewsImages,
+  useNewsImageUrlLookup,
   useNewsPost,
   usePublishNewsPost,
   useUpdateNewsPost,
 } from '@/app/news/hooks/useNews'
+
+// How long a confirmation stays up. Long enough to be seen, short enough that
+// it never lingers as a claim about a save you have since moved on from.
+const SAVE_CONFIRMATION_MS = 4000
 
 const TABS = [
   { id: 'edit', label: 'EDIT' },
@@ -48,20 +58,20 @@ export default function NewsEditorPage() {
   const { user, loading: authLoading } = useAuth()
 
   const { data: post, isLoading } = useNewsPost(postId, { enabled: Boolean(user?.is_admin) })
-  const { data: imagesData } = useNewsImages({ enabled: Boolean(user?.is_admin) })
   const updatePost = useUpdateNewsPost()
   const publishPost = usePublishNewsPost()
   const deletePost = useDeleteNewsPost()
 
-  const imageUrlByKey = useMemo(() => {
-    const lookup = {}
-    for (const image of imagesData?.images || []) {
-      lookup[image.key] = image.url
-    }
-    return lookup
-  }, [imagesData])
+  // Both scopes at once: an article can reference its own images and shared
+  // ones in the same document, so resolving a key to a URL has to look in both.
+  const imageUrlByKey = useNewsImageUrlLookup(postId, { enabled: Boolean(user?.is_admin) })
 
   const [activeTab, setActiveTab] = useState('edit')
+  const [imagePickerOpen, setImagePickerOpen] = useState(false)
+  const [linkModalOpen, setLinkModalOpen] = useState(false)
+  // 'idle' | 'saved' | 'failed' — what to say about the LAST completed write.
+  // In-flight state comes from the mutations themselves.
+  const [saveState, setSaveState] = useState('idle')
   const [title, setTitle] = useState('')
   const [authorName, setAuthorName] = useState('')
   const [doc, setDoc] = useState(null)
@@ -91,7 +101,7 @@ export default function NewsEditorPage() {
   const editor = useEditor({
     immediatelyRender: false,
     content: post ? resolveImageUrls(post.doc, post.image_urls) : null,
-    extensions: NEWS_EXTENSIONS,
+    extensions: NEWS_EDITOR_EXTENSIONS,
     editorProps: {
       attributes: { class: 'news-prose focus:outline-none' },
     },
@@ -134,16 +144,36 @@ export default function NewsEditorPage() {
     }
   }, [post, title, authorName, doc, banners, imageUrlByKey])
 
+  /**
+   * Report the outcome of a write.
+   *
+   * A silent failure is the thing worth preventing: without this, a save that
+   * 500s looks exactly like one that worked, and the author walks away
+   * believing their edit is safe. Success clears itself after a moment;
+   * failure stays until the next attempt, because it is still true.
+   */
+  const reportOutcome = {
+    onSuccess: () => {
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), SAVE_CONFIRMATION_MS)
+    },
+    onError: () => setSaveState('failed'),
+  }
+
   const handleSave = () => {
-    updatePost.mutate({
-      postId,
-      payload: {
-        title,
-        author_name: authorName,
-        doc: doc || post.doc,
-        ...banners,
+    setSaveState('idle')
+    updatePost.mutate(
+      {
+        postId,
+        payload: {
+          title,
+          author_name: authorName,
+          doc: doc || post.doc,
+          ...banners,
+        },
       },
-    })
+      reportOutcome
+    )
   }
 
   const handleDelete = () => {
@@ -155,6 +185,54 @@ export default function NewsEditorPage() {
     // converts it back to its key, so only the key is ever persisted.
     const src = imageUrlByKey[key] || key
     editor?.chain().focus().setImage({ src }).run()
+  }
+
+  /**
+   * Place an image chosen in the picker.
+   *
+   * The picker hands over both the key and a signed URL: the URL renders now,
+   * and onUpdate converts it back to the key before anything is saved.
+   */
+  const placeImage = ({ key, url }) => {
+    editor?.chain().focus().setImage({ src: url || key }).run()
+  }
+
+  /**
+   * Apply a link to the selection.
+   *
+   * Returns whether it took: the schema rejects anything that is not a web or
+   * mail address, and the modal reports that rather than deciding for itself
+   * what counts as valid.
+   */
+  /**
+   * Start a link command against the right range.
+   *
+   * With a real selection, act on EXACTLY that — unlinking a trailing space
+   * must unlink the space, not the sentence it follows. Only when the
+   * selection is collapsed (a bare cursor sitting inside a link) is there
+   * nothing to act on, and widening to the whole link becomes the sole
+   * sensible reading.
+   *
+   * TipTap's own commands already behave correctly on a selection;
+   * extendMarkRange is an opt-in override, so it is applied only where it is
+   * actually needed rather than on every call.
+   */
+  const linkCommandChain = () => {
+    const chain = editor.chain().focus()
+    return editor.state.selection.empty ? chain.extendMarkRange('link') : chain
+  }
+
+  const applyLink = (url) => {
+    if (!editor) return false
+
+    linkCommandChain().setLink({ href: url }).run()
+    return editor.isActive('link')
+  }
+
+  const removeLink = () => {
+    if (!editor) return
+
+    linkCommandChain().unsetLink().run()
   }
 
   const bannerSlotKey = (position, surface) => `banner_${surface}_${position}`
@@ -224,6 +302,10 @@ export default function NewsEditorPage() {
           </div>
   
           <div className="flex items-center gap-3">
+            <SaveStatus
+              pending={updatePost.isPending || publishPost.isPending}
+              state={saveState}
+            />
             <button
               type="button"
               onClick={handleDelete}
@@ -240,12 +322,15 @@ export default function NewsEditorPage() {
               style={{ transform: SKEW_BOX, background: 'rgba(31,31,31,0.05)', border: '1px solid rgba(31,31,31,0.28)', color: '#37322F' }}
             >
               <span className="inline-block" style={{ transform: SKEW_LABEL }}>
-                {updatePost.isPending ? 'SAVING…' : 'SAVE DRAFT'}
+                {updatePost.isPending ? 'SAVING…' : post.published ? 'SAVE ARTICLE' : 'SAVE DRAFT'}
               </span>
             </button>
             <button
               type="button"
-              onClick={() => publishPost.mutate({ postId, published: !post.published })}
+              onClick={() => {
+              setSaveState('idle')
+              publishPost.mutate({ postId, published: !post.published }, reportOutcome)
+            }}
               disabled={publishPost.isPending}
               className="rounded-lg px-[22px] py-3 text-[13px] font-semibold tracking-wider disabled:opacity-50"
               style={{ transform: SKEW_BOX, backgroundColor: COLORS.gold, color: '#241C08' }}
@@ -309,7 +394,11 @@ export default function NewsEditorPage() {
                 onClear={() => setBanner('top', topSurface, null)}
               />
   
-              <NewsEditorToolbar editor={editor} />
+              <NewsEditorToolbar
+              editor={editor}
+              onPickImage={() => setImagePickerOpen(true)}
+              onEditLink={() => setLinkModalOpen(true)}
+            />
   
               <div className="px-2 pt-5 pb-6">
                 <EditorContent editor={editor} />
@@ -325,7 +414,22 @@ export default function NewsEditorPage() {
               />
             </section>
   
-            <NewsImageRail onInsert={insertImage} />
+            <NewsImageRail postId={postId} onInsert={insertImage} />
+
+            <NewsImagePicker
+              open={imagePickerOpen}
+              onClose={() => setImagePickerOpen(false)}
+              postId={postId}
+              onSelect={placeImage}
+            />
+
+            <NewsLinkModal
+              open={linkModalOpen}
+              initialUrl={editor?.getAttributes('link').href || ''}
+              onClose={() => setLinkModalOpen(false)}
+              onSubmit={applyLink}
+              onRemove={removeLink}
+            />
           </div>
         )}
   
@@ -358,5 +462,36 @@ export default function NewsEditorPage() {
         )}
       </div>
     </main>
+  )
+}
+
+/**
+ * What happened to the last write.
+ *
+ * Wording follows the notes editor's vocabulary so save states read the same
+ * across the app, adapted for a manual save: there is no "unsaved changes"
+ * here because the author decides when to write.
+ */
+function SaveStatus({ pending, state }) {
+  if (pending) {
+    return <StatusText color="#6B6459">Saving…</StatusText>
+  }
+
+  if (state === 'saved') {
+    return <StatusText color="#4C7A4C">Saved</StatusText>
+  }
+
+  if (state === 'failed') {
+    return <StatusText color="#B03030">Could not save — try again</StatusText>
+  }
+
+  return null
+}
+
+function StatusText({ color, children }) {
+  return (
+    <span className="text-[12px] font-semibold" style={{ color }}>
+      {children}
+    </span>
   )
 }

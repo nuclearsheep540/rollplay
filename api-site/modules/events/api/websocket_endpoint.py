@@ -23,13 +23,50 @@ jwt_helper = JWTHelper()
 PRESENCE_LOG_TAG = "PRESENCE"
 
 
-async def _broadcast_presence(user_id: str, screen_name: str, came_online: bool):
+def _record_disconnect(user_id: str):
+    """
+    Stamp when this user's last connection closed.
+
+    That timestamp is what lets the next connection tell a page refresh from a
+    genuine return, so it must be written before the reconnect arrives — which
+    in practice means synchronously, here, as the socket closes.
+
+    Swallows its errors for the same reason presence does: a failed stamp costs
+    one spurious "came online" later, which is not worth an exception on a
+    socket that is already closing.
+    """
+    try:
+        with SessionLocal() as db:
+            user_repo = UserRepository(db)
+            user = user_repo.get_by_id(UUID(user_id))
+            if not user:
+                return
+            user.record_disconnect()
+            user_repo.save(user)
+    except Exception as e:
+        logger.error(f"{PRESENCE_LOG_TAG}: could not stamp last_seen for {user_id}: {e}", exc_info=True)
+
+
+async def _broadcast_presence(
+    user_id: str,
+    screen_name: str,
+    came_online: bool,
+    announce: bool = True
+):
     """
     Tell a user's accepted friends that they came online or went offline.
 
     Presence rides the existing per-user event socket: EventManager skips
     recipients who aren't connected, which is exactly the semantics presence
     wants — an offline friend has no presence to update.
+
+    Args:
+        user_id: The user whose presence changed
+        screen_name: Their display name
+        came_online: True for an arrival, False for a departure
+        announce: Whether the arrival is worth telling people about. False
+            delivers the event silently so clients still repaint presence —
+            see UserAggregate.returned_after_absence.
 
     Failures are logged and swallowed: presence is ambient, and it must never
     take down the socket it is announcing.
@@ -42,6 +79,7 @@ async def _broadcast_presence(user_id: str, screen_name: str, came_online: bool)
         # EventManager is built inside the same scope, mirroring what the HTTP
         # provider (events/dependencies/providers.py) does per request.
         with SessionLocal() as db:
+            user_repo = UserRepository(db)
             friendships = FriendshipRepository(db).get_user_friendships(subject_id)
 
             friend_ids = []
@@ -52,14 +90,16 @@ async def _broadcast_presence(user_id: str, screen_name: str, came_online: bool)
                 return
 
             if came_online:
-                events = FriendshipEvents.friend_online(friend_ids, subject_id, screen_name)
+                events = FriendshipEvents.friend_online(
+                    friend_ids, subject_id, screen_name, announce=announce
+                )
             else:
                 events = FriendshipEvents.friend_offline(friend_ids, subject_id, screen_name)
 
             # Presence never persists, so the notification repository goes
             # unused — but EventManager owns that decision via save_notification,
             # and handing it a real one keeps this identical to every other caller.
-            event_manager = EventManager(event_connection_manager, NotificationRepository(db))
+            event_manager = EventManager(event_connection_manager, NotificationRepository(db), user_repo)
             for event in events:
                 await event_manager.broadcast(event)
 
@@ -129,6 +169,10 @@ async def websocket_events_endpoint(websocket: WebSocket):
         user_id = str(user.id)
         screen_name = user.screen_name or user.account_name or "A friend"
 
+        # Decided BEFORE connecting: the answer depends on how long they were
+        # away, and that gap only exists until this connection replaces it.
+        returning = user.returned_after_absence()
+
         came_online = await event_connection_manager.connect(websocket, user_id)
 
         await websocket.send_json({
@@ -144,7 +188,9 @@ async def websocket_events_endpoint(websocket: WebSocket):
         logger.info(f"WebSocket connected for user {user_id} ({email})")
 
         if came_online:
-            await _broadcast_presence(user_id, screen_name, came_online=True)
+            await _broadcast_presence(
+                user_id, screen_name, came_online=True, announce=returning
+            )
 
         while True:
             try:
@@ -177,4 +223,5 @@ async def websocket_events_endpoint(websocket: WebSocket):
             logger.info(f"WebSocket disconnected for user {user_id}")
 
             if went_offline:
+                _record_disconnect(user_id)
                 await _broadcast_presence(user_id, screen_name, came_online=False)

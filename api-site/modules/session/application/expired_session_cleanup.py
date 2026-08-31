@@ -55,7 +55,7 @@ async def _run_cleanup_pass() -> None:
             user_repository=UserRepository(db),
             character_repository=None,  # pause doesn't use it
             campaign_repository=CampaignRepository(db),
-            event_manager=EventManager(event_connection_manager, NotificationRepository(db)),
+            event_manager=EventManager(event_connection_manager, NotificationRepository(db), UserRepository(db)),
             asset_repository=MediaAssetRepository(db),
         )
         for session in expired:

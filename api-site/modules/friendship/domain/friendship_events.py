@@ -72,16 +72,28 @@ class FriendshipEvents:
         )
 
     @staticmethod
-    def friend_online(friend_ids: List[UUID], user_id: UUID, screen_name: str) -> List[EventConfig]:
+    def friend_online(
+        friend_ids: List[UUID],
+        user_id: UUID,
+        screen_name: str,
+        announce: bool = True
+    ) -> List[EventConfig]:
         """
         Event: A user came online (their first live events-socket connection).
 
         Sent only to that user's accepted friends — presence is never public.
 
+        The event ALWAYS goes out, because the client repaints presence by
+        refetching when it arrives; suppressing it would leave a friend's dot
+        stale. What `announce` controls is whether anyone is TOLD: a user
+        returning from a refresh needs the repaint but not the fanfare.
+
         Args:
             friend_ids: Accepted friends of the user who came online
             user_id: The user who came online
             screen_name: Their display name
+            announce: False for a reconnection inside the grace window —
+                delivers silently, with no toast and no pulse pill
 
         Returns:
             List[EventConfig] (one per friend)
@@ -95,8 +107,9 @@ class FriendshipEvents:
                     "user_id": str(user_id),
                     "screen_name": screen_name
                 },
-                show_toast=True,
-                save_notification=False  # Presence is a now-state, never a notification row
+                show_toast=announce,
+                save_notification=False,  # Presence is a now-state, never a notification row
+                show_pulse=announce
             ))
         return events
 

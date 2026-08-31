@@ -3,6 +3,9 @@
 
 'use client'
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faArrowRightLong } from '@fortawesome/free-solid-svg-icons'
+
 import LikeButton from './LikeButton'
 import { PARCHMENT, PARCHMENT_BORDER, GOLD_INK, formatNewsDate } from '../newsTokens'
 
@@ -68,16 +71,20 @@ export default function NewsCard({ post, onOpen, interactive = true }) {
         {excerpt}
       </p>
 
-      {/* READ MORE always precedes the bottom banner in the column, so enabling
-          a banner can never push the call to action below the fold. */}
+      {/* Seated directly under the excerpt — it ends the reading, not the card.
+          mb-auto puts the column's slack BELOW the button rather than above it,
+          which is what used to strand it mid-card when no banner followed. The
+          banner still lands on the bottom edge, and keeps its own 20px top
+          margin so the gap survives a card with no slack to give. */}
       <button
         type="button"
         onClick={onOpen}
         disabled={!interactive}
-        className="mt-auto self-start pt-4 text-[12.5px] font-semibold tracking-wider transition-colors"
+        className="mb-auto flex items-center gap-2 self-start pt-4 text-[12.5px] font-semibold tracking-wider transition-colors"
         style={{ color: GOLD_INK }}
       >
-        READ MORE →
+        READ MORE
+        <FontAwesomeIcon icon={faArrowRightLong} className="text-[11px]" />
       </button>
 
       {bottomBanner && (

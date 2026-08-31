@@ -1,11 +1,24 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Optional
-from uuid import UUID
+from typing import Any, Dict, List, Optional
+from uuid import UUID, uuid4
 import re
+
+# How long a user must be gone before coming back is worth announcing. Covers
+# a refresh, an HMR remount or a flaky moment of network without telling every
+# friend the user left and returned.
+PRESENCE_GRACE_SECONDS = 30
+
+# The pulse is a sensor reading, not a log: it holds the few most recent things
+# that happened near this user and forgets them soon after. Both bounds are
+# deliberate — the cap keeps the line glanceable, the lifetime keeps it honest,
+# because a pill saying "came online" is a claim about NOW.
+MAX_PULSE_EVENTS = 5
+PULSE_EVENT_LIFETIME_SECONDS = 6 * 60 * 60
+
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -37,10 +50,15 @@ class UserAggregate:
     screen_name: str  # NOT NULL; "" = not-yet-set (the FE name modal prompts on empty)
     created_at: datetime
     last_login: Optional[datetime] = None
+    last_seen: Optional[datetime] = None  # When their last live connection closed
     friend_code: Optional[str] = None  # DEPRECATED - use account_name + account_tag
     account_name: Optional[str] = None  # Immutable username (e.g., "claude")
     account_tag: Optional[str] = None  # 4-digit discriminator (e.g., "2345")
     color: Optional[str] = None  # Identity color hex from USER_COLORS; None = not chosen
+    # The user's pulse — newest first, capped and self-expiring. A value the
+    # user owns rather than a relation: bounded, always read whole, and
+    # meaningless split into rows. default_factory, never a shared list.
+    pulse_events: List[Dict[str, Any]] = field(default_factory=list)
     max_slots: int = 4  # Character capacity; DB CHECK caps at 8
 
     @property
@@ -107,6 +125,126 @@ class UserAggregate:
         Updates the last_login field to current UTC time.
         """
         self.last_login = utc_now()
+
+    def record_pulse_event(
+        self,
+        event_type: str,
+        data: Dict[str, Any],
+        lifetime_seconds: int = PULSE_EVENT_LIFETIME_SECONDS
+    ) -> Dict[str, Any]:
+        """
+        Add something that just happened near this user to their pulse.
+
+        The bucket maintains itself on every write — expired entries drop, a
+        repeat of something already showing is refreshed rather than stacked,
+        and the oldest falls off once the cap is reached. That is what removes
+        the need for any scheduled cleanup: a bucket is only ever tidied by
+        being used, and an untouched one is already bounded at MAX_PULSE_EVENTS.
+
+        Repeats are matched on event type AND payload, so the same friend
+        logging in twice in an evening occupies one slot rather than crowding
+        out four other things. A different friend is a different payload, so
+        they never collapse into each other.
+
+        Args:
+            event_type: The event's routing key (e.g. 'friend_online')
+            data: The event payload, as broadcast
+            lifetime_seconds: How long this entry stays true
+
+        Returns:
+            The stored entry
+        """
+        now = utc_now()
+
+        entry = {
+            "id": str(uuid4()),
+            "event_type": event_type,
+            "data": data,
+            "created_at": now.isoformat(),
+            "expires_at": (now + timedelta(seconds=lifetime_seconds)).isoformat(),
+        }
+
+        kept = []
+        for existing in self.active_pulse_events(now):
+            is_repeat = existing["event_type"] == event_type and existing["data"] == data
+            if not is_repeat:
+                kept.append(existing)
+
+        # Newest first: the line reads left-to-right from the pulse source.
+        self.pulse_events = [entry] + kept[:MAX_PULSE_EVENTS - 1]
+
+        return entry
+
+    def active_pulse_events(self, now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        """
+        The pulse entries that are still true.
+
+        Expiry is applied on READ as well as on write, so an entry that lapsed
+        while nothing was happening is invisible immediately rather than
+        lingering until the next event tidies it away.
+
+        Args:
+            now: The moment to judge against; defaults to the current time
+
+        Returns:
+            Unexpired entries, newest first
+        """
+        moment = now if now is not None else utc_now()
+
+        active = []
+        for entry in self.pulse_events or []:
+            expires_at = entry.get("expires_at")
+            if not expires_at:
+                continue
+
+            # Stored by us as an ISO string with an offset, so this round-trips
+            # aware — unlike the naive DateTime columns elsewhere on this model.
+            if datetime.fromisoformat(expires_at) > moment:
+                active.append(entry)
+
+        return active
+
+    def record_disconnect(self):
+        """
+        Stamp the moment this user's last live connection closed.
+
+        Only the LAST connection counts — closing one of several tabs does not
+        mean the user left, so the caller decides when this applies.
+        """
+        self.last_seen = utc_now()
+
+    def returned_after_absence(self, grace_seconds: int = PRESENCE_GRACE_SECONDS) -> bool:
+        """
+        Whether this reconnection is a genuine return worth announcing.
+
+        A page refresh or a remount drops and remakes the connection within a
+        second or two; announcing that to every friend would spam them for a
+        thing that never happened. Anyone who has actually been away longer
+        than the grace window is treated as arriving.
+
+        A user with no recorded absence (first ever connection, or an
+        api-site restart having cleared nothing but memory) counts as
+        returning — announcing a real arrival is the safer failure.
+
+        Args:
+            grace_seconds: How long an absence must last to count as leaving
+
+        Returns:
+            True when friends should be told, False for a blink
+        """
+        if self.last_seen is None:
+            return True
+
+        # Every datetime column on `users` is naive (the table's convention),
+        # so a value read back from the database has lost the offset that
+        # utc_now() gave it. It is UTC — nothing else ever writes here — so
+        # reattaching the timezone is a restatement, not a conversion.
+        last_seen = self.last_seen
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+
+        away_for = utc_now() - last_seen
+        return away_for >= timedelta(seconds=grace_seconds)
 
     def update_screen_name(self, screen_name: str):
         """

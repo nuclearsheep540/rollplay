@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
@@ -54,13 +55,41 @@ export function useNewsPost(postId, { enabled = true } = {}) {
   })
 }
 
-/** The shared news image directory. */
-export function useNewsImages({ enabled = true } = {}) {
+/**
+ * One scope of the news image store.
+ *
+ * `postId` null reads the shared directory; a post id reads that article's own
+ * images. The two cache separately, so uploading into one scope never makes
+ * the other refetch — and the editor's two tabs stay independent.
+ */
+export function useNewsImages(postId = null, { enabled = true } = {}) {
   return useQuery({
-    queryKey: ['news', 'images'],
-    queryFn: () => requestJson('/api/news/images/'),
+    queryKey: ['news', 'images', postId || 'shared'],
+    queryFn: () =>
+      requestJson(postId ? `/api/news/images/?post_id=${postId}` : '/api/news/images/'),
     enabled,
   })
+}
+
+/**
+ * Every image an article can render, as a key → signed URL map.
+ *
+ * The editor works in URLs while the document stores keys, and a post can
+ * reference both scopes at once, so resolving an image means asking both. Both
+ * queries are the same ones the browser tabs use, so this costs no extra
+ * request once the editor is open.
+ */
+export function useNewsImageUrlLookup(postId, { enabled = true } = {}) {
+  const shared = useNewsImages(null, { enabled })
+  const article = useNewsImages(postId, { enabled: enabled && Boolean(postId) })
+
+  return useMemo(() => {
+    const lookup = {}
+    for (const image of [...(shared.data?.images || []), ...(article.data?.images || [])]) {
+      lookup[image.key] = image.url
+    }
+    return lookup
+  }, [shared.data, article.data])
 }
 
 export function useCreateNewsPost() {
@@ -124,7 +153,21 @@ export function useToggleNewsLike() {
 
   return useMutation({
     mutationFn: (postId) => requestJson(`/api/news/${postId}/like`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['news', 'latest'] }),
+    // Patch the cached post rather than invalidating it. A refetch would hand
+    // back a post object with freshly signed banner and image URLs, so every
+    // picture in the card and article would reload — a visible remount for
+    // what is a two-field change. The server's response is authoritative for
+    // both fields, so nothing is being guessed here.
+    onSuccess: (result, postId) => {
+      queryClient.setQueryData(['news', 'latest'], (current) =>
+        current && current.id === postId
+          ? { ...current, liked: result.liked, like_count: result.like_count }
+          : current
+      )
+      queryClient.setQueryData(['news', 'post', postId], (current) =>
+        current ? { ...current, liked: result.liked, like_count: result.like_count } : current
+      )
+    },
   })
 }
 
@@ -138,7 +181,77 @@ export function useMarkNewsRead() {
 }
 
 /**
- * Upload an image into the shared news image directory.
+ * Remove an image, in either scope.
+ *
+ * Rejects with the server's explanation when posts still use it — the message
+ * names them, so the caller can say which rather than just refusing.
+ */
+export function useDeleteNewsImage() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (key) => {
+      const response = await authFetch(`/api/news/images/?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(
+          body?.detail?.posts?.length
+            ? `Still used by: ${body.detail.posts.join(', ')}`
+            : 'Could not delete this image'
+        )
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['news', 'images'] }),
+  })
+}
+
+/**
+ * Move an image between scopes.
+ *
+ * `targetPostId` null promotes it to the shared directory; a post id claims it
+ * for that article. The server refuses a claim while another article still
+ * renders it, and its message names them.
+ */
+export function useMoveNewsImage() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ key, targetPostId = null }) => {
+      const response = await authFetch('/api/news/images/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ key, target_post_id: targetPostId }),
+      })
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(
+          body?.detail?.posts?.length
+            ? `Still used by: ${body.detail.posts.join(', ')}`
+            : 'Could not move this image'
+        )
+      }
+
+      return response.json()
+    },
+    // Both listings change — the image left one and joined the other — and so
+    // does every post whose references were rewritten to follow it.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['news', 'images'] })
+      queryClient.invalidateQueries({ queryKey: ['news', 'post'] })
+      queryClient.invalidateQueries({ queryKey: ['news', 'latest'] })
+    },
+  })
+}
+
+/**
+ * Upload an image into one scope of the news image store.
  *
  * Two steps, not three: presign, then PUT the bytes straight to S3. There is no
  * confirm call because news images have no MediaAsset row to create — they are
@@ -148,10 +261,13 @@ export function useUploadNewsImage() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (file) => {
+    // The scope travels with the file: an image is shared or private from the
+    // moment it lands, rather than being shared by default and discovered to
+    // be so when someone tries to delete it.
+    mutationFn: async ({ file, postId = null }) => {
       const { upload_url: uploadUrl, key } = await requestJson('/api/news/images/upload-url', {
         method: 'POST',
-        body: JSON.stringify({ filename: file.name, content_type: file.type }),
+        body: JSON.stringify({ filename: file.name, content_type: file.type, post_id: postId }),
       })
 
       // Direct to S3 against a presigned URL — plain fetch is correct here.
@@ -170,6 +286,7 @@ export function useUploadNewsImage() {
 
       return key
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['news', 'images'] }),
+    onSuccess: (key, { postId }) =>
+      queryClient.invalidateQueries({ queryKey: ['news', 'images', postId || 'shared'] }),
   })
 }
