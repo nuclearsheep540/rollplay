@@ -201,6 +201,10 @@ alias config. Presigned URLs resolve via the alias → source `s3_key`.
 - Marketplace: shared/public visibility, the "copy file once into a marketplace bucket" flow, and
   cross-user ownership of aliases.
 - Upload-time content-hash dedup.
+- **News/updates media (added 2026-08-31, Matt's call):** article images and banners for the
+  Home news feature upload to their own S3 bucket keys and deliberately bypass `MediaAsset` —
+  so they are ALSO excluded from this split. They are platform editorial content, not user
+  library media; nothing here (sources, aliases, locks, revocation) applies to them.
 
 ## Open sub-decisions (resolve during build)
 1. **Assign = move vs copy:** does assigning a library alias to a campaign set its `campaign_id`
