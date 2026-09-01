@@ -57,8 +57,6 @@ class GetUserDashboard:
         # Calculate dashboard metrics
         total_campaigns = len(campaigns)
         total_sessions = sum(campaign.get_total_sessions() for campaign in campaigns)
-        # TODO: Query session repository for active session count
-        active_sessions = 0
 
         return {
             'user': user,
@@ -66,7 +64,6 @@ class GetUserDashboard:
             'metrics': {
                 'total_campaigns': total_campaigns,
                 'total_sessions': total_sessions,
-                'active_sessions': active_sessions,
                 'is_dm': total_campaigns > 0
             }
         }

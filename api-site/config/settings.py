@@ -3,7 +3,7 @@
 
 import os
 from enum import Enum
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Set
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
 
+    # Admin allowlist. Empty default = nobody is an admin, so a missing env var
+    # fails closed rather than opening the door.
+    ADMIN_EMAILS: str = Field(
+        default='',
+        description="Comma-separated admin email allowlist, read from the runtime env file (dev.env/prod.env)"
+    )
+
     # AWS S3 Configuration
     AWS_ACCESS_KEY_ID: str = Field(..., description="AWS access key for S3 asset storage")
     AWS_SECRET_ACCESS_KEY: str = Field(..., description="AWS secret key for S3 asset storage")
@@ -73,6 +80,28 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """True when running as production."""
         return self.ENVIRONMENT is Environment.production
+
+    @property
+    def admin_email_set(self) -> Set[str]:
+        """
+        The admin allowlist as a lowercased set, parsed from ADMIN_EMAILS.
+
+        Read the raw value ONCE, here, so every consumer compares against the
+        same normalised set rather than splitting the string its own way.
+
+        Freshness: BaseSettings snapshots the environment when Settings() is
+        constructed (module import, i.e. boot), and compose injects the runtime
+        env file when it CREATES the container. Editing dev.env/prod.env
+        therefore takes effect on `up -d` (recreate), not on `restart`.
+        Real environment variables always outrank the model_config env_file,
+        which is why no `.env` needs to exist inside the container.
+        """
+        emails = set()
+        for raw_email in self.ADMIN_EMAILS.split(','):
+            email = raw_email.strip().lower()
+            if email:
+                emails.add(email)
+        return emails
 
     @property
     def cfd_private_key_path(self) -> Optional[str]:

@@ -85,7 +85,6 @@ class CampaignResponse(BaseModel):
     member_ids: List[str] = []  # All joined members regardless of role (excludes INVITED)
     members: List[CampaignMemberResponse] = []  # Full member detail (username + character)
     total_sessions: int = 0
-    active_sessions: int = 0
     invited_count: int = 0
     player_count: int = 0
 
@@ -106,7 +105,6 @@ class CampaignSummaryResponse(BaseModel):
     updated_at: datetime
     last_played_at: Optional[datetime] = None
     total_sessions: int = 0
-    active_sessions: int = 0
     invited_player_ids: List[str] = []
     player_ids: List[str] = []
     member_ids: List[str] = []  # All joined members regardless of role (excludes INVITED)

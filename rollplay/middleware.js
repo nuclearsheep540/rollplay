@@ -12,6 +12,7 @@ const PROTECTED_ROUTES = [
   '/game',
   '/workshop',
   '/notes',
+  '/news',
   '/profile',
   '/settings'
 ]

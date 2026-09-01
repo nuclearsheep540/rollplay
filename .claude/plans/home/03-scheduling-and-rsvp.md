@@ -65,3 +65,12 @@ Verified by code sweep — [dependency-audit.md](dependency-audit.md) §2:
 1. Backend: `scheduled_at` + RSVP model/migrations, endpoints, events.
 2. Scheduling UI (GM) + RSVP flow (player) + notifications.
 3. Home integration: ranking middle slot, hero/card Scheduled state, greeting meta.
+
+# matt's impromptu thought
+im thinking where schedule lives, and im thinking the most sense is it lives in the session model, therefore, a GM has a campaign and says 'were going to play next week monday', they dont schedule in the campaign, instead they create a new session (forcing them to stop any current ones - which is good for us because it unlocks media/characters) (and also a session is required for our campaign hero to look up) and the session create form has an optional field 'schedule: date'. This model column is nothing more than cosmetic though, we're not automatically starting sessions or policing anything, this whole 'schedule' concept is cosmetic and communicative data only, i.e, just because GM said next session is monday and wrote that in the session - it doesnt change anything, all it does it let the players know intent and helps align users (thats the facilitate dont enforce rule being applied) does that make sense? next time you read this in a plan please validate.
+
+I also notice that this plan mentions RSVP, but we really dont need that at this v1 stage, we can just have 'next schedulled' and players know - the reality of it is the date was very much likely pre-agreed in person, hence why its added. so no RSVP, just schedule. This one shouldnt be too complicated.
+
+Another food for thought is that schedulling = time, and our current time in the home page = time. time is currently read from the server's time based on where its deployed, but with all things time - we need to adjust for timezones. Server time is GMT+01, and im GMT+0, so we'd need to have timezones set for users so we can offset scheduled time, so if a user in GMT+1 see's the scheduled time to start at 2pm, for users in GMT+0 that means 1pm, so we need to get that right - and then also ensure the home page is adjusted for the user's time
+
+if its not already in this plan, the idea of pausing/ending a session from the game runtime needs to be shipped with this feature to enable the user-flow.

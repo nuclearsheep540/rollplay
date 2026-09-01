@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import logging
+from typing import Optional
 from uuid import UUID
 from fastapi import Depends, HTTPException, Request, status
 
+from config.settings import Settings
 from shared.jwt_helper import JWTHelper
 from modules.user.dependencies.providers import user_repository
 from modules.user.repositories.user_repository import UserRepository
@@ -14,6 +16,24 @@ logger = logging.getLogger(__name__)
 
 # Initialize JWT helper (singleton for performance)
 jwt_helper = JWTHelper()
+
+# Env snapshot taken at import (boot). See Settings.admin_email_set for why
+# changing the allowlist means recreating the container, not restarting it.
+settings = Settings()
+
+
+def is_admin_email(email: Optional[str]) -> bool:
+    """
+    Whether an email is on the admin allowlist.
+
+    Adminhood is evaluated, never stored: no column, no JWT claim, no cache.
+    Both consumers — this module's require_admin and UserResponse.is_admin —
+    read the same parsed set, so revoking an admin takes effect for everyone
+    the moment the container is recreated.
+    """
+    if not email:
+        return False
+    return email.lower() in settings.admin_email_set
 
 
 async def get_current_user_id(request: Request) -> UUID:
@@ -123,6 +143,35 @@ async def get_current_user_from_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
+        )
+
+    return user
+
+async def require_admin(
+    user: UserAggregate = Depends(get_current_user_from_token)
+) -> UserAggregate:
+    """
+    FastAPI dependency gating a route to allowlisted admins.
+
+    Runs after authentication, so the email compared is the one resolved from
+    the database for this request — not a claim the client could carry.
+
+    Args:
+        user: The authenticated user, injected by get_current_user_from_token
+
+    Returns:
+        UserAggregate: The authenticated admin
+
+    Raises:
+        HTTPException: 403 when the user is authenticated but not allowlisted.
+            Deliberately not 404 — the caller is a real user, and hiding the
+            route's existence buys nothing when the client already renders it.
+    """
+    if not is_admin_email(user.email):
+        logger.warning(f"ADMIN: rejected non-admin access by user {user.id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required"
         )
 
     return user

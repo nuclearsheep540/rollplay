@@ -43,7 +43,7 @@ Agreed in the chat conversation, reconfirmed here. Do not reopen without new inf
 | Greeting | "Welcome back, {screen_name}" + a rotating **flavor tagline** — silly, personal, templated over cheap existing fields ("{character} still hasn't forgiven you for that critical fail in {campaign} on {date_last_played}"). Pure texture: the tagline never carries status or actionable state — one actionable home per fact, and status belongs to the hero/Pulse/invite card. The live-status meta line is CUT (2026-08-28). (Adventure logs are persisted, so log-derived taglines — real nat-1s — are feasible one day; v1 is a dumb template bank) |
 | Pending invites | DECIDED 2026-08-28, **reworked 2026-08-29 (the switcheroo — supersedes the dealt-on-top version)**: the hero is NEVER occluded at rest — the hero-sized invite **tucks UNDER** the hero's bottom-right (parallel 8° slants expose a constant band; a bare gold "!" wiggles on the exposed corner: ±20°, two oscillations in 1s, 2s rest). Clicking swaps the two cards EXACTLY — the invite takes the hero's position while the hero slides into the vacated tuck slot, still a live card (no dimming; clicking its band swaps back). The tuck slot's space is permanently reserved so toggling never shifts the page. Multiple invites = a deeper under-stack, one promotion at a time. Mechanics kept: Accept = one tap; Decline = **two-step confirm on the card** (nothing sent until confirmed); drag/swipe bonus only |
 | Pulse | Site-level ambient awareness — "what's happening on the site": friends online, players in session, now-playing music (the music line needs an api-site→api-game hot-state read; it ships when that plumbing exists). Strictly what the user is entitled to see: sessions the user isn't a member of are **never exposed** — the chat's opt-in spectate idea was rejected outright as a privacy violation (2026-08-28). A now-snapshot, not a history feed, and not in-game peeks — the fan-out in-game activity feed (nat 20s, level-ups; old `TODO-social-live-pulse.md`) was retired 2026-08-28 as too D&D-shaped for the system-agnostic direction. Quiet state must read as alive; every item actionable; sharing a user's own activity (e.g. their Spotify track) must be visible and opt-out-able. **Form (2026-08-28, ticker model 2026-08-29): a line, not a region** — breathing gold dot clamped hard left (the pulse *source*) + overlapping avatar coins + an event ticker emitting from the dot (each event a discrete quiet pill; new one slides in beside the dot, older pills slide right and dim with age, oldest drops off; width-aware cap, max 4); **a dimmer, not a switch**: intensity (breath rate, glow, coin count, text specificity) scales with **weighted activity** — a user in-session awaiting players weighs most; online and editing a character / writing notes pre-session weighs more than idling on the dashboard; merely logged in weighs least; a scheduled session drawing near raises the baseline. **No modes (2026-08-29)**: busy-ness is a continuous dial — the weighted score interpolates breath, coins, and cadence; a **live session is content, not a state**: a sticky gold pill at the head of the line carrying its own Join action, raising the activity floor while the ticker keeps flowing behind it. Calm is championed: at rest the lone pill names the next scheduled thing ("All quiet · next game Thursday 20:00"). Placement (2026-08-29): a full-width **divider** directly beneath the hero — the edge of the table; it owns a sliver of space even when quiet |
-| What's new | Authored editorial news: eye-catching card (campaign-art visual language) → full-screen modal with rich content. TipTap-authored, PostgreSQL-stored. NOT release-changelog-driven, NOT a feed |
+| What's new | Authored editorial news: eye-catching card (campaign-art visual language) → full-screen modal with rich content. TipTap-authored. NOT release-changelog-driven, NOT a feed. (2026-08-31: content doc + images stored in S3 so news survives a dev DB wipe; images bypass MediaAsset and the media-source split; authoring = a standalone admin editor view — detail in [02](02-live-panels-and-news.md)) |
 | Admin access | Env-var allowlist (`ADMIN_EMAILS` in dev/prod.env) + `require_admin` request-time dependency. No DB role column, no admin claims in JWT. Lands in stage 2 with news authoring — first feature that needs it |
 | Demo campaign | **Retire it** (auto-grant in campaign endpoints). The empty-state onboarding hero becomes the real first-run experience |
 | Empty state | REVISED 2026-08-29 (supersedes the create-first hero): **onboarding ≠ creating a campaign** — most users will be players, not GMs, so the hero never pushes creation. Hero empty state is **invite-centric** ("invites from your GM arrive right here" — literally true, the invite deck lands on this card; there is no join-by-code and none is planned). The create door is the working-on card's always-present template variant (see Working-on row). A new campaign reaches the hero via its SESSION, not its mere existence (see Hero eligibility row): today creation auto-creates the session, so it appears in both slots at once (hero to play, working-on to build); once [05](05-campaign-create-and-publish.md) hands session creation to the publish seal, the hero waits for it. Later: browse the Market |
@@ -218,6 +218,7 @@ owning their scope.)
      frontend file. So the `active_session_id` replacement would be orphaned
      infrastructure; the honest treatment is deleting the dead hardcoded int. (Home reads
      liveness from the embedded sessions array instead.) Decide at extraction.
+     **DECIDED 2026-08-31: delete it** (Matt confirmed — never computed, no readers).
    - **The live seat count** (`active_session_members` fed from api-game) — unchanged,
      still needs its own scoping incl. the api-game unauthenticated-HTTP constraint.
 4. **Scheduling + RSVP** (stage 3, promoted 2026-08-29: it hangs off aggregates that
@@ -230,10 +231,19 @@ owning their scope.)
    Needs 3 + 4.
 6. **Tagline template bank** — small, pure texture, any time after 1.
 7. **News vertical** — admin infra → news module → authoring → Home card + likes + NEW!
-   read receipt. Self-contained.
+   read receipt. Self-contained. (Extraction 2026-08-31, covering steps 7+8 and the
+   presence-push decision:
+   [implementation/step-02-news-and-pulse.md](implementation/step-02-news-and-pulse.md).)
+   (2026-08-31: authoring = a standalone `/news/editor`
+   behind a new admin-only ADMIN launcher section; content write-through to S3
+   `news_media/` with a restore CLI; `author_name` plain string, no user FK; `is_admin`
+   exposed on `UserResponse` for FE gating. Detail in 02.)
 8. **Pulse** — in two deliberate releases (framing agreed 2026-08-29): **v1** wires what
    the social tab already reads — friends online + live games, poll-based, zero new
-   dependencies — and is a complete shippable feature in its own right. **v2 is the MVP
+   dependencies — and is a complete shippable feature in its own right. (Revised
+   2026-08-31: presence goes push — `friend_online`/`friend_offline` events emitted on
+   connect/disconnect transitions, fanned out to friends over the existing per-user
+   socket; live-session state rides the existing session lifecycle events. See 02.) **v2 is the MVP
    we're aiming for**: the new parts — activity signals ("editing their character",
    "writing notes"), the client→server reporting channel, the broadcast transport, the
    full weighted dial — shipped whole per the infra-lands-with-its-feature rule. The
@@ -346,7 +356,8 @@ entry is knowingly overtaken in part.
   the "Nothing at the table yet" hero variant (needs a campaign whose sessions are all
   FINISHED — its copy is also unreviewed).
 - **`active_sessions`**: audit found nothing reads it. Recommendation is deletion rather
-  than the planned `active_session_id` replacement — see step 3 above.
+  than the planned `active_session_id` replacement — see step 3 above. **DECIDED
+  2026-08-31: delete.**
 
 ## Out of scope (this epic)
 

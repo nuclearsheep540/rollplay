@@ -7,7 +7,7 @@ import { Fragment } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Popover, PopoverButton, PopoverPanel, Transition } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBookOpen, faUsers, faFolderOpen, faStore } from '@fortawesome/free-solid-svg-icons'
+import { faBookOpen, faUsers, faFolderOpen, faStore, faNewspaper } from '@fortawesome/free-solid-svg-icons'
 
 import { TOOLS, TOOL_ROUTES } from '@/app/workshop'
 import { THEME } from '@/app/styles/colorTheme'
@@ -64,7 +64,7 @@ function AppGridIcon({ className }) {
  * enabled flags can never drift from the workshop index, which remains a
  * destination in its own right (the section header opens it).
  */
-export default function AppLauncher() {
+export default function AppLauncher({ isAdmin = false }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -160,6 +160,26 @@ export default function AppLauncher() {
                   )
                 })}
               </div>
+
+              {/* Admin tools. Hidden entirely for everyone else — the server
+                  enforces access regardless, so this is about not showing
+                  people doors they cannot open. */}
+              {isAdmin && (
+                <div className="mt-3 border-t border-border-subtle pt-3">
+                  <span className="block px-2.5 pb-2 pt-0.5 text-[11px] font-semibold uppercase tracking-widest text-gold">
+                    Admin
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => go('/news/editor', close)}
+                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] text-content-on-dark transition-colors hover:bg-interactive-hover/10"
+                  >
+                    <FontAwesomeIcon icon={faNewspaper} className="w-4 text-center" />
+                    <span className="flex-1">News editor</span>
+                  </button>
+                </div>
+              )}
             </>
           )}
         </PopoverPanel>

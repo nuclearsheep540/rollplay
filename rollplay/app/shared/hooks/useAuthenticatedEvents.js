@@ -24,8 +24,17 @@ import { getEventConfig } from '../config/eventConfig'
  * @param {({type, message}) => void} showToast - Toast dispatcher from
  *   the caller's toast provider.
  */
-export function useAuthenticatedEvents(userId, showToast) {
+export function useAuthenticatedEvents(userId, showToast, addPulseEvent) {
   const invalidation = useEventQueryInvalidation()
+
+  // Any event the server flagged reaches the pulse, whatever its type — the
+  // decision of what is pulse-worthy belongs to the event's factory, not to a
+  // list of types maintained here.
+  const pulse = (message) => {
+    if (message.show_pulse && addPulseEvent && message.pulse_entry) {
+      addPulseEvent(message.pulse_entry)
+    }
+  }
 
   const toast = (eventType, message, bodyFactory) => {
     if (!message.show_toast) return
@@ -58,6 +67,15 @@ export function useAuthenticatedEvents(userId, showToast) {
       invalidation.invalidateNotifications()
       toast('friend_removed', m)
     },
+
+    // ── Presence events ──────────────────────────────────────────────
+    // is_online is computed on read, so a refetch is what repaints the dots.
+    friend_online: (m) => {
+      invalidation.invalidateFriendships()
+      toast('friend_online', m, (c, d) => c.panelMessage(d))
+      pulse(m)
+    },
+    friend_offline: () => invalidation.invalidateFriendships(),
 
     // ── Buzz events (fun notification, no state refresh) ─────────────
     friend_buzzed: (m) => toast('friend_buzzed', m, (c, d) => c.panelMessage(d)),

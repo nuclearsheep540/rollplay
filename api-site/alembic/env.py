@@ -41,6 +41,9 @@ try:
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.events.model.notification_model import Notification
     from modules.notes.model.note_model import Note
+    from modules.news.model.news_post_model import NewsPost
+    from modules.news.model.news_post_like_model import NewsPostLike
+    from modules.news.model.news_post_read_model import NewsPostRead
     from modules.library.model.asset_model import MediaAsset
     from modules.library.model.map_asset_model import MapAssetModel
     from modules.library.model.music_asset_model import MusicAssetModel

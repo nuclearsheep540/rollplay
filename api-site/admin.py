@@ -13,6 +13,7 @@ Usage (dev):
     docker exec -it api-site-dev python admin.py list-active
     docker exec -it api-site-dev python admin.py pause-session <session-id>
     docker exec -it api-site-dev python admin.py pause-all [--yes]
+    docker exec -it api-site-dev python admin.py restore-news
 
 Pausing via the ETL is fully graceful for live players: state lands cold
 (resumable), and api-game closes the room's websockets with a proper
@@ -61,6 +62,9 @@ from modules.library.model.music_asset_model import MusicAssetModel  # noqa: F40
 from modules.library.model.sfx_asset_model import SfxAssetModel  # noqa: F401
 from modules.library.model.image_asset_model import ImageAssetModel  # noqa: F401
 from modules.library.model.preset_model import PresetModel  # noqa: F401
+from modules.news.model.news_post_model import NewsPost  # noqa: F401
+from modules.news.model.news_post_like_model import NewsPostLike  # noqa: F401
+from modules.news.model.news_post_read_model import NewsPostRead  # noqa: F401
 from integrations.spotify.models import SpotifyAccount  # noqa: F401
 from modules.session.application.commands import PauseSession
 from modules.characters.repositories.character_repository import CharacterRepository
@@ -72,6 +76,9 @@ from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.events.repositories.notification_repository import NotificationRepository
 from modules.events.websocket_manager import event_connection_manager
 from modules.events.event_manager import EventManager
+from modules.news.application.commands import RestoreNewsFromBackup
+from modules.news.repositories.news_repository import NewsRepository
+from shared.services.s3_service import get_s3_service
 
 
 def _run_draining_tasks(coroutine):
@@ -140,7 +147,7 @@ def _build_pause_command(db, session_repo):
         user_repository=UserRepository(db),
         character_repository=None,  # pause doesn't use it
         campaign_repository=CampaignRepository(db),
-        event_manager=EventManager(event_connection_manager, NotificationRepository(db)),
+        event_manager=EventManager(event_connection_manager, NotificationRepository(db), UserRepository(db)),
         asset_repository=MediaAssetRepository(db),
     )
 
@@ -253,6 +260,30 @@ def set_max_slots(email, max_slots):
             raise click.ClickException(str(reason))
 
         click.echo(f"{email}: max_slots set to {max_slots}")
+    finally:
+        db.close()
+
+
+@admin.command("restore-news")
+def restore_news():
+    """Rebuild the news tables from their S3 backup documents.
+
+    Every news save writes a complete copy of the post to S3, so authored
+    content outlives the database it was served from — which matters in dev,
+    where dropping the database to reset migrations is routine.
+
+    Posts already present are skipped, so this is safe to re-run. Likes and
+    read receipts are NOT restored: they reference users who no longer exist
+    after a wipe.
+    """
+    db = SessionLocal()
+    try:
+        command = RestoreNewsFromBackup(NewsRepository(db), get_s3_service())
+        result = command.execute()
+        click.echo(
+            f"news restore: {result['restored']} restored, "
+            f"{result['skipped']} already present"
+        )
     finally:
         db.close()
 

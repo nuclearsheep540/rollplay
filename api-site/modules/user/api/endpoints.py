@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from pydantic import BaseModel, Field
 from uuid import UUID
 
-from shared.dependencies.auth import get_current_user_from_token, get_current_user_id
+from shared.dependencies.auth import get_current_user_from_token, get_current_user_id, is_admin_email
 from shared.jwt_helper import JWTHelper
 from .schemas import (
     UserEmailRequest,
@@ -42,7 +42,13 @@ jwt_helper = JWTHelper()
 
 
 def _to_user_response(user: UserAggregate) -> UserResponse:
-    """Helper to convert UserAggregate to UserResponse"""
+    """Convert UserAggregate to UserResponse.
+
+    `is_admin` is enrichment at the response boundary, not domain state: the
+    aggregate never carries it and nothing persists it. The frontend uses it to
+    decide what to SHOW; every admin route still checks require_admin, so a
+    forged client flag grants nothing.
+    """
     return UserResponse(
         id=str(user.id),
         email=user.email,
@@ -55,6 +61,8 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
         last_login=user.last_login,
         color=user.color,
         max_slots=user.max_slots,
+        is_admin=is_admin_email(user.email),
+        pulse_events=user.active_pulse_events(),
     )
 
 
@@ -624,8 +632,7 @@ async def get_user_dashboard(
                 {
                     "id": str(campaign.id),
                     "name": campaign.title,
-                    "total_sessions": campaign.get_total_sessions(),
-                    "active_sessions": 0  # TODO: Query session module for active session count
+                    "total_sessions": campaign.get_total_sessions()
                 }
                 for campaign in dashboard_data['campaigns']
             ],

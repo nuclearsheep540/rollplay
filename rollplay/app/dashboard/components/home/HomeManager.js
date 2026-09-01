@@ -7,13 +7,16 @@ import { useCampaigns } from '@/app/dashboard/hooks/useCampaigns'
 import { useCharacters } from '@/app/dashboard/hooks/useCharacters'
 import { selectHeroCampaign, selectWorkingOnCampaign } from '@/app/dashboard/utils/homeRanking'
 import Spinner from '@/app/shared/components/Spinner'
+import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import CharacterHand from './CharacterHand'
 import HomeGreeting from './HomeGreeting'
 import HomeHeroCard from './HomeHeroCard'
 import HomeOnboardingHero from './HomeOnboardingHero'
 import InviteDeck from './InviteDeck'
 import WorkingOnCard from './WorkingOnCard'
-import { FeaturedFromMarket, NewsNoticeboard, PulseDivider } from './HomePlaceholders'
+import HomeUpdates from './HomeUpdates'
+import PulseLine from './PulseLine'
+import { FeaturedFromMarket } from './HomePlaceholders'
 import { PLATE_HEIGHT_PX } from '@/app/styles/plateGeometry'
 
 // Gold reads darker on the light page ground than it does on the plates.
@@ -40,6 +43,9 @@ function SectionHead({ children, className = 'mb-2.5' }) {
  * duplicating work.
  */
 export default function HomeManager({ user }) {
+  // The social panel lives in the group layout's header; the pulse asks it to
+  // open rather than owning a second copy of it.
+  const { openSocialPanel } = useAuthenticated()
   const { data: campaignData, isLoading } = useCampaigns(user?.id)
   const { data: characters } = useCharacters()
 
@@ -89,15 +95,12 @@ export default function HomeManager({ user }) {
       {/* Clears the invite's tucked slot, which stays reserved whether or not
           an invite exists — toggling one never shifts the page. */}
       <div className="mt-[54px]">
-        <PulseDivider />
+        <PulseLine campaigns={campaigns} onOpenSocial={openSocialPanel} />
       </div>
 
       <div className="mt-[26px] grid grid-cols-1 gap-[26px] lg:grid-cols-[2fr_3fr]">
         <div className="flex flex-col gap-[26px]">
-          <div className="flex flex-1 flex-col">
-            <SectionHead>Updates</SectionHead>
-            <NewsNoticeboard />
-          </div>
+          <HomeUpdates sectionLabelColor={SECTION_LABEL_GOLD} />
         </div>
 
         <div className="flex flex-col gap-[26px]">

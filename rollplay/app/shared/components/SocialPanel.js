@@ -45,10 +45,18 @@ const BUZZ_COOLDOWN_MS = 20000
  * only by the CTA, the ✕, or Escape (no click-away: it's a non-modal
  * companion, not a menu).
  */
-export default function SocialPanel({ user, toasts = [], onDismissToast }) {
+export default function SocialPanel({ user, toasts = [], onDismissToast, openSignal = 0 }) {
   const router = useRouter()
   const containerRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
+
+  // Anything on the page can ask the panel to open by bumping openSignal —
+  // Home's pulse line uses this so its coins are actionable. The panel keeps
+  // owning its own open/close (including the outside-click handling below);
+  // this is a request to open, not a controlled prop.
+  useEffect(() => {
+    if (openSignal) setIsOpen(true)
+  }, [openSignal])
   const [buzzCooldowns, setBuzzCooldowns] = useState({})
   const [cooldownProgress, setCooldownProgress] = useState({})
   const [isAddingFriend, setIsAddingFriend] = useState(false)

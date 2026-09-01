@@ -44,6 +44,8 @@ class UserRepository:
             screen_name=model.screen_name,
             created_at=model.created_at,
             last_login=model.last_login,
+            last_seen=model.last_seen,
+            pulse_events=model.pulse_events or [],
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
@@ -69,6 +71,8 @@ class UserRepository:
             screen_name=model.screen_name,
             created_at=model.created_at,
             last_login=model.last_login,
+            last_seen=model.last_seen,
+            pulse_events=model.pulse_events or [],
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
@@ -145,6 +149,8 @@ class UserRepository:
             screen_name=model.screen_name,
             created_at=model.created_at,
             last_login=model.last_login,
+            last_seen=model.last_seen,
+            pulse_events=model.pulse_events or [],
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
@@ -219,6 +225,8 @@ class UserRepository:
                 model.email = aggregate.email
                 model.screen_name = aggregate.screen_name
                 model.last_login = aggregate.last_login
+                model.last_seen = aggregate.last_seen
+                model.pulse_events = aggregate.pulse_events
                 model.color = aggregate.color
                 model.max_slots = aggregate.max_slots
                 # Update account_name and account_tag if set on aggregate
@@ -241,6 +249,8 @@ class UserRepository:
                     screen_name=aggregate.screen_name,
                     created_at=aggregate.created_at,
                     last_login=aggregate.last_login,
+                    last_seen=aggregate.last_seen,
+                    pulse_events=aggregate.pulse_events,
                     account_name=aggregate.account_name,
                     account_tag=aggregate.account_tag,
                 )

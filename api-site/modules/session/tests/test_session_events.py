@@ -174,3 +174,42 @@ class TestPayloadShape:
         for event in events:
             for key, value in event.data.items():
                 assert isinstance(value, str), f"{key} is {type(value).__name__}, not str"
+
+
+class TestSessionStartedPersistence:
+    """Who gets a NOTIFICATION ROW, as opposed to who gets the broadcast.
+
+    The host performed the action, so a persisted notification telling them
+    their own session started is noise they then have to clear. Everyone else
+    wants the receipt.
+    """
+
+    def test_the_host_is_not_told_about_their_own_session(self, campaign):
+        events = SessionEvents.session_started(
+            campaign_member_ids=campaign["all"],
+            session_id=uuid4(),
+            session_name="Session 12",
+            campaign_id=uuid4(),
+            campaign_name="Curse of Strahd",
+            host_id=campaign["dm_id"],
+            host_screen_name="Matt",
+        )
+
+        host_event = next(e for e in events if e.user_id == campaign["dm_id"])
+        assert host_event.save_notification is False
+        assert host_event.show_toast is True
+
+    def test_every_other_member_keeps_their_notification(self, campaign):
+        events = SessionEvents.session_started(
+            campaign_member_ids=campaign["all"],
+            session_id=uuid4(),
+            session_name="Session 12",
+            campaign_id=uuid4(),
+            campaign_name="Curse of Strahd",
+            host_id=campaign["dm_id"],
+            host_screen_name="Matt",
+        )
+
+        member_events = [e for e in events if e.user_id != campaign["dm_id"]]
+        assert len(member_events) == len(campaign["others"])
+        assert all(event.save_notification for event in member_events)

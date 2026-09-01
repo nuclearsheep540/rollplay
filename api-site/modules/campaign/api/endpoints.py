@@ -138,7 +138,6 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
         members=members,
         total_sessions=campaign.get_total_sessions(),
-        active_sessions=0,  # TODO: Query session module for active count
         invited_count=campaign.get_invited_count(),
         player_count=campaign.get_player_count()
     )
@@ -167,7 +166,6 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: Option
         updated_at=campaign.updated_at,
         last_played_at=campaign.last_played_at,
         total_sessions=campaign.get_total_sessions(),
-        active_sessions=0,  # TODO: Query session module for active count
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
         member_ids=[str(mid) for mid in campaign.get_all_member_ids()],

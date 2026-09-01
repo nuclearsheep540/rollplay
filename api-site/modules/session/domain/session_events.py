@@ -82,6 +82,9 @@ class SessionEvents:
         """
         Event: Host started a session (notifies every campaign member)
 
+        The host gets the toast but NOT a saved notification: they performed the
+        action, so a notification row telling them about it is noise.
+
         Args:
             campaign_member_ids: Every active campaign member, DM included
             session_id: Session ID
@@ -108,7 +111,7 @@ class SessionEvents:
                     "host_screen_name": host_screen_name
                 },
                 show_toast=True,
-                save_notification=True
+                save_notification=(member_id != host_id)
             ))
         return events
 
