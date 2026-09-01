@@ -189,27 +189,37 @@ class S3Service:
 
     def list_objects(self, prefix: str) -> List[dict]:
         """
-        List objects under a prefix.
+        List the first page of objects under a prefix.
 
-        Used by the news module to browse its own shared image directory —
-        library media are listed from PostgreSQL instead, because they have
-        rows; news images deliberately have none.
+        Only the news module lists S3 at all — library media are enumerated
+        from PostgreSQL, because they have rows; news images deliberately have
+        none. Three callers: the editor's per-scope image browser, the folder
+        delete behind DeleteNewsPost, and RestoreNewsFromBackup.
+
+        THE FIRST PAGE, not the listing. list_objects_v2 returns at most 1000
+        keys per call and reports more via IsTruncated; this reads one page and
+        stops, so past 1000 objects the result is a prefix of the truth. Two of
+        the three callers are scoped to a single folder and cannot approach it.
+        The third walks the whole news prefix, so it is the one that eventually
+        will — accepted deliberately (Matt, 2026-09-01) because S3 holds the
+        durable copy either way: a truncated restore recovers an incomplete
+        set, it does not destroy the documents it did not reach.
+
+        Truncation is LOGGED rather than paginated, so the day it starts
+        happening is a line in the logs and not a silent surprise.
 
         Args:
             prefix: Key prefix to list under (e.g. 'news_media/shared_images/')
 
         Returns:
             List of {key, size, last_modified}, excluding directory-marker
-            objects (keys ending in '/'), newest first.
+            objects (keys ending in '/'), newest first. Capped at one page.
 
         Raises:
             ClientError: If the listing fails. Deliberately unhandled — a
-                caller cannot present a partial listing as a complete one.
+                caller must not mistake a failed listing for an empty one.
         """
         try:
-            # list_objects_v2 caps at 1000 keys per call and signals more with
-            # IsTruncated. The news image directory is authored by hand and will
-            # not approach that, so a single page is the whole listing.
             response = self.client.list_objects_v2(
                 Bucket=self.bucket_name,
                 Prefix=prefix
@@ -217,6 +227,14 @@ class S3Service:
         except ClientError as e:
             logger.error(f"Failed to list objects under {prefix}: {e}")
             raise
+
+        if response.get('IsTruncated'):
+            # The whole point of not paginating is that this never fires. When
+            # it does, every caller above is now working from a partial view.
+            logger.error(
+                f"Listing of {prefix} was truncated at {response.get('KeyCount')} keys — "
+                f"callers are seeing a partial view and list_objects now needs pagination"
+            )
 
         objects = []
         for item in response.get('Contents', []):
