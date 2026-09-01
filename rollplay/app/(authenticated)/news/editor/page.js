@@ -5,7 +5,7 @@
 
 import { useRouter } from 'next/navigation'
 
-import { useAuth } from '@/app/dashboard/hooks/useAuth'
+import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import { COLORS } from '@/app/styles/colorTheme'
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 import { GOLD_INK, INK, formatNewsDate } from '@/app/news/newsTokens'
@@ -23,7 +23,9 @@ import { useCreateNewsPost, useNewsPosts } from '@/app/news/hooks/useNews'
  */
 export default function NewsEditorIndexPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
+  // The layout owns the one auth instance for this route group — a second
+  // useAuth() here would start its own fetch and token-refresh lifecycle.
+  const { user, loading } = useAuthenticated()
   const { data: posts, isLoading } = useNewsPosts({ enabled: Boolean(user?.is_admin) })
   const createPost = useCreateNewsPost()
 

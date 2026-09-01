@@ -3,6 +3,8 @@
 
 import { Extension } from '@tiptap/core'
 
+import { BLOCK_ATTRIBUTE_TYPES, applyToBlockTypes } from './blockAttribute'
+
 /**
  * Line spacing for block nodes.
  *
@@ -33,7 +35,7 @@ export const LineHeight = Extension.create({
 
   addOptions() {
     return {
-      types: ['paragraph', 'heading'],
+      types: BLOCK_ATTRIBUTE_TYPES,
     }
   },
 
@@ -62,14 +64,16 @@ export const LineHeight = Extension.create({
       setLineHeight:
         (lineHeight) =>
         ({ commands }) =>
-          this.options.types.every((type) =>
+          applyToBlockTypes(this.options.types, (type) =>
             commands.updateAttributes(type, { lineHeight })
           ),
 
       unsetLineHeight:
         () =>
         ({ commands }) =>
-          this.options.types.every((type) => commands.resetAttributes(type, 'lineHeight')),
+          applyToBlockTypes(this.options.types, (type) =>
+            commands.resetAttributes(type, 'lineHeight')
+          ),
     }
   },
 })

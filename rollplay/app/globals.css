@@ -2173,6 +2173,7 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 .news-tbtn-b { font-weight: 800; font-size: 14px; }
 .news-tbtn-i { font-family: Georgia, serif; font-style: italic; font-size: 15px; }
 .news-tbtn-h { font-weight: 800; font-size: 11px; }
+.news-tbtn-alt { font-weight: 800; font-size: 10px; letter-spacing: 0.06em; }
 
 .news-toolbar-sep {
   width: 1px;

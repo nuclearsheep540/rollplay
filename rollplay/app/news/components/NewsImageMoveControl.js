@@ -17,7 +17,7 @@ import { useMoveNewsImage } from '../hooks/useNews'
  * another article still renders the image — so there is nothing to confirm.
  * The two-step confirm is reserved for the operation S3 cannot undo.
  */
-export default function NewsImageMoveControl({ imageKey, scope, postId, onRefused }) {
+export default function NewsImageMoveControl({ imageKey, scope, postId, onRefused, onMoved }) {
   const moveImage = useMoveNewsImage()
 
   const promoting = scope === 'article'
@@ -32,7 +32,14 @@ export default function NewsImageMoveControl({ imageKey, scope, postId, onRefuse
         onRefused?.(null)
         moveImage.mutate(
           { key: imageKey, targetPostId: promoting ? null : postId },
-          { onError: (error) => onRefused?.(error.message) }
+          {
+            // The editor holds its own copy of the document, which the
+            // server's rewrite cannot reach — so the new key is handed back
+            // for it to apply the same change locally.
+            onSuccess: (result) =>
+              onMoved?.({ oldKey: imageKey, newKey: result.key, newUrl: result.url }),
+            onError: (error) => onRefused?.(error.message),
+          }
         )
       }}
       disabled={moveImage.isPending}

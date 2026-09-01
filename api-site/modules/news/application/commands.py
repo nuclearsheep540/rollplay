@@ -8,7 +8,7 @@ from uuid import UUID
 
 from botocore.exceptions import ClientError
 
-from modules.news.domain.news_post_aggregate import NewsPostAggregate
+from modules.news.domain.news_post_aggregate import NewsPostAggregate, collect_image_keys
 from modules.news.repositories.news_repository import NewsRepository
 from shared.services.s3_service import S3Service
 
@@ -146,6 +146,46 @@ def _write_through(post: NewsPostAggregate, s3_service: S3Service) -> None:
         logger.error(f"{NEWS_LOG_TAG}: write-through failed for post {post.id}: {e}")
 
 
+class InvalidImageKeyError(ValueError):
+    """A post referenced something that is not a news image."""
+
+
+def _validate_image_references(
+    doc: Optional[Dict[str, Any]],
+    banners: Optional[Dict[str, Optional[str]]],
+) -> None:
+    """
+    Refuse a post that points at anything outside the news store.
+
+    Every key a post carries is signed on read and served to every reader, so
+    an unchecked key is a way to publish a signed URL for any object in the
+    bucket — which holds users' maps and audio, not only news media. Admins are
+    the only ones who can reach this, so it is a guard against a mistake rather
+    than an attack, but the blast radius is the same either way.
+
+    It also closes the other entrance: a browser paste can put a remote URL or
+    a blob: URL into an image node, which the key-recovery on save turns into a
+    plausible-looking key for an object that has never existed. Rejecting it
+    here means such a document fails loudly at the save instead of rendering
+    broken once the tab that held the blob is gone.
+
+    Raises:
+        InvalidImageKeyError: naming the offending key. A subclass of
+            ValueError so callers that only care about "bad request" still
+            catch it, while the endpoint can answer 400 rather than 404.
+    """
+    if banners:
+        for slot, key in banners.items():
+            # None is how the editor CLEARS a slot; only a present key is checked.
+            if key is not None and not is_news_image_key(key):
+                raise InvalidImageKeyError(f"{slot} must reference a news image, got: {key}")
+
+    if doc is not None:
+        for key in collect_image_keys(doc):
+            if not is_news_image_key(key):
+                raise InvalidImageKeyError(f"Document references a non-news image: {key}")
+
+
 class CreateNewsPost:
     """Start a new draft."""
 
@@ -179,6 +219,8 @@ class UpdateNewsPost:
         post = self.news_repo.get_by_id(post_id)
         if not post:
             raise ValueError(f"News post {post_id} not found")
+
+        _validate_image_references(doc, banners)
 
         post.update_content(title=title, author_name=author_name, doc=doc, banners=banners)
         saved = self.news_repo.save(post)

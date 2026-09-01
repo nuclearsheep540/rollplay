@@ -180,6 +180,38 @@ export function toStorageDoc(doc) {
 }
 
 /**
+ * Rewrite every reference to one image key into another.
+ *
+ * The client-side twin of NewsPostAggregate.replace_image_key, and it exists
+ * for the same reason: an image that moves between scopes changes key, and
+ * anything still pointing at the old one is pointing at nothing.
+ *
+ * The editor needs its own copy because it holds the working document in local
+ * state — the server rewrites what it has stored, but a refetch cannot be
+ * allowed to clobber unsaved edits, so the same edit is applied here instead.
+ */
+export function replaceImageKey(doc, oldKey, newKey) {
+  if (!doc || typeof doc !== 'object') return doc
+
+  if (Array.isArray(doc)) {
+    return doc.map((node) => replaceImageKey(node, oldKey, newKey))
+  }
+
+  const rewritten = { ...doc }
+
+  if (rewritten.type === 'image' && rewritten.attrs?.src === oldKey) {
+    rewritten.attrs = { ...rewritten.attrs, src: newKey }
+  }
+
+  if (rewritten.content) {
+    rewritten.content = replaceImageKey(rewritten.content, oldKey, newKey)
+  }
+
+  return rewritten
+}
+
+
+/**
  * A published news document, rendered read-only.
  *
  * Keyed remounting is the caller's job: TipTap takes content at creation, so a

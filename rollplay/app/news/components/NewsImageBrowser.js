@@ -50,6 +50,7 @@ export default function NewsImageBrowser({
   scrollWithin = false,
   onSelect,
   onUploaded,
+  onMoved,
 }) {
   const fileInputRef = useRef(null)
   const [scope, setScope] = useState('article')
@@ -181,6 +182,7 @@ export default function NewsImageBrowser({
               scope={scope}
               postId={postId}
               onRefused={setRefusal}
+              onMoved={onMoved}
             />
             <NewsImageDeleteControl imageKey={image.key} onRefused={setRefusal} />
           </div>

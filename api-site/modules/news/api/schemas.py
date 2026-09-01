@@ -125,8 +125,15 @@ class NewsImageListResponse(BaseModel):
 
 
 class NewsImageMoveResponse(BaseModel):
-    """The image's new key — its old one no longer resolves."""
+    """
+    The image's new key, and a URL signed for it.
+
+    The URL rides along because the old one is already dead — the object it
+    pointed at was deleted by the move — so any editor holding the document
+    needs something loadable in the same round trip rather than after a refetch.
+    """
     key: str
+    url: str
 
 
 class NewsImageUploadResponse(BaseModel):

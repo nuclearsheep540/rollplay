@@ -44,6 +44,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 
 import Dropdown from '@/app/shared/components/Dropdown'
+import { activeBlockAttribute } from '@/app/shared/tiptap/blockAttribute'
 import { BLOCK_SPACINGS, BlockSpacing } from '@/app/shared/tiptap/blockSpacing'
 import { LINE_HEIGHTS, LineHeight } from '@/app/shared/tiptap/lineHeight'
 
@@ -168,8 +169,9 @@ export default function NoteEditor({ initialContent, onChange, editable = true, 
   }))
 
   // Line spacing is a block attribute, so the active one is read from the
-  // paragraph the cursor sits in rather than from a toggle's state.
-  const activeLineHeight = editor.getAttributes('paragraph').lineHeight || null
+  // block the cursor sits in rather than from a toggle's state — headings
+  // carry it too, and asking paragraph alone reports Default inside one.
+  const activeLineHeight = activeBlockAttribute(editor, 'lineHeight')
 
   const lineHeightItems = LINE_HEIGHTS.map((option) => ({
     label: option.label,
@@ -181,7 +183,7 @@ export default function NoteEditor({ initialContent, onChange, editable = true, 
   }))
 
   // The gap after a block, as opposed to the leading within one.
-  const activeBlockSpacing = editor.getAttributes('paragraph').blockSpacing || null
+  const activeBlockSpacing = activeBlockAttribute(editor, 'blockSpacing')
 
   const blockSpacingItems = BLOCK_SPACINGS.map((option) => ({
     label: option.label,

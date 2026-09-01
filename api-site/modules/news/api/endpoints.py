@@ -27,6 +27,7 @@ from modules.news.application.commands import (
     DeleteNewsImage,
     DeleteNewsPost,
     ImageInUseError,
+    InvalidImageKeyError,
     MarkNewsPostRead,
     MoveNewsImage,
     PublishNewsPost,
@@ -236,7 +237,7 @@ async def move_news_image(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    return NewsImageMoveResponse(key=new_key)
+    return NewsImageMoveResponse(key=new_key, url=s3_service.generate_download_url(new_key))
 
 
 @router.post("/images/upload-url", response_model=NewsImageUploadResponse)
@@ -410,6 +411,10 @@ async def update_news_post(
             doc=request.doc,
             banners=banners or None,
         )
+    # Ordered: a bad key is a malformed request, not a missing post. Both are
+    # ValueErrors, so the narrower one has to be caught first.
+    except InvalidImageKeyError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

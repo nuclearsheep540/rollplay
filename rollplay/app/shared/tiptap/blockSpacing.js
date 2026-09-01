@@ -3,6 +3,8 @@
 
 import { Extension } from '@tiptap/core'
 
+import { BLOCK_ATTRIBUTE_TYPES, applyToBlockTypes } from './blockAttribute'
+
 /**
  * Space BETWEEN blocks — the gap after a paragraph or heading.
  *
@@ -33,7 +35,7 @@ export const BlockSpacing = Extension.create({
 
   addOptions() {
     return {
-      types: ['paragraph', 'heading'],
+      types: BLOCK_ATTRIBUTE_TYPES,
     }
   },
 
@@ -62,14 +64,16 @@ export const BlockSpacing = Extension.create({
       setBlockSpacing:
         (blockSpacing) =>
         ({ commands }) =>
-          this.options.types.every((type) =>
+          applyToBlockTypes(this.options.types, (type) =>
             commands.updateAttributes(type, { blockSpacing })
           ),
 
       unsetBlockSpacing:
         () =>
         ({ commands }) =>
-          this.options.types.every((type) => commands.resetAttributes(type, 'blockSpacing')),
+          applyToBlockTypes(this.options.types, (type) =>
+            commands.resetAttributes(type, 'blockSpacing')
+          ),
     }
   },
 })

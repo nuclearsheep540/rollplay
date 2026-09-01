@@ -7,9 +7,10 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
-import { useAuth } from '@/app/dashboard/hooks/useAuth'
+import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import { COLORS } from '@/app/styles/colorTheme'
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
+import NewsAltTextModal from '@/app/news/components/NewsAltTextModal'
 import NewsArticle from '@/app/news/components/NewsArticle'
 import NewsBannerSlot from '@/app/news/components/NewsBannerSlot'
 import NewsCard from '@/app/news/components/NewsCard'
@@ -19,6 +20,7 @@ import NewsLinkModal from '@/app/news/components/NewsLinkModal'
 import NewsImageRail from '@/app/news/components/NewsImageRail'
 import {
   NEWS_EDITOR_EXTENSIONS,
+  replaceImageKey,
   resolveImageUrls,
   toStorageDoc,
 } from '@/app/news/components/NewsDocument'
@@ -55,7 +57,9 @@ const TABS = [
 export default function NewsEditorPage() {
   const { postId } = useParams()
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  // The layout owns the one auth instance for this route group — a second
+  // useAuth() here would start its own fetch and token-refresh lifecycle.
+  const { user, loading: authLoading } = useAuthenticated()
 
   const { data: post, isLoading } = useNewsPost(postId, { enabled: Boolean(user?.is_admin) })
   const updatePost = useUpdateNewsPost()
@@ -69,6 +73,7 @@ export default function NewsEditorPage() {
   const [activeTab, setActiveTab] = useState('edit')
   const [imagePickerOpen, setImagePickerOpen] = useState(false)
   const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const [altModalOpen, setAltModalOpen] = useState(false)
   // 'idle' | 'saved' | 'failed' — what to say about the LAST completed write.
   // In-flight state comes from the mutations themselves.
   const [saveState, setSaveState] = useState('idle')
@@ -160,19 +165,71 @@ export default function NewsEditorPage() {
     onError: () => setSaveState('failed'),
   }
 
+  /** Everything the editor is currently holding, as the API takes it. */
+  const draftPayload = () => ({
+    title,
+    author_name: authorName,
+    doc: doc || post.doc,
+    ...banners,
+  })
+
   const handleSave = () => {
     setSaveState('idle')
+    updatePost.mutate({ postId, payload: draftPayload() }, reportOutcome)
+  }
+
+  /**
+   * Publish (or unpublish) what is on screen.
+   *
+   * The save is not optional. Publishing used to send only the flag, so an
+   * author who edited and then hit PUBLISH shipped the PREVIOUS version to
+   * every reader while the UI reported success and went on showing the edits
+   * that never left the browser. Chained rather than parallel: publishing
+   * content that failed to save would be the same bug again.
+   */
+  const handlePublish = () => {
+    setSaveState('idle')
     updatePost.mutate(
+      { postId, payload: draftPayload() },
       {
-        postId,
-        payload: {
-          title,
-          author_name: authorName,
-          doc: doc || post.doc,
-          ...banners,
-        },
-      },
-      reportOutcome
+        onSuccess: () =>
+          publishPost.mutate({ postId, published: !post.published }, reportOutcome),
+        onError: () => setSaveState('failed'),
+      }
+    )
+  }
+
+  /**
+   * Follow an image that moved between scopes.
+   *
+   * The server rewrote every reference it had stored, but the working document
+   * lives here in local state and the seeding effect deliberately ignores
+   * same-id refetches so a background update cannot clobber unsaved edits.
+   * Without this, the editor would keep the dead key — the preview would break
+   * and the next save would write it back over the server's correction.
+   */
+  const handleImageMoved = ({ oldKey, newKey, newUrl }) => {
+    const followedDoc = replaceImageKey(doc || post.doc, oldKey, newKey)
+
+    setDoc(followedDoc)
+    setBanners((current) => {
+      const followed = {}
+      for (const [slot, key] of Object.entries(current)) {
+        followed[slot] = key === oldKey ? newKey : key
+      }
+      return followed
+    })
+
+    // The editor's own content has to be corrected too, not just this state:
+    // its DOM still holds a signed URL for the object the move deleted, and
+    // the next keystroke would read that back through toStorageDoc and put
+    // the dead key straight into the document again.
+    //
+    // The URL comes from the move response rather than the image lookup,
+    // which has not refetched yet — signing it server-side is what makes the
+    // picture survive the move without a visible reload.
+    editor?.commands.setContent(
+      resolveImageUrls(followedDoc, { ...imageUrlByKey, [newKey]: newUrl })
     )
   }
 
@@ -195,6 +252,17 @@ export default function NewsEditorPage() {
    */
   const placeImage = ({ key, url }) => {
     editor?.chain().focus().setImage({ src: url || key }).run()
+  }
+
+  /**
+   * Describe the selected image.
+   *
+   * An empty string is stored rather than dropped: `alt=""` is the explicit
+   * marker for decoration, and it means something different to a screen reader
+   * than an absent attribute.
+   */
+  const applyAltText = (alt) => {
+    editor?.chain().focus().updateAttributes('image', { alt }).run()
   }
 
   /**
@@ -327,11 +395,8 @@ export default function NewsEditorPage() {
             </button>
             <button
               type="button"
-              onClick={() => {
-              setSaveState('idle')
-              publishPost.mutate({ postId, published: !post.published }, reportOutcome)
-            }}
-              disabled={publishPost.isPending}
+              onClick={handlePublish}
+              disabled={publishPost.isPending || updatePost.isPending}
               className="rounded-lg px-[22px] py-3 text-[13px] font-semibold tracking-wider disabled:opacity-50"
               style={{ transform: SKEW_BOX, backgroundColor: COLORS.gold, color: '#241C08' }}
             >
@@ -398,6 +463,7 @@ export default function NewsEditorPage() {
               editor={editor}
               onPickImage={() => setImagePickerOpen(true)}
               onEditLink={() => setLinkModalOpen(true)}
+              onEditAltText={() => setAltModalOpen(true)}
             />
   
               <div className="px-2 pt-5 pb-6">
@@ -414,13 +480,21 @@ export default function NewsEditorPage() {
               />
             </section>
   
-            <NewsImageRail postId={postId} onInsert={insertImage} />
+            <NewsImageRail postId={postId} onInsert={insertImage} onMoved={handleImageMoved} />
 
             <NewsImagePicker
               open={imagePickerOpen}
               onClose={() => setImagePickerOpen(false)}
               postId={postId}
               onSelect={placeImage}
+              onMoved={handleImageMoved}
+            />
+
+            <NewsAltTextModal
+              open={altModalOpen}
+              initialAlt={editor?.getAttributes('image').alt || ''}
+              onClose={() => setAltModalOpen(false)}
+              onSubmit={applyAltText}
             />
 
             <NewsLinkModal
@@ -457,7 +531,7 @@ export default function NewsEditorPage() {
             <p className="mx-auto mb-4 max-w-[760px] text-right text-[11.5px]" style={{ color: '#8A8378' }}>
               as the full article renders
             </p>
-            <NewsArticle post={draftPost} />
+            <NewsArticle post={draftPost} interactive={false} />
           </div>
         )}
       </div>

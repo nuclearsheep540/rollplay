@@ -134,6 +134,36 @@ endpoint), `api/schemas.py`, `shared/services/s3_service.py` (`copy_object`),
 (`useNewsImages(postId)`, `useNewsImageUrlLookup`, `useMoveNewsImage`, scoped upload);
 `(authenticated)/news/editor/[postId]/page.js`; `globals.css`.
 
+## PR #170 review round (2026-09-01)
+
+Copilot raised 17 inline findings across this work and step-02. All 17 verified as
+technically correct; actioned as below. Suite 1132 → **1139 green**, frontend builds and
+lints clean.
+
+| # | Finding | Action |
+|---|---|---|
+| 1 | `every()` short-circuits in `LineHeight`/`BlockSpacing` — a cursor in a heading makes the paragraph command return false, so the heading update never runs | Fixed. New `shared/tiptap/blockAttribute.js` owns `BLOCK_ATTRIBUTE_TYPES` and `applyToBlockTypes`, which runs every type then aggregates — the shape `@tiptap/extension-text-align` uses (`.map().some()`) for exactly this reason. Both extensions now source their `types` from that one constant |
+| 2 | PUBLISH sent only the flag, shipping the last-saved version while the UI reported success | Fixed. `handlePublish` saves `draftPayload()` first and publishes in its `onSuccess`; chained, not parallel, so publishing content that failed to save can't happen |
+| 3 | A move rewrote keys server-side but the editor's local doc kept the dead key, breaking the preview and writing it back on the next save | Fixed. `replaceImageKey` (the client twin of the aggregate's method) applied via a new `onMoved` callback threaded control → browser → rail/picker → page. **The move response now also returns a signed `url`** — without it the editor would hold a URL for the object the move just deleted, and the picture would break until a refetch |
+| 4 | Both editor pages called `useAuth()` | Fixed — `useAuthenticated()`. This was a documented rule in `AuthenticatedContext.js:22-24`, not a judgment call |
+| 5 | Nothing validated submitted `doc` image sources or banner keys; `_to_news_post_response` signs whatever it finds | Fixed. `_validate_image_references` in `UpdateNewsPost` applies `is_news_image_key`; `InvalidImageKeyError` (a `ValueError` subclass) → 400, caught before the not-found 404. **Also closes the TipTap paste hole** — a pasted remote URL becomes a plausible-looking key on save, and now fails loudly instead of rendering broken |
+| 6 | Fifth pulse pill computed negative opacity, invisible but occupying the row | Fixed. Quadratic ease-in from 1.0 to 0.2 → `1.00, 0.95, 0.80, 0.55, 0.20`, anchored to `MAX_PULSE_EVENTS` so a pill's opacity means its age rather than its position in a variable-length list |
+| 7 | `usePulse` merged hydration by `id`, but the server mints a fresh id per record — so a repeat showed twice | Fixed. One `isSameHappening` predicate (type + payload) used by both the live path and the merge, mirroring `record_pulse_event` |
+| 8 | Toolbars read `getAttributes('paragraph')` only, showing Default inside a styled heading | Fixed via `activeBlockAttribute`, in both the news toolbar and `NoteEditor` |
+| 9 | `friend_offline` never clears the `friend_online` pulse entry, so it can assert someone is around for 6h after they left | Fixed **by not storing the problem**: `PulseLine` declines to draw a `friend_online` pill whose subject is not in `onlineFriends`. Retracting server-side would be N row writes on every tab close; this is the same principle expiry already uses — nothing is deleted for it to stop being shown, and the entry keeps its timestamp so ordering survives |
+| 10 | No alt text on in-content images | Added. `alt` was already in the extension's schema and survives the key↔URL round trip, so the work was a toolbar control (active only on a selected image) plus `NewsAltTextModal`. Scope is in-content images only — the four banners are CSS backgrounds, which assistive tech already ignores, and that is correct for decorative frame art. **Empty alt is stored, not dropped**: `alt=""` is the explicit marker for decoration |
+| 11 | `mint.py` crashes on the default empty allowlist | Moot — file deleted. It was a scratch token-minter of mine that leaked into a commit, and `COPY api-site/ .` would have shipped it into the production image |
+| 12 | `app/compilecheck/page.js` is a debug artifact | Deleted. Mine, from the `Portal.Group` investigation; it sat at the repo root rather than under `rollplay/app`, so Next never built it — which is why it proved nothing |
+| 13 | `list_objects` reads only the first 1000 keys, so a restore could silently omit documents | **Deferred by Matt.** I'd revised my own position to "worth doing" — the likelihood is low but the failure is silent partial data loss on the durability path — and it remains open |
+| — | Copilot also flagged the article preview's live `LikeButton` | Fixed. `NewsArticle` takes `interactive`; the editor preview passes false so a draft nobody has read cannot accrue real likes |
+
+Every fix that encodes a rule has a test that fails without it, each run against the broken
+version first: 5 tests fail if the key guard is removed, 5 more if `is_news_image_key` is
+loosened to a bare `startswith`, and the move ordering, destination check and identity-based
+demote rule each have their own. Live-verified against `api-site-dev`: foreign keys and the
+article document are refused with 400 naming the offender, valid keys and banner-clearing
+still 200, a missing post still 404s, and a move returns a signed URL that loads.
+
 ## Storage layout
 
 **Before**

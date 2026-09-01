@@ -21,6 +21,7 @@ from modules.news.application.commands import (
     CreateNewsPost,
     DeleteNewsImage,
     ImageInUseError,
+    InvalidImageKeyError,
     DeleteNewsPost,
     MarkNewsPostRead,
     MoveNewsImage,
@@ -639,3 +640,96 @@ class TestMovingImagesBetweenScopes:
 
         with pytest.raises(ValueError):
             MoveNewsImage(news_repo, s3).execute(key, None)
+
+
+class TestRejectingForeignImageReferences:
+    """A post may only point at images in the news store.
+
+    Every key a post carries is signed on read and served to every reader, so
+    an unchecked one is a way to hand out a signed URL for any object in the
+    bucket — which holds users' maps and audio, not just news media. Only
+    admins can reach this endpoint, so the guard is against a mistake rather
+    than an attack, but the exposure is identical either way.
+
+    It also catches what a browser paste produces: an <img> pasted from a web
+    page carries a remote URL, and the editor's key-recovery turns that into a
+    plausible key for an object that never existed.
+    """
+
+    def _document_with(self, src):
+        return {
+            'type': 'doc',
+            'content': [
+                {'type': 'paragraph'},
+                {'type': 'image', 'attrs': {'src': src}},
+            ],
+        }
+
+    def test_a_banner_pointing_at_library_media_is_refused(self, news_repo, s3):
+        post = CreateNewsPost(news_repo, s3).execute('Weather', 'Keeper')
+
+        with pytest.raises(InvalidImageKeyError):
+            UpdateNewsPost(news_repo, s3).execute(
+                post.id, banners={'banner_home_top': 'map/some-user/private-map.png'}
+            )
+
+    def test_a_document_pointing_outside_the_news_store_is_refused(self, news_repo, s3):
+        post = CreateNewsPost(news_repo, s3).execute('Weather', 'Keeper')
+
+        with pytest.raises(InvalidImageKeyError):
+            UpdateNewsPost(news_repo, s3).execute(
+                post.id, doc=self._document_with('audio/some-user/private-track.png')
+            )
+
+    def test_a_pasted_remote_image_is_refused(self, news_repo, s3):
+        """What a paste from a web page leaves behind once the editor has
+        recovered a 'key' from the remote URL's path."""
+        post = CreateNewsPost(news_repo, s3).execute('Weather', 'Keeper')
+
+        with pytest.raises(InvalidImageKeyError):
+            UpdateNewsPost(news_repo, s3).execute(
+                post.id, doc=self._document_with('wp-content/uploads/2026/08/dragon.png')
+            )
+
+    def test_the_refusal_leaves_the_post_untouched(self, news_repo, s3):
+        post = CreateNewsPost(news_repo, s3).execute('Weather', 'Keeper')
+        good_key = f'{SHARED_IMAGE_PREFIX}/hero.png'
+        UpdateNewsPost(news_repo, s3).execute(post.id, banners={'banner_home_top': good_key})
+
+        with pytest.raises(InvalidImageKeyError):
+            UpdateNewsPost(news_repo, s3).execute(
+                post.id, banners={'banner_home_top': 'map/some-user/private-map.png'}
+            )
+
+        assert news_repo.get_by_id(post.id).banner_home_top == good_key
+
+    def test_an_article_document_is_not_an_image(self, news_repo, s3):
+        post = CreateNewsPost(news_repo, s3).execute('Weather', 'Keeper')
+
+        with pytest.raises(InvalidImageKeyError):
+            UpdateNewsPost(news_repo, s3).execute(
+                post.id, banners={'banner_home_top': article_document_key(post.id)}
+            )
+
+    def test_both_scopes_are_accepted(self, news_repo, s3):
+        post = CreateNewsPost(news_repo, s3).execute('Weather', 'Keeper')
+
+        saved = UpdateNewsPost(news_repo, s3).execute(
+            post.id,
+            banners={'banner_home_top': f'{SHARED_IMAGE_PREFIX}/hero.png'},
+            doc=self._document_with(f'{article_prefix(post.id)}/inline.png'),
+        )
+
+        assert saved.banner_home_top == f'{SHARED_IMAGE_PREFIX}/hero.png'
+
+    def test_clearing_a_banner_is_still_allowed(self, news_repo, s3):
+        """None is how REMOVE works in the editor — it must not be mistaken
+        for a key that failed validation."""
+        post = CreateNewsPost(news_repo, s3).execute('Weather', 'Keeper')
+        UpdateNewsPost(news_repo, s3).execute(
+            post.id, banners={'banner_home_top': f'{SHARED_IMAGE_PREFIX}/hero.png'}
+        )
+
+        saved = UpdateNewsPost(news_repo, s3).execute(post.id, banners={'banner_home_top': None})
+
+        assert saved.banner_home_top is None

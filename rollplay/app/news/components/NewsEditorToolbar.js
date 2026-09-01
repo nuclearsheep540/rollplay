@@ -3,6 +3,7 @@
 
 'use client'
 
+import { activeBlockAttribute } from '@/app/shared/tiptap/blockAttribute'
 import { BLOCK_SPACINGS } from '@/app/shared/tiptap/blockSpacing'
 import { LINE_HEIGHTS } from '@/app/shared/tiptap/lineHeight'
 
@@ -22,7 +23,7 @@ import { LINE_HEIGHTS } from '@/app/shared/tiptap/lineHeight'
  * the site header, so the bar lands in the right place without measuring the
  * chrome or competing with it for z-order.
  */
-export default function NewsEditorToolbar({ editor, onPickImage, onEditLink }) {
+export default function NewsEditorToolbar({ editor, onPickImage, onEditLink, onEditAltText }) {
   if (!editor) return null
 
   const toggleClass = (isActive) => `news-tbtn ${isActive ? 'is-active' : ''}`
@@ -131,11 +132,13 @@ export default function NewsEditorToolbar({ editor, onPickImage, onEditLink }) {
       <span className="news-toolbar-sep" />
 
       {/* Line spacing applies to whole blocks, so this reads the current one
-          rather than toggling — a select says "this paragraph is X" in a way a
-          row of buttons cannot. */}
+          rather than toggling — a select says "this block is X" in a way a row
+          of buttons cannot. Read through activeBlockAttribute because a
+          heading carries the attribute too, and asking paragraph alone would
+          report Default while the cursor sits in a styled heading. */}
       <select
         className="news-tbtn-select"
-        value={editor.getAttributes('paragraph').lineHeight || ''}
+        value={activeBlockAttribute(editor, 'lineHeight') || ''}
         onChange={(event) => {
           const value = event.target.value
           if (value) {
@@ -156,7 +159,7 @@ export default function NewsEditorToolbar({ editor, onPickImage, onEditLink }) {
       {/* The gap AFTER a block, as opposed to the leading within one. */}
       <select
         className="news-tbtn-select"
-        value={editor.getAttributes('paragraph').blockSpacing || ''}
+        value={activeBlockAttribute(editor, 'blockSpacing') || ''}
         onChange={(event) => {
           const value = event.target.value
           if (value) {
@@ -203,6 +206,18 @@ export default function NewsEditorToolbar({ editor, onPickImage, onEditLink }) {
           <circle cx="9" cy="10" r="1.6" />
           <path d="M4.5 18.5 10 13l3.5 3.5L17 13l2.5 2.5" />
         </svg>
+      </button>
+
+      {/* Alt text belongs to one image, so this acts on the selected one and is
+          dead otherwise — there is no sensible "describe nothing". */}
+      <button
+        type="button"
+        className={toggleClass(Boolean(editor.getAttributes('image').alt))}
+        onClick={onEditAltText}
+        disabled={!editor.isActive('image')}
+        title="Describe the selected image for screen readers"
+      >
+        <span className="news-tbtn-alt">ALT</span>
       </button>
     </div>
   )

@@ -17,8 +17,12 @@ import { GOLD_INK, INK, formatNewsDate } from '../newsTokens'
  * The article OWNS its header: title, separator rule, then author and meta
  * beneath. The card bakes its meta above the title instead, and that
  * difference is deliberate — a card is a summary, an article is a document.
+ *
+ * `interactive` exists for the editor's preview tab: it renders this same
+ * component against the REAL post, so a live like button there would write
+ * genuine engagement — on a draft nobody has read yet.
  */
-export default function NewsArticle({ post }) {
+export default function NewsArticle({ post, interactive = true }) {
   if (!post) return null
 
   const topBanner = post.banner_urls?.article_top
@@ -40,7 +44,12 @@ export default function NewsArticle({ post }) {
         <span className="text-[11px] font-semibold tracking-widest" style={{ color: GOLD_INK }}>
           {formatNewsDate(post.published_at || post.updated_at)}
         </span>
-        <LikeButton postId={post.id} likeCount={post.like_count} liked={post.liked} />
+        <LikeButton
+          postId={post.id}
+          likeCount={post.like_count}
+          liked={post.liked}
+          interactive={interactive}
+        />
       </div>
 
       {topBanner && (

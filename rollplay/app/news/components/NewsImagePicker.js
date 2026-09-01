@@ -19,7 +19,7 @@ import NewsImageBrowser from './NewsImageBrowser'
  * choice, so making the author then find it in the grid would be a second
  * decision they already made.
  */
-export default function NewsImagePicker({ open, onClose, postId, onSelect }) {
+export default function NewsImagePicker({ open, onClose, postId, onSelect, onMoved }) {
   const place = (image) => {
     onSelect(image)
     onClose()
@@ -40,6 +40,7 @@ export default function NewsImagePicker({ open, onClose, postId, onSelect }) {
           columns={4}
           onSelect={place}
           onUploaded={place}
+          onMoved={onMoved}
         />
       </div>
     </Modal>

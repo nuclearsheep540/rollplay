@@ -20,7 +20,7 @@ import NewsImageBrowser from './NewsImageBrowser'
  * once it outgrows four rows, so a large library never pushes the rail taller
  * than the screen and defeats the sticking.
  */
-export default function NewsImageRail({ postId, onInsert }) {
+export default function NewsImageRail({ postId, onInsert, onMoved }) {
   return (
     <aside
       className="news-image-rail w-[290px] flex-none rounded-[10px] p-[18px]"
@@ -36,6 +36,7 @@ export default function NewsImageRail({ postId, onInsert }) {
         draggable
         scrollWithin
         onSelect={(image) => onInsert?.(image.key)}
+        onMoved={onMoved}
       />
 
       <p className="mt-4 text-[11.5px] leading-relaxed" style={{ color: COLORS.silver }}>
