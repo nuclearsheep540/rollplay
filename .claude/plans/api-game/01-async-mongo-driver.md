@@ -61,7 +61,7 @@ which the observer sees as the exact path replaying late.
 | Driver operations gaining `await` inside services | 61 |
 | Call sites gaining `await` (WS handlers, HTTP routes, service→service) | 190 |
 | Sync helpers that call a service and must go async | 4: `grid_resnap_fragment`, `_get_player_metadata`, `_map_token_place_cell_suffix`, `_write_map_token_log` (13 call sites) |
-| Cursor sites needing a real rewrite | 5: `gameservice.py:54`, `mapservice.py:226`, `adventure_log_service.py:194`, `:289`, `:372` |
+| Cursor sites needing a real rewrite | 5 found, 4 rewritten: `gameservice.py:54`, `adventure_log_service.py:194`, `:289`, `:372`. The fifth, `MapService.get_room_maps`, had no callers anywhere and was deleted rather than converted (Matt's call, 2026-09-03) |
 | Import-time database I/O to relocate | the `ping` in `mongo_service.client`, and `create_indexes()` in three constructors — run **twice** today because `app.py:52-54` and `websocket_events.py:31-33` each build their own service instances (the doubled "Created indexes" lines at boot) |
 | Startup hook in api-game today | none — `app = FastAPI()` with no lifespan |
 | Automated tests touching the services | none (`test_map_token_ops.py` tests the pure update-spec builder) |

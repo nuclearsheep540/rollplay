@@ -221,22 +221,4 @@ class MapService:
             logger.error(f"Failed to update complete map for room {room_id}: {e}")
             return False
     
-    async def get_room_maps(self, room_id: str) -> list:
-        """Get all maps uploaded to a room (for future map management UI)"""
-        try:
-            # find() is synchronous and sort/skip/limit chain on the cursor;
-            # only to_list() is awaited.
-            maps = await self.collection.find(
-                {"room_id": room_id}
-            ).sort("upload_date", -1).to_list()
-            
-            # Convert ObjectIds to strings
-            for map_doc in maps:
-                map_doc["_id"] = str(map_doc["_id"])
-                
-            return maps
-            
-        except Exception as e:
-            logger.error(f"Failed to get maps for room {room_id}: {e}")
-            return []
 
