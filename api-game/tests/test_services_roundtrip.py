@@ -234,26 +234,17 @@ class TestConcurrentWrites:
         finally:
             await GameService.delete_room(room_id)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Known gap (plan api-game/03): seat_change sends the whole array, "
-               "so a stale 'empty' is indistinguishable from a vacated seat and "
-               "no server-side write strategy can narrow it. Needs a wire change "
-               "to send the seat index + occupant. Remove this marker when fixed.",
-    )
-    async def test_stale_seat_layout_copy_erases_another_players_seat(self, mongo_up):
-        """Seat layout is an array every player writes whole.
+    async def test_stale_seat_copy_no_longer_erases_another_players_seat(self, mongo_up):
+        """Two players joining at once must both keep their seat.
 
-        Unlike the player_metadata cases above, this one is NOT fixed: it is
-        here to hold the gap open and will fail loudly (strict xfail) the day
-        someone makes it pass, so the marker cannot rot.
+        Reproduces the original bug as a SEQUENCE, not a race: it was a
+        stale-payload bug and a race was only one way to produce a stale copy.
+        Bob's client took its picture of the layout while every seat was empty;
+        Alice then sat; Bob sits from that stale picture. Under the old
+        whole-array write his "empty" at seat 0 landed on top of Alice.
 
-        Deliberately sequential, not concurrent. The bug is a stale-payload
-        bug — a race is just one way to produce a stale copy — and a sequence
-        reproduces it on every run, which is what a strict xfail needs. A
-        gather-based version would pass whenever the driver happened not to
-        interleave the reads, and strict would then fail the whole suite for
-        a timing accident.
+        set_seat_occupant takes only the seat being changed, so Bob's stale
+        view of seat 0 is never sent and never written.
         """
         room_id = make_room_id()
         alice, bob = str(uuid.uuid4()), str(uuid.uuid4())
@@ -265,18 +256,62 @@ class TestConcurrentWrites:
                     room_id, {"user_id": seat_user, "player_name": name,
                               "character_id": str(uuid.uuid4())})
 
-            # Bob's client took its copy of the layout while every seat was
-            # empty. Alice then sits. Bob sits from his stale copy, which
-            # still shows seat 0 as empty — and the whole-array write makes
-            # that stale "empty" land on top of Alice.
-            bobs_stale_copy = ["empty", "empty", "empty", "empty"]
-            await GameService.update_seat_layout(room_id, [alice, "empty", "empty", "empty"])
-            bobs_stale_copy[1] = bob
-            await GameService.update_seat_layout(room_id, bobs_stale_copy)
+            await GameService.set_seat_occupant(room_id, 0, alice)
+            # Bob's client still believes seat 0 is empty; it never says so.
+            await GameService.set_seat_occupant(room_id, 1, bob)
 
             layout = await GameService.get_seat_layout(room_id)
-            assert bob in layout, f"Bob's seat was erased: {layout}"
-            assert alice in layout, f"Alice's seat was erased by Bob's stale copy: {layout}"
+            assert layout[0] == alice, f"Alice's seat was erased: {layout}"
+            assert layout[1] == bob, f"Bob's seat is missing: {layout}"
+        finally:
+            await GameService.delete_room(room_id)
+
+    async def test_simultaneous_seat_changes_both_land(self, mongo_up):
+        """The concurrent form of the same thing: disjoint indexed writes."""
+        room_id = make_room_id()
+        alice, bob = str(uuid.uuid4()), str(uuid.uuid4())
+        try:
+            await GameService.create_room(make_game_settings(), room_id=room_id)
+            for seat_user, name in ((alice, "Alice"), (bob, "Bob")):
+                await GameService.update_player_character(
+                    room_id, {"user_id": seat_user, "player_name": name,
+                              "character_id": str(uuid.uuid4())})
+
+            await asyncio.gather(
+                GameService.set_seat_occupant(room_id, 0, alice),
+                GameService.set_seat_occupant(room_id, 2, bob),
+            )
+
+            layout = await GameService.get_seat_layout(room_id)
+            assert layout[0] == alice and layout[2] == bob, layout
+        finally:
+            await GameService.delete_room(room_id)
+
+    async def test_seat_rules_still_enforced_on_the_resulting_layout(self, mongo_up):
+        """A seating rule is about the whole party, so it is validated against
+        the layout the single-seat change would produce."""
+        room_id = make_room_id()
+        alice = str(uuid.uuid4())
+        try:
+            await GameService.create_room(make_game_settings(), room_id=room_id)
+            # No character selected yet — must be refused.
+            await GameService.update_player_character(
+                room_id, {"user_id": alice, "player_name": "Alice"})
+            with pytest.raises(ValueError, match="selected characters"):
+                await GameService.set_seat_occupant(room_id, 0, alice)
+
+            # With a character, the same seat is allowed.
+            await GameService.update_player_character(
+                room_id, {"user_id": alice, "character_id": str(uuid.uuid4())})
+            await GameService.set_seat_occupant(room_id, 0, alice)
+
+            # Sitting twice is still a duplicate.
+            with pytest.raises(ValueError, match="already occupies"):
+                await GameService.set_seat_occupant(room_id, 1, alice)
+
+            # Out-of-range index is rejected, not silently appended.
+            with pytest.raises(ValueError, match="outside a layout"):
+                await GameService.set_seat_occupant(room_id, 99, alice)
         finally:
             await GameService.delete_room(room_id)
 

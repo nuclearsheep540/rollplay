@@ -291,16 +291,24 @@ class WebsocketEvent():
 
     @staticmethod
     async def seat_change(websocket, data, event_data, user_id, client_id, manager):
-        """Broadcast a new seat layout.
+        """Broadcast the seat layout after a change.
+
+        Reads the AUTHORITATIVE layout rather than trusting the array the
+        client sent. The sender built its array before its own change landed,
+        so under two simultaneous joins each client would broadcast a picture
+        missing the other's seat, and whichever arrived last would win on every
+        screen — the same stale-copy problem as the write, one layer up
+        (plan api-game/03). The write itself happens over HTTP, before this
+        event; this handler only reflects the result to the room.
 
         Validates its own payload: the router used to do this before
         dispatching, which meant the one handler with a shape requirement had
         it enforced somewhere else entirely. The error result reaches the
         sender only, exactly as the router's inline reply did.
         """
-        seat_layout = data.get("data")
+        seat_layout = await GameService.get_seat_layout(client_id)
         if not isinstance(seat_layout, list):
-            return WebsocketEventResult.error("Seat layout must be an array.")
+            return WebsocketEventResult.error("Room has no seat layout.")
 
         print(f"📡 Broadcasting seat layout change for room {client_id}: {seat_layout}")
 

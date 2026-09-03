@@ -96,58 +96,119 @@ class GameService:
             return id
 
     @staticmethod
+    def _validate_seat_layout(room: dict, seat_layout: list) -> None:
+        """Every rule a resulting seat layout must satisfy.
+
+        Shared by the whole-array writer (server-initiated, e.g. disconnect
+        cleanup) and the single-seat writer, so both enforce the same thing
+        against the layout the change would PRODUCE.
+
+        Raises:
+            ValueError: any rule broken — a user in two seats, the DM seated, a
+                moderator seated, or a seated user with no selected character.
+                One type for all four so callers can map them uniformly; the
+                HTTP route turns them into 409 Conflict.
+        """
+        seated_user_ids = [uid for uid in seat_layout if uid != "empty"]
+        if len(seated_user_ids) != len(set(seated_user_ids)):
+            duplicates = [uid for uid in set(seated_user_ids) if seated_user_ids.count(uid) > 1]
+            raise ValueError(f"User '{duplicates[0]}' already occupies another seat")
+
+        if not room:
+            return
+
+        dm_user_id = room.get("dungeon_master", {}).get("user_id", "")
+        if dm_user_id and dm_user_id in seat_layout:
+            raise ValueError("Dungeon Master cannot sit in party seats")
+
+        player_metadata = room.get("player_metadata", {})
+        if not isinstance(player_metadata, dict):
+            player_metadata = {}
+
+        seated_mods = [
+            uid for uid in seated_user_ids
+            if player_metadata.get(uid, {}).get("campaign_role") == "mod"
+        ]
+        if seated_mods:
+            raise ValueError("Moderators cannot sit in party seats")
+
+        # Any seated user must have a selected character in hot-state metadata.
+        invalid_users = [
+            uid for uid in seated_user_ids
+            if not player_metadata.get(uid, {}).get("character_id")
+        ]
+        if invalid_users:
+            raise ValueError("Only adventurers with selected characters can sit in party seats")
+
+    @staticmethod
+    async def set_seat_occupant(room_id: str, seat_index: int, user_id: str) -> list:
+        """Seat one user (or "empty") at ONE index, and return the resulting layout.
+
+        This is how a player taking, leaving or being removed from a seat is
+        written. The client sends the seat it is changing rather than the array
+        it believes in, because an array carries every OTHER seat as the sender
+        last saw it — and a seat that reads "empty" in a stale copy is
+        indistinguishable from one being vacated, so a whole-array write erases
+        whoever sat down in between (plan api-game/03).
+
+        The layout is validated as a whole (a seating rule is about the whole
+        party) but written as a single indexed $set, so two players sitting at
+        once touch disjoint paths and both land.
+
+        Raises:
+            Exception: the room does not exist.
+            ValueError: seat_index outside the layout, or a seating rule
+                broken — see _validate_seat_layout. The HTTP route maps these
+                to 409 Conflict.
+        """
+        collection = GameService._get_active_session()
+        filter_criteria = GameService.room_filter(room_id)
+
+        room = await collection.find_one(filter_criteria)
+        if not room:
+            raise Exception(f"Room {room_id} not found")
+
+        current_layout = room.get("seat_layout", [])
+        if not isinstance(current_layout, list):
+            raise Exception(f"Room {room_id} has no seat layout")
+        if not isinstance(seat_index, int) or not 0 <= seat_index < len(current_layout):
+            raise ValueError(
+                f"Seat index {seat_index} is outside a layout of {len(current_layout)} seats")
+
+        resulting_layout = list(current_layout)
+        resulting_layout[seat_index] = user_id
+        GameService._validate_seat_layout(room, resulting_layout)
+
+        result = await collection.update_one(
+            filter_criteria,
+            {"$set": {f"seat_layout.{seat_index}": user_id}}
+        )
+        if result.matched_count == 0:
+            raise Exception(f"Room {room_id} not found")
+
+        return resulting_layout
+
+    @staticmethod
     async def update_seat_layout(room_id: str, seat_layout: list):
-        """Update the seat layout for a room. Entries are user_ids or 'empty'."""
+        """Replace the WHOLE seat layout. Server-initiated callers only.
+
+        Safe where the caller derives the array from freshly-read state it owns
+        (disconnect cleanup vacating a leaver's seat, a resize). A client must
+        NOT drive this — see set_seat_occupant for why.
+        """
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        # Validate: Check for duplicate users in seats
-        seated_user_ids = [uid for uid in seat_layout if uid != "empty"]
-        if len(seated_user_ids) != len(set(seated_user_ids)):
-            duplicates = [uid for uid in set(seated_user_ids) if seated_user_ids.count(uid) > 1]
-            raise Exception(f"User '{duplicates[0]}' already occupies another seat")
-
-        # Validate: Prevent DM and moderators from taking player seats
         room = await collection.find_one(filter_criteria)
-        if room:
-            dm_user_id = room.get("dungeon_master", {}).get("user_id", "")
-            if dm_user_id and dm_user_id in seat_layout:
-                raise Exception("Dungeon Master cannot sit in party seats")
-
-            player_metadata = room.get("player_metadata", {})
-            if not isinstance(player_metadata, dict):
-                player_metadata = {}
-
-            seated_mods = [
-                uid for uid in seated_user_ids
-                if player_metadata.get(uid, {}).get("campaign_role") == "mod"
-            ]
-            if seated_mods:
-                raise ValueError("Moderators cannot sit in party seats")
-
-            # Any seated user must have a selected character in hot-state metadata.
-            invalid_users = [
-                uid for uid in seated_user_ids
-                if not player_metadata.get(uid, {}).get("character_id")
-            ]
-            if invalid_users:
-                raise ValueError("Only adventurers with selected characters can sit in party seats")
+        GameService._validate_seat_layout(room, seat_layout)
 
         logger.info(f"Updating seat layout with filter: {filter_criteria}")
         logger.info(f"New seat layout: {seat_layout}")
 
-        # Whole-array write, deliberately. A per-index diff was tried and is
-        # NOT an improvement: the client sends the layout it believes in, so a
-        # seat that reads "empty" in a stale copy is indistinguishable from a
-        # seat being vacated. Diffing against the stored array therefore writes
-        # that stale "empty" over whoever just sat down — the same loss, with
-        # more code. Unlike player_metadata (whose payload is already scoped to
-        # one player), the payload here IS the container, and no server-side
-        # write strategy can narrow what the client widened.
-        #
-        # Fixing this properly means sending the seat change (index + occupant)
-        # rather than the resulting array — a wire change (plan api-game/03).
+        # Whole-array write: correct here because the caller built this array
+        # from state it just read and owns. Client-driven seat changes go
+        # through set_seat_occupant instead.
         result = await collection.update_one(
             filter_criteria,
             {

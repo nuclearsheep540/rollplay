@@ -1,7 +1,8 @@
 # api-game 03 — Write to the Operation's Scope
 
-**Status:** PARTIALLY IMPLEMENTED 2026-09-03. D1 built and verified. **D2 and D3 were
-wrong and are withdrawn** — see §3a; both need a wire change, not a server-side one. Same branch/PR as 01 (async driver) and 02
+**Status:** IMPLEMENTED 2026-09-03. D1 (player metadata) built and verified. D2 was withdrawn
+as planned, then **fixed properly via the wire change it needed** (D2b below). D3 remains open.
+A fourth bug surfaced while tracing D1 and is fixed here too (D6, character colour). Same branch/PR as 01 (async driver) and 02
 (dispatch table), which are what exposed this.
 **Scope:** three write paths in api-game, one deletion, one CLAUDE.md refinement. No wire
 change: clients keep sending complete objects.
@@ -78,7 +79,40 @@ and `PlayerTokenSizeControl` (`pc_token_scale`). Both spread their whole cached 
 hardcoded narrow write would have broken grid saving, and diffing fails for D2's reason.
 `update_complete_map` therefore stays.
 
-### D2a/D3a — what would actually fix them (not scoped here)
+### D2b — DONE. Seat changes send the seat, not the layout
+The wire change D2a called for, built. `GameService.set_seat_occupant(room_id, seat_index,
+user_id)` validates the layout the change would PRODUCE (a seating rule is about the whole
+party) and writes a single `seat_layout.<i>` `$set`. `PUT /game/{room}/seat-layout` now takes
+`{seat_index, user_id}`; `update_seat_layout` survives for server-initiated whole-array writes
+(disconnect cleanup) and says so.
+
+**The broadcast had the same flaw and needed the same fix.** The `seat_change` handler
+re-broadcast the client's array, so under two simultaneous joins each client published a
+picture missing the other's seat and the last to arrive won on every screen. It now reads the
+authoritative layout for both the party-status update and the broadcast, so the WebSocket event
+only announces *which* seat changed.
+
+Frontend: `sendSeatChange(newSeats, seatIndex)`; all three callers (kick, role change, taking a
+seat) already had or could derive the index — every one of them was only ever changing one seat.
+
+All four seating rules now raise `ValueError`, so the route maps them uniformly to 409 (the
+duplicate-seat and DM checks previously raised bare `Exception` and surfaced as 500s).
+
+### D6 — DONE. Character colour no longer rides the runtime re-sync
+Found while tracing D1, and **not a clobber** — a stale read. Colour is character-owned but
+edited inside the hot session and synced back to PostgreSQL only at session end. api-site's
+`/internal/{id}/summary`, which api-game re-reads on every seat change to refresh HP/level/AC,
+also returned `color` — so any seat interaction overwrote a player's live choice with the value
+the character row held when the session began. Colour removed from that endpoint (its only
+consumer is this sync); session start still seeds colour by the ETL's separate
+`SessionUser`/`PlayerCharacter` path. Regression test asserts colour is absent from the summary.
+
+This is one symptom of a wider issue recorded in
+`.claude/plans/TODO-runtime-character-state-authority.md`: runtime state is written to
+PostgreSQL only, the hot copy goes stale, and the seat-change re-sync exists to paper over it.
+That refactor is out of this PR's scope.
+
+### D3a — what would still fix D3 (not scoped here)
 Both payloads *are* the container, and no server-side strategy can narrow what the client
 widened. The fix is at the wire: send the intent, not the resulting state — the seat index and
 its occupant, the map_config keys being changed. That is a frontend + backend change per
@@ -116,14 +150,19 @@ collection others also write? Only the first can be fixed behind the wire.
 |---|---|---|
 | Two players select characters at once | **failed** — Alice's entry erased | passes |
 | Same player, disjoint fields (rename vs damage) | passed (see below) | passes |
-| Two players sit down at once | **failed** — Alice's seat erased | **strict xfail**, the withdrawn D2 |
+| Two players sit down at once (stale copy, sequential) | **failed** — Alice's seat erased | passes via `set_seat_occupant` |
+| Two players sit down at once (concurrent) | — | passes; disjoint indexed writes |
+| Seat rules on the resulting layout | — | passes; duplicate/no-character/out-of-range all refused |
+| Colour survives a seat change | **failed** — reverted to the session-start value | passes |
 
 The disjoint-fields test **passed against the unfixed code** — `gather` did not force those
 two to interleave — so it proves nothing about the bug and is kept only as a guarantee that
 the fixed shape holds. Labelled as such rather than cited as evidence.
 
-The seat test stays as a `strict=True` xfail so the gap is visible in the suite and fails
-loudly the day someone closes it without removing the marker.
+The seat xfail is gone: the gap it held open is closed. A/B on the same stale-copy sequence,
+one run: the old whole-array writer loses Alice, `set_seat_occupant` keeps both. Live over the
+real route and sockets, two players take seats and **both clients see `[A, B, empty, empty]`**;
+409 for a duplicate seat and an out-of-range index, 400 for the old array payload.
 
 Live, through the real HTTP route (`PUT /game/{room}/player/character`): full character sync,
 then an `hp_current`-only update that **kept** `character_name` (the merge guarantee now comes

@@ -1018,70 +1018,45 @@ async def update_player_character(room_id: str, character_data: dict):
 
 @app.put("/game/{room_id}/seat-layout")
 async def update_seat_layout(room_id: str, request: dict):
-    """Update the seat layout for a game room"""
+    """Seat one user (or "empty") at ONE seat, and return the resulting layout.
+
+    Takes the seat being changed, not the array the client believes in. An
+    array carries every other seat as the sender last saw it, so a stale
+    "empty" is indistinguishable from a seat being vacated and the write erases
+    whoever sat down in between — two players joining at once used to lose one
+    of the seats (plan api-game/03).
+
+    The response carries the authoritative resulting layout, which is what the
+    caller should render rather than its own optimistic array.
+    """
     try:
-        logger.debug(f"Received seat layout update request for room {room_id}")
-        logger.debug(f"Request data: {request}")
+        logger.debug(f"Received seat change for room {room_id}: {request}")
+
+        seat_index = request.get("seat_index")
+        user_id = request.get("user_id")
+        updated_by = request.get("updated_by", "System")
+
+        if not isinstance(seat_index, int) or isinstance(seat_index, bool):
+            raise HTTPException(status_code=400, detail="seat_index must be an integer")
+        if not isinstance(user_id, str) or not user_id:
+            raise HTTPException(status_code=400, detail="user_id must be a user id or 'empty'")
 
         check_room = await GameService.get_room(id=room_id)
         if not check_room:
             logger.error(f"Room {room_id} not found")
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
-        seat_layout = request.get("seat_layout")
-        updated_by = request.get("updated_by", "System")
+        # Validation lives in the service, against the layout this change would
+        # produce — it is a rule about the whole party, not about one seat.
+        seat_layout = await GameService.set_seat_occupant(room_id, seat_index, user_id)
+        logger.info(f"Seat {seat_index} in room {room_id} set to {user_id}")
 
-        logger.debug(f"Updated by: {updated_by}")
-        logger.debug(f"New seat layout: {seat_layout}")
-        
-        # Validate seat layout
-        if not isinstance(seat_layout, list):
-            logger.error(f"Invalid seat layout type: {type(seat_layout)}")
-            raise HTTPException(status_code=400, detail="Seat layout must be an array")
-
-        # Get current max_players to validate layout length
-        current_max = check_room.get("max_players", 4)
-        if len(seat_layout) > current_max:
-            logger.error(f"Seat layout too long: {len(seat_layout)} > {current_max}")
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Seat layout cannot exceed {current_max} seats"
-            )
-
-        non_empty_players = [seat for seat in seat_layout if isinstance(seat, str) and seat != "empty"]
-
-        room_dm = check_room.get("dungeon_master", {}).get("user_id", "")
-        if room_dm and room_dm in non_empty_players:
-            raise HTTPException(status_code=409, detail="Dungeon Master cannot sit in party seats")
-
+        # Log the change (only if there are actual players). Resolve each seat's user_id to a
+        # display name — NEVER bake raw UUIDs into the message (the client renders it verbatim).
         player_metadata = check_room.get("player_metadata", {})
         if not isinstance(player_metadata, dict):
             player_metadata = {}
 
-        seated_mods = [
-            uid for uid in non_empty_players
-            if player_metadata.get(uid, {}).get("campaign_role") == "mod"
-        ]
-        if seated_mods:
-            raise HTTPException(status_code=409, detail="Moderators cannot sit in party seats")
-
-        invalid_players = [
-            uid for uid in non_empty_players
-            if not player_metadata.get(uid, {}).get("character_id")
-        ]
-        if invalid_players:
-            raise HTTPException(
-                status_code=409,
-                detail="Only adventurers with selected characters can sit in party seats",
-            )
-        
-        # Update MongoDB record
-        logger.debug(f"Calling await GameService.update_seat_layout({room_id}, {seat_layout})")
-        await GameService.update_seat_layout(room_id, seat_layout)
-        logger.info(f"Successfully saved seat layout to database")
-        
-        # Log the change (only if there are actual players). Resolve each seat's user_id to a
-        # display name — NEVER bake raw UUIDs into the message (the client renders it verbatim).
         non_empty_seats = [seat for seat in seat_layout if seat != "empty"]
         if non_empty_seats:  # Only log if there are actual players
             def _seat_name(uid):
@@ -1098,20 +1073,18 @@ async def update_seat_layout(room_id: str, request: dict):
                 log_type=LogType.SYSTEM,
                 from_player=updated_by  # user_id — the client resolves it to a name (never shows the UUID)
             )
-        
-        response_data = {
+
+        return {
             "success": True,
             "room_id": room_id,
             "seat_layout": seat_layout,
             "updated_by": updated_by
         }
-        logger.debug(f"Returning response: {response_data}")
-        return response_data
 
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except ValueError as e:
-        logger.warning(f"Seat layout validation failed: {str(e)}")
+        logger.warning(f"Seat change validation failed: {str(e)}")
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error in update_seat_layout: {str(e)}")

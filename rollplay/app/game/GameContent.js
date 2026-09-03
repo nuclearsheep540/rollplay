@@ -973,8 +973,12 @@ export default function GameContent() {
   const handleKickPlayer = async (userIdToKick, disconnected) => {
     try {
       // Find the seat with this user and empty it
-      const updatedSeats = gameSeats.map(seat =>
-        seat.userId === userIdToKick
+      const kickedSeatIndex = gameSeats.findIndex(seat => seat.userId === userIdToKick);
+      if (kickedSeatIndex === -1) {
+        return; // not seated — nothing to vacate
+      }
+      const updatedSeats = gameSeats.map((seat, index) =>
+        index === kickedSeatIndex
           ? { ...seat, userId: "empty", playerName: "empty", characterData: null, isActive: false }
           : seat
       );
@@ -982,8 +986,8 @@ export default function GameContent() {
       // Send kick event via websocket using hook method
       sendPlayerKick(userIdToKick);
 
-      // Send updated seat layout using hook method
-      sendSeatChange(updatedSeats);
+      // Vacate that one seat — never the whole layout
+      sendSeatChange(updatedSeats, kickedSeatIndex);
 
       // Update local state
       setGameSeats(updatedSeats);
@@ -1058,7 +1062,7 @@ export default function GameContent() {
         };
 
         setGameSeats(newSeats);
-        sendSeatChangeRef.current?.(newSeats);
+        sendSeatChangeRef.current?.(newSeats, seatIndex);
       }
     } else if (action === 'unset_dm') {
       setIsDM(false);
@@ -1542,7 +1546,7 @@ export default function GameContent() {
       characterData,
       isActive: false
     };
-    await sendSeatChange(newSeats);
+    await sendSeatChange(newSeats, emptyIdx);
   };
 
   // Show dice portal for player rolls
