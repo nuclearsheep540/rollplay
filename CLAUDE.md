@@ -410,8 +410,9 @@ npm run build        # Production build
 # api-site (Main DDD Application) — port 8082
 cd api-site && uvicorn main:app --reload
 
-# api-game (Game Service) — port 8081
-cd api-game && python app.py
+# api-game (Game Service) — port 8081. No `python app.py`: app.py defines the
+# ASGI app and has no __main__ block, and the lifespan needs a running loop.
+cd api-game && uvicorn app:app --reload --port 8081 --log-config ./config/log_conf.yaml
 
 # api-auth (Authentication Service) — port 8083
 cd api-auth && uvicorn app:app --reload
@@ -517,8 +518,24 @@ location /api/auth { ... }
 
 ### api-game (Game Session Service)
 - **Does**: Manage atomic game state in MongoDB, handle game WebSocket connections, broadcast state changes
-- **Does NOT**: Know about campaigns/users/site concepts, read from PostgreSQL
-- **Tech**: MongoDB, WebSocket
+- **Does NOT**: Know about campaigns/users/site concepts, read from PostgreSQL, **block the event loop**
+- **Tech**: MongoDB via PyMongo's async client (`AsyncMongoClient`), WebSocket
+
+**Every database call in api-game is awaited.** One process, one event loop, every
+client in every room served by it — so a synchronous driver call freezes the whole
+service until it returns, including drag streams and broadcasts for players in
+other games. Blocking pymongo was measured stalling the loop for the length of
+each MongoDB round trip; a blocking call in a handler is now a bug, not a style
+choice. Boot (the reachability ping and index creation) runs in `app.py`'s FastAPI
+lifespan, because there is no event loop at import time to await on.
+
+**Awaits are suspension points, so handlers interleave.** A handler no longer runs
+start-to-finish uninterrupted; another client's message can run at any `await`.
+In-memory presence state — the map-token hold registry, the hidden-token set,
+`ConnectionManager.room_users` — is owned by the loop thread: read and mutate it
+between awaits, never across one, and re-read anything a decision depends on. This
+is why `map_token_update`'s read → write → read-back is no longer atomic (accepted:
+per-token positional `$set`s, same-token races are last-write-wins by design).
 
 ### HTTP-Based ETL (Session Lifecycle)
 **Game Start** (Cold→Hot): api-site gathers state from PostgreSQL → HTTP POST to api-game → MongoDB document created → game status set to ACTIVE
@@ -578,7 +595,7 @@ into our code, not left in the library's documentation. A bare library call cann
 
   ```python
   try:
-      client.admin.command('ping')  # forces a real round-trip
+      await self.client.admin.command('ping')  # forces a real round-trip
   except ServerSelectionTimeoutError:
       logger.critical("MongoDB unreachable — refusing to start")
       raise
@@ -588,9 +605,11 @@ into our code, not left in the library's documentation. A bare library call cann
   next reader doesn't "helpfully" wrap it in a recovery path.
 - **Defaults we rely on**: pass them explicitly as kwargs (`serverSelectionTimeoutMS=5000`). If
   the design cares about a value, an invisible library default is not allowed to supply it.
-- **Semantics we lean on**: implicit behaviors the design depends on (pymongo's lazy connect,
-  `create_index` idempotency, Mongo auto-creating collections on first write) get a one-line
-  comment at the point of reliance.
+- **Semantics we lean on**: implicit behaviors the design depends on get a one-line comment at
+  the point of reliance — `AsyncMongoClient` connects lazily (constructing it proves nothing;
+  the lifespan's ping is what establishes reachability), `create_index` is an idempotent no-op,
+  Mongo auto-creates collections on first write, and `find()` returns a cursor *synchronously*
+  while `aggregate()` must be awaited before you can drain it.
 
 **Calibration**: this applies at I/O boundaries and designed failure paths — not to every line
 (any Python line can raise; annotating everything buries the signal). The test: can a reader who
@@ -599,7 +618,8 @@ decided to do about it?
 
 **Origin (2026-08-28)**: `client.admin.command('ping')` in api-game's `mongo_service.py` was the
 loud-crash half of boot — it raises when MongoDB is unreachable, and nothing in the code said so.
-The failure path the architecture depended on was invisible at the call site.
+The failure path the architecture depended on was invisible at the call site. Moved into the
+FastAPI lifespan on 2026-09-03 when api-game went async; the property it guards is unchanged.
 
 ### Variable Naming — Recognizable Words, Not Initials
 
@@ -649,13 +669,22 @@ place.
 - **Assert only on objects the test created.** Asserting on a module constant, or on anything a
   previous test could have touched, makes the result a function of the whole run.
 - **Leave nothing behind.** If a test must mutate shared state, restore it in teardown — but treat
-  needing that as a smell worth removing rather than managing.
+  needing that as a smell worth removing rather than managing. Against a real store this means
+  deleting rows, not just deactivating them: `api-game/tests/test_services_roundtrip.py` learned
+  this when `clear_active_map` turned out to only flip `active: false`, leaving a row per run.
+- **Skip, don't fail, when infrastructure is absent.** A test that needs MongoDB or PostgreSQL
+  should `pytest.skip` with a reason when it cannot reach it, so the suite still runs on a machine
+  with no stack up.
 
 **Verify a new test actually proves what you claim.** Run it alone against the *unfixed* code:
 
 ```bash
-docker exec api-site-dev python -m pytest "path::TestClass::test_name" -q
+docker exec api-site-dev python -m pytest "path::TestClass::test_name" -q   # api-site
+docker exec api-game-dev python -m pytest "path::TestClass::test_name" -q   # api-game
 ```
+
+Both images carry pytest; run the suite in the container that owns the code, so it sees the same
+dependencies and the same MongoDB/PostgreSQL the app talks to.
 
 If it passes there, it does not prove the bug — whatever it does in a full run. Temporarily
 reintroducing the bug to run this experiment is cheap and worth it (copy the file first, restore

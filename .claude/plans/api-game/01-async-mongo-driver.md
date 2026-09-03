@@ -1,6 +1,7 @@
 # api-game 01 — Async MongoDB Driver
 
-**Status:** Planned 2026-09-03, not built. Second work item after tokens 05 (the token
+**Status:** IMPLEMENTED 2026-09-03. Built, verified (see §5 results below), CLAUDE.md
+updated. Awaiting Matt's two-window QA of the drag stream. Second work item after tokens 05 (the token
 branch is complete and awaiting QA; the stall this plan removes is what has been masking
 that QA). Ships as its own PR off `main`.
 **Scope:** api-game only. api-site, the ETL contracts, the wire, and shared_contracts are
@@ -200,7 +201,36 @@ Throughput headroom comes from the loop no longer blocking, not from more proces
    fail); the value is the round trip passing against the async client.
 7. **Docs** — §6, only after the above is implemented and QA'd.
 
-## 5. Proof and QA
+## 5. Proof and QA — RESULTS
+
+All verified on the dev stack, 2026-09-03:
+
+| Check | Result |
+|---|---|
+| api-game suite, in-container | 77 passed (69 existing + 8 new round trips) |
+| Round trips, repeated runs | pass twice consecutively, zero rows left behind |
+| Boot, MongoDB reachable | one "MongoDB connection established", one set of index lines (was two) |
+| Boot, MongoDB unreachable | `CRITICAL ... refusing to start`, `ServerSelectionTimeoutError`, exit 1, no "startup complete", Sentry event sent |
+| HTTP routes | `/game/{room}`, `/active-map`, `/active-image`, `/logs`, `/logs/stats`, `/roles` all 200 with real data (covers 4 of the 5 cursor rewrites) |
+| WebSocket path | connect → initial_state; place/move/remove → board fragments; grab/move/release → 3 relays |
+| Loop no longer blocks | A/B in one process, 200 `find_one` calls each: blocking client let a 1 ms ticker run **37** times, awaited client **225** times over a comparable window |
+| Missed awaits | no `coroutine object` in logs; grep sweep clean |
+
+Two things found during implementation that were not in the plan:
+
+1. **PyMongo 4.x emits structured DEBUG logs** for every command, connection checkout and
+   server-selection round trip. Under api-game's DEBUG root that is several lines per driver
+   call on the hot path — worse than the per-message log removed from the websocket loop.
+   Fixed by pinning the `pymongo` logger to WARNING in `config/log_conf.yaml`.
+2. **`AsyncMongoClient` binds to the event loop that created it** and refuses use from another
+   ("Cannot use AsyncMongoClient in different event loop"). Harmless in production (one loop for
+   the process' life) but it means tests must rebuild the client per test, since anyio hands each
+   test a fresh loop — a session-scoped `anyio_backend` does *not* share one. `close()` now drops
+   its reference before awaiting so a client bound to a dead loop can still be replaced.
+
+Original QA plan follows.
+
+## 5a. Proof and QA (as planned)
 
 - `python3 -m pytest api-game/tests -q` green, including the four round trips.
 - Boot: `docker logs api-game-dev` shows one "MongoDB connection established", one set of

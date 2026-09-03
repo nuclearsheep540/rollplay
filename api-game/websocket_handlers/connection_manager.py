@@ -1,6 +1,10 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
+import asyncio
+
 from fastapi import WebSocket
+
+from gameservice import GameService
 
 class ConnectionManager:
     """
@@ -69,7 +73,6 @@ class ConnectionManager:
 
     def schedule_user_removal(self, room_id: str, user_id: str):
         """Schedule a user for complete removal after 30 seconds"""
-        import asyncio
 
         async def remove_user_after_timeout():
             await asyncio.sleep(30)  # 30 seconds
@@ -139,8 +142,7 @@ class ConnectionManager:
             return
 
         # Look up player names from the room's player_metadata
-        from gameservice import GameService
-        room = GameService.get_room(room_id)
+        room = await GameService.get_room(room_id)
         player_metadata = room.get("player_metadata", {}) if room else {}
         dm = room.get("dungeon_master", {}) if room else {}
 

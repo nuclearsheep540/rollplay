@@ -3,7 +3,11 @@
 import logging
 from datetime import datetime
 from fastapi import FastAPI, WebSocket
+import asyncio
+
 from starlette.websockets import WebSocketDisconnect
+
+from gameservice import GameService
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +36,8 @@ def register_websocket_routes(app: FastAPI):
         room_manager = RoomManager(manager, client_id)
 
         # Send initial state to THIS client only (before broadcasting connection to others)
-        from gameservice import GameService
         try:
-            room = GameService.get_room(client_id)
+            room = await GameService.get_room(client_id)
             if room:
                 # Hidden tokens never reach player clients (decision 17) —
                 # this send is already per-socket, so filter right here.
@@ -484,7 +487,6 @@ def register_websocket_routes(app: FastAPI):
 
                 # Handle special cases for adventure log removal
                 if event_type == "dice_roll":
-                    import asyncio
                     await asyncio.sleep(0.5)  # Small delay to ensure dice roll is processed first
 
                     # Send log removal message first

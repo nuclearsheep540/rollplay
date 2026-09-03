@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from pydantic import BaseModel
-from pymongo.collection import Collection
-from pymongo.database import Database
+from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.database import AsyncDatabase
 from gameservice import GameService
 from shared_contracts.image import ImageConfig
 import logging
@@ -24,24 +24,25 @@ class ImageSettings(BaseModel):
 class ImageService:
     """Managing active images for rooms"""
 
-    def __init__(self, db: Database):
-        self.collection: Collection = db.active_images
-        self.create_indexes()
+    def __init__(self, db: AsyncDatabase):
+        self.collection: AsyncCollection = db.active_images
+        # No I/O in the constructor: create_indexes() is awaited once at boot
+        # from app.py's lifespan, where there is an event loop to await on.
 
-    def create_indexes(self):
+    async def create_indexes(self):
         """
         Creates indexes for the active_images collection
         optimizing queries for active images by room_id
         """
-        self.collection.create_index([("room_id", 1), ("active", 1)])
+        await self.collection.create_index([("room_id", 1), ("active", 1)])
         logger.info(f"Created indexes for {self.collection.name} collection")
 
-    def set_active_image(self, room_id: str, image_settings: ImageSettings) -> bool:
+    async def set_active_image(self, room_id: str, image_settings: ImageSettings) -> bool:
         """Set the active image for a room and update active_display to 'image'"""
         try:
             # Preserve display config from existing MongoDB document for this image
             # (config applied in-game lives in MongoDB until session-end ETL)
-            existing = self.collection.find_one(
+            existing = await self.collection.find_one(
                 {"room_id": room_id, "image_config.filename": image_settings.image_config.filename}
             )
             if existing:
@@ -62,21 +63,21 @@ class ImageService:
                 image_settings.image_config = ImageConfig(**incoming_conf)
 
             # Deactivate any existing active images for this room
-            self.collection.update_many(
+            await self.collection.update_many(
                 {"room_id": room_id, "active": True},
                 {"$set": {"active": False}}
             )
 
             # Insert or update the image (nested shape stored in MongoDB)
             image_data = image_settings.model_dump()
-            self.collection.replace_one(
+            await self.collection.replace_one(
                 {"room_id": room_id, "image_config.filename": image_settings.image_config.filename},
                 image_data,
                 upsert=True
             )
 
             # Update active_display on the game session document
-            GameService.set_active_display(room_id, "image")
+            await GameService.set_active_display(room_id, "image")
 
             logger.info(f"Set active image for room {room_id}: {image_settings.image_config.filename}")
             return True
@@ -85,10 +86,10 @@ class ImageService:
             logger.error(f"Failed to set active image for room {room_id}: {e}")
             return False
 
-    def get_active_image(self, room_id: str) -> Optional[Dict[str, Any]]:
+    async def get_active_image(self, room_id: str) -> Optional[Dict[str, Any]]:
         """Get the currently active image for a room"""
         try:
-            image_doc = self.collection.find_one(
+            image_doc = await self.collection.find_one(
                 {"room_id": room_id, "active": True}
             )
 
@@ -104,15 +105,15 @@ class ImageService:
             logger.error(f"Failed to get active image for room {room_id}: {e}")
             return None
 
-    def clear_active_image(self, room_id: str) -> bool:
+    async def clear_active_image(self, room_id: str) -> bool:
         """Clear the active image for a room and update active_display"""
         try:
-            self.collection.update_many(
+            await self.collection.update_many(
                 {"room_id": room_id, "active": True},
                 {"$set": {"active": False}}
             )
 
-            GameService.set_active_display(room_id, None)
+            await GameService.set_active_display(room_id, None)
 
             logger.info(f"Cleared active image for room {room_id}")
             return True
@@ -121,7 +122,7 @@ class ImageService:
             logger.error(f"Failed to clear active image for room {room_id}: {e}")
             return False
 
-    def update_image_config(
+    async def update_image_config(
             self,
             room_id: str,
             image_fit: str = None,
@@ -150,7 +151,7 @@ class ImageService:
             if not update_fields:
                 return False
 
-            result = self.collection.update_one(
+            result = await self.collection.update_one(
                 {"room_id": room_id, "active": True},
                 {"$set": update_fields}
             )
@@ -166,20 +167,20 @@ class ImageService:
             logger.error(f"Failed to update image config for room {room_id}: {e}")
             return False
 
-    def delete_room_images(self, room_id: str) -> bool:
+    async def delete_room_images(self, room_id: str) -> bool:
         """Delete all image documents for a room (session-end cleanup)."""
         try:
-            result = self.collection.delete_many({"room_id": room_id})
+            result = await self.collection.delete_many({"room_id": room_id})
             logger.info(f"Deleted {result.deleted_count} image docs for room {room_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to delete images for room {room_id}: {e}")
             return False
 
-    def get_active_display(self, room_id: str) -> Optional[str]:
+    async def get_active_display(self, room_id: str) -> Optional[str]:
         """Get the current active_display value from the game session"""
         try:
-            room = GameService.get_room(room_id)
+            room = await GameService.get_room(room_id)
             if room:
                 return room.get("active_display")
             return None

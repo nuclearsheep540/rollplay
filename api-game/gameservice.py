@@ -46,15 +46,17 @@ class GameService:
     # need to be able to generate a room_id
     # creating the room needs to update mongo with this player and basic config
     @staticmethod
-    def get_room(id):
+    async def get_room(id):
         "Gets the room id"
         
         collection = GameService._get_active_session()
         filter_criteria = GameService.room_filter(id)
+        # find() returns an AsyncCursor synchronously — it is NOT a coroutine
+        # (unlike every other driver call here). Awaiting comes at to_list().
         cursor = collection.find(filter_criteria)
 
         try:
-            result = [room for room in cursor]
+            result = await cursor.to_list()
             result = result[0] # get first record
             result["_id"] = str(result["_id"]) # cast object to str for json
             return result
@@ -62,12 +64,12 @@ class GameService:
             return
 
     @staticmethod
-    def delete_room(id):
+    async def delete_room(id):
         """Delete a room from active_sessions collection"""
         collection = GameService._get_active_session()
         filter_criteria = GameService.room_filter(id)
         try:
-            result = collection.delete_one(filter_criteria)
+            result = await collection.delete_one(filter_criteria)
             logger.info(f"Deleted room {id}: {result.deleted_count} documents")
             return result.deleted_count > 0
         except Exception as e:
@@ -76,7 +78,7 @@ class GameService:
 
     # need to be able to query a room_id
     @staticmethod
-    def create_room(settings: GameSettings, room_id: str = None):
+    async def create_room(settings: GameSettings, room_id: str = None):
         "Creates a room by adding a new record in mongodb with player config, returning the hash as the route"
         collection = GameService._get_active_session()
 
@@ -85,16 +87,16 @@ class GameService:
         # If room_id is provided, use it as the MongoDB _id
         if room_id:
             room_data["_id"] = room_id
-            result = collection.insert_one(room_data)
+            result = await collection.insert_one(room_data)
             return room_id
         else:
             # Original behavior - auto-generate ObjectId
-            result = collection.insert_one(room_data)
+            result = await collection.insert_one(room_data)
             id = str(result.inserted_id)
             return id
 
     @staticmethod
-    def update_seat_layout(room_id: str, seat_layout: list):
+    async def update_seat_layout(room_id: str, seat_layout: list):
         """Update the seat layout for a room. Entries are user_ids or 'empty'."""
         collection = GameService._get_active_session()
 
@@ -107,7 +109,7 @@ class GameService:
             raise Exception(f"User '{duplicates[0]}' already occupies another seat")
 
         # Validate: Prevent DM and moderators from taking player seats
-        room = collection.find_one(filter_criteria)
+        room = await collection.find_one(filter_criteria)
         if room:
             dm_user_id = room.get("dungeon_master", {}).get("user_id", "")
             if dm_user_id and dm_user_id in seat_layout:
@@ -135,7 +137,7 @@ class GameService:
         logger.info(f"Updating seat layout with filter: {filter_criteria}")
         logger.info(f"New seat layout: {seat_layout}")
 
-        result = collection.update_one(
+        result = await collection.update_one(
             filter_criteria,
             {
                 "$set": {
@@ -156,7 +158,7 @@ class GameService:
         return str(result)
 
     @staticmethod
-    def update_seat_count(room_id, new_max):
+    async def update_seat_count(room_id, new_max):
         """Update the maximum number of seats for a room"""
         collection = GameService._get_active_session()
         
@@ -165,7 +167,7 @@ class GameService:
         logger.info(f"Updating seat count with filter: {filter_criteria}")
         logger.info(f"New max players: {new_max}")
         
-        result = collection.update_one(
+        result = await collection.update_one(
             filter_criteria,
             {
                 "$set": {
@@ -183,11 +185,11 @@ class GameService:
         return str(result)
 
     @staticmethod
-    def get_seat_layout(room_id: str) -> list:
+    async def get_seat_layout(room_id: str) -> list:
         """Get the current seat layout for a room"""
         collection = GameService._get_active_session()
         
-        room = collection.find_one(GameService.room_filter(room_id))
+        room = await collection.find_one(GameService.room_filter(room_id))
 
         if room and "seat_layout" in room:
             return room["seat_layout"]
@@ -197,7 +199,7 @@ class GameService:
             return ["empty"] * max_players
 
     @staticmethod
-    def update_player_color(room_id: str, user_id: str, color: str):
+    async def update_player_color(room_id: str, user_id: str, color: str):
         """Set a player's character color on their player_metadata entry.
 
         Color is character-owned — the seat a player occupies only *displays* it.
@@ -205,7 +207,7 @@ class GameService:
         back onto character rows during the ETL)."""
         collection = GameService._get_active_session()
 
-        result = collection.update_one(
+        result = await collection.update_one(
             GameService.room_filter(room_id),
             {"$set": {f"player_metadata.{user_id}.color": color}}
         )
@@ -217,9 +219,9 @@ class GameService:
         return str(result)
 
     @staticmethod
-    def is_moderator(room_id: str, user_id: str) -> bool:
+    async def is_moderator(room_id: str, user_id: str) -> bool:
         """Check if user is a moderator (includes DM)"""
-        room = GameService.get_room(room_id)
+        room = await GameService.get_room(room_id)
         if not room:
             return False
 
@@ -234,25 +236,25 @@ class GameService:
         return False
 
     @staticmethod
-    def is_dm(room_id: str, user_id: str) -> bool:
+    async def is_dm(room_id: str, user_id: str) -> bool:
         """Check if user is the dungeon master"""
-        room = GameService.get_room(room_id)
+        room = await GameService.get_room(room_id)
         if not room:
             return False
         return room.get("dungeon_master", {}).get("user_id") == user_id
 
     @staticmethod
-    def get_dm_user_id(room_id: str):
+    async def get_dm_user_id(room_id: str):
         """The DM's user_id, or None. Projection read — token ACL and
         per-recipient hidden filtering consult this on every committed op."""
         collection = GameService._get_active_session()
-        room = collection.find_one(GameService.room_filter(room_id), {"dungeon_master": 1})
+        room = await collection.find_one(GameService.room_filter(room_id), {"dungeon_master": 1})
         if not room:
             return None
         return room.get("dungeon_master", {}).get("user_id")
 
     @staticmethod
-    def get_room_token_context(room_id: str, asset_id: str):
+    async def get_room_token_context(room_id: str, asset_id: str):
         """Everything one committed token op needs, in ONE projection read:
         the DM's user_id (ACL + per-recipient filtering), the map's board
         (target lookup, denial reconciliation), and the token image refs
@@ -262,7 +264,7 @@ class GameService:
 
         Returns (dm_user_id, board_tokens, token_images)."""
         collection = GameService._get_active_session()
-        room = collection.find_one(
+        room = await collection.find_one(
             GameService.room_filter(room_id),
             {"dungeon_master": 1, map_token_array_path(asset_id): 1, "token_images": 1},
         )
@@ -273,9 +275,9 @@ class GameService:
         return dm_user_id, board_tokens, room.get("token_images", {})
 
     @staticmethod
-    def player_has_selected_character(room_id: str, user_id: str) -> bool:
+    async def player_has_selected_character(room_id: str, user_id: str) -> bool:
         """Check whether a user is an adventurer in this hot-state session."""
-        room = GameService.get_room(room_id)
+        room = await GameService.get_room(room_id)
         if not room:
             return False
 
@@ -287,12 +289,12 @@ class GameService:
         return bool(metadata.get("character_id"))
 
     @staticmethod
-    def update_player_role(room_id: str, user_id: str, new_role: str):
+    async def update_player_role(room_id: str, user_id: str, new_role: str):
         """Update a player's campaign_role in player_metadata."""
         collection = GameService._get_active_session()
         filter_criteria = GameService.room_filter(room_id)
 
-        result = collection.update_one(
+        result = await collection.update_one(
             filter_criteria,
             {"$set": {f"player_metadata.{user_id}.campaign_role": new_role}}
         )
@@ -303,13 +305,13 @@ class GameService:
         return result.modified_count > 0
 
     @staticmethod
-    def set_dm(room_id: str, user_id: str, player_name: str):
+    async def set_dm(room_id: str, user_id: str, player_name: str):
         """Set a user as dungeon master"""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        result = collection.update_one(
+        result = await collection.update_one(
             filter_criteria,
             {"$set": {"dungeon_master": {"user_id": user_id, "player_name": player_name, "campaign_role": "dm"}}}
         )
@@ -320,13 +322,13 @@ class GameService:
         return result.modified_count > 0
 
     @staticmethod
-    def unset_dm(room_id: str):
+    async def unset_dm(room_id: str):
         """Remove the current dungeon master"""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        result = collection.update_one(
+        result = await collection.update_one(
             filter_criteria,
             {"$set": {"dungeon_master": {}}}
         )
@@ -337,7 +339,7 @@ class GameService:
         return result.modified_count > 0
 
     @staticmethod
-    def update_player_character(room_id: str, character_data: dict):
+    async def update_player_character(room_id: str, character_data: dict):
         """
         Update a player's character data in room-level metadata, keyed by user_id.
 
@@ -359,7 +361,7 @@ class GameService:
         filter_criteria = GameService.room_filter(room_id)
 
         # Get current room
-        room = collection.find_one(filter_criteria)
+        room = await collection.find_one(filter_criteria)
         if not room:
             raise Exception(f"Room {room_id} not found")
 
@@ -380,7 +382,7 @@ class GameService:
         merged = {**existing, **provided, "user_id": user_id}
         player_metadata[user_id] = merged
 
-        result = collection.update_one(
+        result = await collection.update_one(
             filter_criteria,
             {"$set": {"player_metadata": player_metadata}}
         )
@@ -392,96 +394,96 @@ class GameService:
         return True
 
     @staticmethod
-    def update_audio_state(room_id: str, channel_id: str, channel_state: dict):
+    async def update_audio_state(room_id: str, channel_id: str, channel_state: dict):
         """Update a single audio channel's state in the active session (fire-and-forget)"""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        collection.update_one(
+        await collection.update_one(
             filter_criteria,
             {"$set": {f"audio_state.{channel_id}": channel_state}}
         )
 
     @staticmethod
-    def get_audio_state(room_id: str) -> dict:
+    async def get_audio_state(room_id: str) -> dict:
         """Get current audio state from active session"""
         collection = GameService._get_active_session()
 
-        room = collection.find_one(GameService.room_filter(room_id), {"audio_state": 1})
+        room = await collection.find_one(GameService.room_filter(room_id), {"audio_state": 1})
 
         return room.get("audio_state", {}) if room else {}
 
     @staticmethod
-    def update_spotify_state(room_id: str, spotify_state: dict):
+    async def update_spotify_state(room_id: str, spotify_state: dict):
         """Replace the DM-controlled Spotify BGM anchor snapshot for late-joiner sync."""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        collection.update_one(
+        await collection.update_one(
             filter_criteria,
             {"$set": {"spotify": spotify_state}}
         )
 
     @staticmethod
-    def get_spotify_state(room_id: str) -> dict:
+    async def get_spotify_state(room_id: str) -> dict:
         """Get the current Spotify BGM anchor snapshot from the active session."""
         collection = GameService._get_active_session()
 
-        room = collection.find_one(GameService.room_filter(room_id), {"spotify": 1})
+        room = await collection.find_one(GameService.room_filter(room_id), {"spotify": 1})
 
         return room.get("spotify", {}) if room else {}
 
     @staticmethod
-    def save_track_config(room_id: str, asset_id: str, config: dict):
+    async def save_track_config(room_id: str, asset_id: str, config: dict):
         """Stash a track's config when swapped out of a channel (survives channel swaps)"""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        collection.update_one(
+        await collection.update_one(
             filter_criteria,
             {"$set": {f"audio_track_config.{asset_id}": config}}
         )
 
     @staticmethod
-    def get_track_config(room_id: str, asset_id: str):
+    async def get_track_config(room_id: str, asset_id: str):
         """Retrieve a stashed track config (returns None if never loaded)"""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        session = collection.find_one(filter_criteria, {f"audio_track_config.{asset_id}": 1})
+        session = await collection.find_one(filter_criteria, {f"audio_track_config.{asset_id}": 1})
         if session:
             return session.get("audio_track_config", {}).get(asset_id)
         return None
 
     @staticmethod
-    def remove_track_config(room_id: str, asset_id: str):
+    async def remove_track_config(room_id: str, asset_id: str):
         """Remove stashed config when track is loaded back into a channel"""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        collection.update_one(
+        await collection.update_one(
             filter_criteria,
             {"$unset": {f"audio_track_config.{asset_id}": ""}}
         )
 
     @staticmethod
-    def get_map_tokens(room_id: str, asset_id: str) -> list:
+    async def get_map_tokens(room_id: str, asset_id: str) -> list:
         """Current token list for one map asset (empty when none placed)."""
         collection = GameService._get_active_session()
         array_path = map_token_array_path(asset_id)
 
-        room = collection.find_one(GameService.room_filter(room_id), {array_path: 1})
+        room = await collection.find_one(GameService.room_filter(room_id), {array_path: 1})
         if not room:
             return []
         return room.get("map_token_state", {}).get(asset_id, [])
 
     @staticmethod
-    def apply_map_token_op(room_id: str, asset_id: str, op: str,
+    async def apply_map_token_op(room_id: str, asset_id: str, op: str,
                            token: dict = None, token_id: str = None) -> list:
         """Apply one committed MapToken op as a single atomic array update and
         return the map's full token list for the broadcast fragment.
@@ -499,20 +501,20 @@ class GameService:
         )
         filter_criteria = {**GameService.room_filter(room_id), **extra_filter}
 
-        result = collection.update_one(filter_criteria, update_doc)
+        result = await collection.update_one(filter_criteria, update_doc)
 
         if result.matched_count == 0:
-            room_exists = collection.count_documents(GameService.room_filter(room_id), limit=1)
+            room_exists = await collection.count_documents(GameService.room_filter(room_id), limit=1)
             if not room_exists:
                 raise ValueError(f"Room {room_id} not found")
             if op == "place":
                 raise ValueError(f"Token {token['id']} already exists on map {asset_id}")
             raise ValueError(f"Token {token_id} not found on map {asset_id}")
 
-        return GameService.get_map_tokens(room_id, asset_id)
+        return await GameService.get_map_tokens(room_id, asset_id)
 
     @staticmethod
-    def replace_map_token_board(room_id: str, asset_id: str, tokens: list) -> bool:
+    async def replace_map_token_board(room_id: str, asset_id: str, tokens: list) -> bool:
         """Atomic whole-board $set for server-initiated rewrites (grid
         re-snap, tokens v2 decision 20). Unlike apply_map_token_op this
         never stamps updated_at: a re-snap keeps pieces in their cells
@@ -520,20 +522,20 @@ class GameService:
         scramble."""
         collection = GameService._get_active_session()
 
-        result = collection.update_one(
+        result = await collection.update_one(
             GameService.room_filter(room_id),
             {"$set": {map_token_array_path(asset_id): tokens}}
         )
         return result.matched_count > 0
 
     @staticmethod
-    def set_active_display(room_id: str, display_type):
+    async def set_active_display(room_id: str, display_type):
         """Update the active_display field on the game session document"""
         collection = GameService._get_active_session()
 
         filter_criteria = GameService.room_filter(room_id)
 
-        collection.update_one(
+        await collection.update_one(
             filter_criteria,
             {"$set": {"active_display": display_type}}
         )
