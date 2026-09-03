@@ -385,9 +385,32 @@ from modules.your_module.model.your_model import YourModel
 
 ### Event System
 - **Structure**: `{event_type: string, data: object}`
-- **Game Events**: `seat_change`, `dice_roll`, `combat_state`, `player_connection`, `system_message`, `role_change`
+- **Game Events**: `seat_change`, `dice_roll`, `combat_state`, `role_change`
 - **Audio Events**: `remote_audio_play`, `remote_audio_resume`, `remote_audio_batch`
 - Events validated server-side before broadcasting; malformed events logged and ignored
+
+**Routing: `EVENT_HANDLERS` in `api-game/websocket_handlers/app_websocket.py`.** One dict
+mapping wire event type → handler on `WebsocketEvent`, replacing what used to be 29 hand-written
+`if/elif` branches. Every handler shares the signature
+`(websocket, data, event_data, user_id, client_id, manager)` and returns a
+`WebsocketEventResult`, which is what lets the receive loop be a single body.
+
+**That dict IS the wire allowlist — never build it with `getattr(WebsocketEvent, event_type)`.**
+The same class carries `player_connection`, `player_disconnect`, `player_displaced` and
+`system_message`, which the server invokes on its own initiative and no client may ever reach,
+plus the private name/metadata/log helpers. Reflection would expose all of them to any client.
+`api-game/tests/test_event_dispatch.py` guards this and fails if the table is ever derived
+rather than declared.
+
+**Adding an event**: write the handler on `WebsocketEvent`, add one line to `EVENT_HANDLERS`,
+and validate the payload *inside the handler* (returning `WebsocketEventResult.error(...)`, which
+the loop sends to the sender alone). The loop handles the rest generically — a `None`
+`broadcast_message` means "already answered point-to-point, send nothing", handler exceptions
+become an error reply instead of a dead socket, and cleanup runs in a `finally` on every exit
+path so a socket that dies any way other than a clean disconnect still releases its map-token
+holds. Per-event post-dispatch behaviour (the seat lobby refresh, which must run *before* its own
+broadcast, and the dice log-removal follow-ups) is spelled out in the loop, not hidden in the
+table.
 
 ## Development Commands
 

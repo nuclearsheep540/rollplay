@@ -291,7 +291,16 @@ class WebsocketEvent():
 
     @staticmethod
     async def seat_change(websocket, data, event_data, user_id, client_id, manager):
+        """Broadcast a new seat layout.
+
+        Validates its own payload: the router used to do this before
+        dispatching, which meant the one handler with a shape requirement had
+        it enforced somewhere else entirely. The error result reaches the
+        sender only, exactly as the router's inline reply did.
+        """
         seat_layout = data.get("data")
+        if not isinstance(seat_layout, list):
+            return WebsocketEventResult.error("Seat layout must be an array.")
 
         print(f"📡 Broadcasting seat layout change for room {client_id}: {seat_layout}")
 
@@ -361,6 +370,13 @@ class WebsocketEvent():
     @staticmethod
     async def initiative_prompt_all(websocket, data, event_data, user_id, client_id, manager):
         players_to_prompt = event_data.get("players", [])  # user_ids
+        if not players_to_prompt:
+            # Nothing to prompt. Silent by design — the router dropped this
+            # before dispatch and never answered the sender, so returning no
+            # broadcast keeps the behaviour identical.
+            logger.warning("No players provided for initiative prompt")
+            return WebsocketEventResult(broadcast_message=None)
+
         prompted_by = event_data.get("prompted_by", user_id)
                 
         # Generate unique initiative prompt ID for potential removal
@@ -1448,9 +1464,9 @@ class WebsocketEvent():
             # the DM cycles between maps in a session, in-session edits
             # are preserved per-map — switching to map B and back to map A
             # restores A's painted fog and tweaked grid.
-            existing_map = map_service.collection.find_one(
-                {"room_id": room_id, "map_config.filename": mc_data.get("filename")}
-            ) if map_service.collection is not None else None
+            existing_map = await map_service.get_room_map_by_filename(
+                room_id, mc_data.get("filename")
+            )
             existing_mc = existing_map.get("map_config", {}) if existing_map else {}
 
             preserved = _merge_preserved_map_fields(incoming=mc_data, existing=existing_mc)

@@ -1,7 +1,6 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 import logging
-from datetime import datetime
 from fastapi import FastAPI, WebSocket
 import asyncio
 
@@ -14,12 +13,49 @@ logger = logging.getLogger(__name__)
 from .connection_manager import manager, RoomManager
 from .websocket_events import WebsocketEvent
 from map_token_ops import filter_map_token_state_for_player
-from adventure_log_service import AdventureLogService
-from mongo_service import mongo_service
-from models.log_type import LogType
 
-# Initialize shared services
-adventure_log = AdventureLogService(mongo_service.db)
+# Wire event type -> handler. Written out EXPLICITLY, never
+# getattr(WebsocketEvent, event_type): the same class also carries
+# player_connection, player_disconnect, player_displaced and system_message,
+# which the server invokes itself and no client may ever reach, plus the
+# private name/metadata/log helpers. This dict IS the wire allowlist, so an
+# event absent from it is refused and adding a handler cannot expose it to
+# clients by accident.
+#
+# Every handler shares one signature and returns a WebsocketEventResult, which
+# is what lets the receive loop below be a single body instead of one branch
+# per event. Post-dispatch behaviour that is genuinely per-event (the seat
+# lobby refresh, the dice follow-ups) is spelled out there rather than hidden
+# in this table.
+EVENT_HANDLERS = {
+    "seat_change": WebsocketEvent.seat_change,
+    "seat_count_change": WebsocketEvent.seat_count_change,
+    "player_kicked": WebsocketEvent.player_kicked,
+    "role_change": WebsocketEvent.role_change,
+    "color_change": WebsocketEvent.color_change,
+    "combat_state": WebsocketEvent.combat_state,
+    "dice_roll": WebsocketEvent.dice_roll,
+    "dice_prompt": WebsocketEvent.dice_prompt,
+    "dice_prompt_clear": WebsocketEvent.dice_prompt_clear,
+    "initiative_prompt_all": WebsocketEvent.initiative_prompt_all,
+    "clear_system_messages": WebsocketEvent.clear_system_messages,
+    "clear_all_messages": WebsocketEvent.clear_all_messages,
+    "remote_audio_play": WebsocketEvent.remote_audio_play,
+    "remote_audio_resume": WebsocketEvent.remote_audio_resume,
+    "remote_audio_batch": WebsocketEvent.remote_audio_batch,
+    "spotify_control": WebsocketEvent.spotify_control,
+    "map_load": WebsocketEvent.map_load,
+    "map_clear": WebsocketEvent.map_clear,
+    "map_request": WebsocketEvent.map_request,
+    "map_config_update": WebsocketEvent.map_config_update,
+    "fog_config_update": WebsocketEvent.fog_config_update,
+    "map_token_update": WebsocketEvent.map_token_update,
+    "map_token_drag": WebsocketEvent.map_token_drag,
+    "image_load": WebsocketEvent.image_load,
+    "image_clear": WebsocketEvent.image_clear,
+    "image_request": WebsocketEvent.image_request,
+    "image_config_update": WebsocketEvent.image_config_update,
+}
 
 def register_websocket_routes(app: FastAPI):
     """Register WebSocket routes with the FastAPI app"""
@@ -102,408 +138,84 @@ def register_websocket_routes(app: FastAPI):
                 event_type = data.get("event_type")
                 event_data = data.get("data")
 
+                # Drag frames arrive ~20x/sec per dragging hand, and this log
+                # is a synchronous stderr write on that hot path.
                 if event_type != 'map_token_drag':
-                    # TODO: this is a horrible event type map/switch. drag events
-                    # clog up the async threads and cause performance issues, so skip those logs.
                     logger.debug(f"WebSocket received: {event_type} from {user_id}")
 
-                # Initialize variables for post-processing
-                broadcast_message = None
-                log_removal_message = None
-                clear_prompt_message = None
-
-                if event_type == "seat_change":
-                    # Existing seat change logic...
-                    seat_layout = data.get("data")
-
-                    if not isinstance(seat_layout, list):
-                        error_message = {
-                            "event_type": "error",
-                            "data": "Seat layout must be an array."
-                        }
-                        await websocket.send_json(error_message)
-                        continue
-
-                    result = await WebsocketEvent.seat_change(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                    # After seat change, update lobby
-                    await room_manager.broadcast_lobby_update()
-
-                elif event_type == "dice_prompt":
-                    result = await WebsocketEvent.dice_prompt(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "initiative_prompt_all":
-                    if not event_data.get("players", []):
-                        logger.warning("No players provided for initiative prompt")
-                        continue
-
-                    result = await WebsocketEvent.initiative_prompt_all(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                # NEW: Handle clearing dice prompts
-                elif event_type == "dice_prompt_clear":
-                    result = await WebsocketEvent.dice_prompt_clear(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-                    log_removal_message = result.log_removal_message
-
-                elif event_type == "combat_state":
-                    result = await WebsocketEvent.combat_state(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "seat_count_change":
-                    result = await WebsocketEvent.seat_count_change(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "player_kicked":
-                    result = await WebsocketEvent.player_kicked(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "role_change":
-                    result = await WebsocketEvent.role_change(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "dice_roll":
-                    result = await WebsocketEvent.dice_roll(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-                    log_removal_message = result.log_removal_message
-                    clear_prompt_message = result.clear_prompt_message
-
-                elif event_type == "clear_system_messages":
-                    result = await WebsocketEvent.clear_system_messages(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                    # Check if it's an error message and handle accordingly
-                    if broadcast_message.get("event_type") == "error":
-                        await websocket.send_json(broadcast_message)
-                        continue
-
-                elif event_type == "clear_all_messages":
-                    result = await WebsocketEvent.clear_all_messages(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                    # Check if it's an error message and handle accordingly
-                    if broadcast_message.get("event_type") == "error":
-                        await websocket.send_json(broadcast_message)
-                        continue
-
-                elif event_type == "color_change":
-                    result = await WebsocketEvent.color_change(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                    # Check if it's an error message and handle accordingly
-                    if broadcast_message.get("event_type") == "error":
-                        await websocket.send_json(broadcast_message)
-                        continue
-
-                elif event_type == "remote_audio_play":
-                    result = await WebsocketEvent.remote_audio_play(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "remote_audio_resume":
-                    result = await WebsocketEvent.remote_audio_resume(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "remote_audio_batch":
-                    result = await WebsocketEvent.remote_audio_batch(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "spotify_control":
-                    result = await WebsocketEvent.spotify_control(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                # Map management events
-                elif event_type == "map_load":
-                    try:
-                        result = await WebsocketEvent.map_load(
-                            websocket=websocket,
-                            data=data,
-                            event_data=event_data,
-                            user_id=user_id,
-                            client_id=client_id,
-                            manager=manager
-                        )
-                        broadcast_message = result.broadcast_message
-                        logger.debug(f"Map load result broadcast_message: {broadcast_message}")
-                    except Exception as e:
-                        logger.error(f"Exception in map_load handler: {e}")
-                        broadcast_message = {"event_type": "error", "data": f"Map load failed: {str(e)}"}
-
-                elif event_type == "map_clear":
-                    result = await WebsocketEvent.map_clear(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "map_config_update":
-                    result = await WebsocketEvent.map_config_update(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "fog_config_update":
-                    result = await WebsocketEvent.fog_config_update(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "map_token_update":
-                    result = await WebsocketEvent.map_token_update(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    if result.broadcast_message:
-                        broadcast_message = result.broadcast_message
-                    else:
-                        continue  # denied (answered to sender) or per-recipient hidden filtering already sent
-
-                elif event_type == "map_token_drag":
-                    result = await WebsocketEvent.map_token_drag(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    if result.broadcast_message:
-                        broadcast_message = result.broadcast_message
-                    else:
-                        continue  # deny answered the sender directly; stale frames drop silently
-
-                elif event_type == "map_request":
-                    result = await WebsocketEvent.map_request(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    # map_request sends directly to client, no broadcast needed
-                    if result.broadcast_message:
-                        broadcast_message = result.broadcast_message
-                    else:
-                        continue  # Skip broadcasting for direct client responses
-
-                # Image management events
-                elif event_type == "image_load":
-                    try:
-                        result = await WebsocketEvent.image_load(
-                            websocket=websocket,
-                            data=data,
-                            event_data=event_data,
-                            user_id=user_id,
-                            client_id=client_id,
-                            manager=manager
-                        )
-                        broadcast_message = result.broadcast_message
-                        logger.debug(f"Image load result broadcast_message: {broadcast_message}")
-                    except Exception as e:
-                        logger.error(f"Exception in image_load handler: {e}")
-                        broadcast_message = {"event_type": "error", "data": f"Image load failed: {str(e)}"}
-
-                elif event_type == "image_clear":
-                    result = await WebsocketEvent.image_clear(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "image_config_update":
-                    result = await WebsocketEvent.image_config_update(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "image_request":
-                    result = await WebsocketEvent.image_request(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        user_id=user_id,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    # image_request sends directly to client, no broadcast needed
-                    if result.broadcast_message:
-                        broadcast_message = result.broadcast_message
-                    else:
-                        continue  # Skip broadcasting for direct client responses
-
-                else:
-                    # Unknown event type - log and ignore
+                handler = EVENT_HANDLERS.get(event_type)
+                if handler is None:
                     logger.warning(f"Unknown WebSocket event type: {event_type}")
                     continue
 
-                # Send errors back to sender only, don't broadcast
-                if broadcast_message and broadcast_message.get("event_type") == "error":
-                    await websocket.send_json(broadcast_message)
+                # One try for EVERY handler. Only map_load and image_load used
+                # to have one; anywhere else an escaping exception broke out of
+                # this loop and killed the socket, which since holds stopped
+                # expiring (tokens decision 54) also stranded the player's
+                # tokens for the life of the process.
+                try:
+                    result = await handler(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        user_id=user_id,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                except Exception as handler_error:
+                    logger.error(f"Exception in {event_type} handler: {handler_error}")
+                    await websocket.send_json({
+                        "event_type": "error",
+                        "data": f"{event_type} failed: {str(handler_error)}"
+                    })
                     continue
 
-                # Broadcast the main message
-                await room_manager.update_room_data(broadcast_message)
+                # Nothing to broadcast: the handler already answered the sender
+                # point-to-point (a denied grab, a per-recipient filtered
+                # fragment, a request served directly) or deliberately stayed
+                # silent. update_room_data must never be handed None — it would
+                # send a bare null to every client in the room.
+                if result.broadcast_message is None:
+                    continue
 
-                # Handle special cases for adventure log removal
+                # Errors go to the sender alone, never to the room.
+                if result.broadcast_message.get("event_type") == "error":
+                    await websocket.send_json(result.broadcast_message)
+                    continue
+
+                # seat_change refreshes the lobby BEFORE its own broadcast, so
+                # clients see lobby_update then seat_change. Moving it after
+                # would reorder two messages they already depend on.
+                if event_type == "seat_change":
+                    await room_manager.broadcast_lobby_update()
+
+                await room_manager.update_room_data(result.broadcast_message)
+
+                # Follow-up sends for the dice flows. The delay is deliberate:
+                # the roll has to land before the line that removes its log.
                 if event_type == "dice_roll":
-                    await asyncio.sleep(0.5)  # Small delay to ensure dice roll is processed first
-
-                    # Send log removal message first
-                    if log_removal_message:
-                        await room_manager.update_room_data(log_removal_message)
-
-                    # Then send prompt clear message
-                    if clear_prompt_message:
-                        await room_manager.update_room_data(clear_prompt_message)
-
+                    await asyncio.sleep(0.5)
+                    if result.log_removal_message:
+                        await room_manager.update_room_data(result.log_removal_message)
+                    if result.clear_prompt_message:
+                        await room_manager.update_room_data(result.clear_prompt_message)
                 elif event_type == "dice_prompt_clear":
-                    # Send log removal message for cancelled prompts (no delay needed)
-                    if log_removal_message:
-                        await room_manager.update_room_data(log_removal_message)
+                    if result.log_removal_message:
+                        await room_manager.update_room_data(result.log_removal_message)
 
         except WebSocketDisconnect:
-            # Server-side disconnect handling with seat cleanup
+            logger.debug(f"WebSocket closed by {user_id} in room {client_id}")
+        except Exception as loop_error:
+            # The receive itself failed (malformed frame, transport error), or
+            # sending the handler's error reply did. Either way this socket is
+            # finished; cleanup happens in the finally below.
+            logger.error(f"WebSocket loop failed for {user_id} in room {client_id}: {loop_error}")
+        finally:
+            # Cleanup on EVERY exit path, not just a clean WebSocketDisconnect.
+            # Holds no longer expire on their own, so a socket that left by any
+            # other route used to keep this player's tokens held for the life
+            # of the process. player_disconnect runs first and releases them,
+            # so a later failure in the lobby broadcast cannot strand a token.
             result = await WebsocketEvent.player_disconnect(
                 websocket=websocket,
                 data={},
@@ -513,13 +225,11 @@ def register_websocket_routes(app: FastAPI):
                 manager=manager
             )
 
-            # Send lobby update after disconnect (will show user as disconnecting)
+            # Lobby update after disconnect (shows the user as disconnecting).
             await room_manager.broadcast_lobby_update()
 
-            # Broadcast disconnect and seat change messages. No broadcast at
-            # all when a stale duplicate socket closed — the user never left,
-            # so there is nothing to tell the room (and update_room_data would
-            # otherwise send a bare null to every client).
+            # No broadcast at all when a stale duplicate socket closed — the
+            # user never left, so there is nothing to tell the room.
             if result.broadcast_message:
                 await room_manager.update_room_data(result.broadcast_message)
             if result.clear_prompt_message:  # This contains the seat change message

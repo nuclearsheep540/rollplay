@@ -84,6 +84,28 @@ class MapService:
             logger.error(f"Failed to get active map for room {room_id}: {e}")
             return None
     
+    async def get_room_map_by_filename(self, room_id: str, filename: str) -> Optional[Dict[str, Any]]:
+        """One room's stored doc for a specific map file, active or not.
+
+        Backs the per-map preservation on map_load: cycling from map A to B
+        and back restores A's painted fog and tuned grid, which needs the
+        inactive doc that get_active_map cannot return.
+
+        Returns None when the room has never held that map, and when filename
+        is empty — an empty filename would otherwise match on a missing field
+        and hand back an unrelated document.
+        """
+        if not filename:
+            return None
+
+        try:
+            return await self.collection.find_one(
+                {"room_id": room_id, "map_config.filename": filename}
+            )
+        except Exception as e:
+            logger.error(f"Failed to look up map {filename} for room {room_id}: {e}")
+            return None
+
     async def clear_active_map(self, room_id: str) -> bool:
         """Clear the active map for a room"""
         try:
