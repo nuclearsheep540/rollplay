@@ -563,6 +563,25 @@ body {
   border-color: var(--content-on-dark);
 }
 
+/* Finish Session — the host's end-of-game CTA. A fullscreen-btn in danger
+   colours: it is the only control in the nav that ends the game for everyone,
+   so it must not read as one more neutral button beside Dashboard. */
+.finish-session-btn {
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #fca5a5;
+}
+
+.finish-session-btn:hover:not(:disabled) {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.15);
+  color: #fecaca;
+}
+
+.finish-session-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Main Game Area Grid - Single column, all panels are fixed-position drawers
    ========================================================================== */
 .main-game-area {
