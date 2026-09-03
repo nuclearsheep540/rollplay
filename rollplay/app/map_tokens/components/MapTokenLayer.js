@@ -3,7 +3,7 @@
 
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEyeSlash, faLock } from '@fortawesome/free-solid-svg-icons';
@@ -28,9 +28,24 @@ import TokenAvatarDisc from './TokenAvatarDisc';
  * (panning between tokens still works); each disc captures its own events.
  *
  * Drag is the FogRegionStack model — pointer capture + refs on the hot
- * path, sub-pixel threshold, direct style mutation. Markers-only v1: grab
- * lifts, release commits; no mid-drag streaming. Grabs are optimistic — a
- * server denial (someone else's hand got there first) snaps the drag home.
+ * path, sub-pixel threshold, direct style mutation. Grabs are optimistic —
+ * a server denial (someone else's hand got there first) snaps the drag home.
+ *
+ * Disc POSITION has exactly one writer, and it is never React (decision 53).
+ * React renders everything else about a disc; left/top are written only by
+ * this file, from three places that between them cover every disc at every
+ * moment: the pointer handler (the disc under the local hand), the rAF loop
+ * (discs under a remote hand), and the committed-position layout effect
+ * (every other disc). Each writes unconditionally — nothing compares a
+ * position against a remembered one before deciding to write.
+ *
+ * Why that rule exists: React writes a style key only when it differs from
+ * the value React last RENDERED; it never reads the DOM. Sharing left/top
+ * with imperative code left React's memory stale, so a commit whose value
+ * matched that stale memory was silently skipped and the disc stranded where
+ * the imperative write had left it. That was the drag-end strand (still hand
+ * + another player's mid-drag re-render + no grid snap to force a difference)
+ * and, before it, half of the rubber banding.
  *
  * Color and name are derived at render, never stored (field-drift rule):
  * pc discs show the owner's character color (seat-palette fallback), npc
@@ -90,10 +105,12 @@ export default function MapTokenLayer({
   // commits and other players' grabs, or every disc restarts its chase from
   // the committed position (the rubber band).
   const lerpPositionsRef = useRef({});
-  // Latest board, holds and scale for that loop. Assigned during render
-  // rather than in an effect on purpose: React runs every effect *cleanup*
-  // before any effect *body*, so an effect-updated ref would lag one commit
-  // behind and the teardown path would put discs back at stale positions.
+  // Latest board, holds and scale for that loop, so board commits and other
+  // players' grabs can't become dependencies of it (that restart was the
+  // rubber band). Assigned during render rather than in an effect on purpose:
+  // an effect-updated ref lags a commit behind, and the loop reads committed
+  // positions every frame as its target for a disc with no live frame — a
+  // stale board would steer that disc to a position the table has left.
   const lerpInputsRef = useRef(null);
 
   // Track rendered + natural image size (fog wrapper pattern).
@@ -132,6 +149,12 @@ export default function MapTokenLayer({
   // Coarse on purpose — flips only on the first grab and the last release,
   // so one player grabbing or releasing never restarts another's steering.
   const hasRemoteHolds = Object.keys(heldTokens).length > 0;
+  // Which of the two position writers owns a held disc. The rAF loop below
+  // steers discs under a remote hand only when it is actually running; when
+  // it is not (markers-only build, no active map), those discs belong to the
+  // committed-position effect like any other. The two conditions are exact
+  // complements on purpose — every disc has one writer, never zero or two.
+  const remoteSteerRuns = LIVE_DRAG_STREAMING && !!remoteDragFramesRef && !!mapAssetId;
 
   // Discs scale with the map (they occupy grid cells); the annotations on
   // them (names, nameplates, badges) hold constant SCREEN size by scaling
@@ -200,23 +223,17 @@ export default function MapTokenLayer({
    *                release at the committed position, never commit a move
    *  - 'denied'  — server refused the grab; no hold to release
    *
-   * Always resets the element's inline style to the pre-drag position:
-   * direct mutations bypass React, and on non-commit paths the committed
-   * values match React's last-rendered ones, so the reconciler would skip
-   * the write and leave the disc stranded where the pointer dropped it.
-   * On commit the optimistic state lands in the same tick, so React paints
-   * the new position before this reset is visible.
+   * Writes nothing to the DOM. Clearing draggingTokenId hands the disc back
+   * to the committed-position layout effect, which writes it unconditionally
+   * in the same commit — including when a send failed and the disc has to
+   * return to where the gesture started, because the board then still holds
+   * the pre-drag position.
    */
   const endDrag = useCallback((outcome) => {
     const drag = dragRef.current;
     dragRef.current = null;
     setDraggingTokenId(null);
     if (!drag) return;
-
-    if (drag.element) {
-      drag.element.style.left = `${drag.startLeft}px`;
-      drag.element.style.top = `${drag.startTop}px`;
-    }
 
     if (outcome === 'commit' && drag.moved && renderScale > 0) {
       const nativeX = drag.currentLeft / renderScale;
@@ -231,6 +248,28 @@ export default function MapTokenLayer({
     // 'denied': the server never granted the hold — nothing to release.
     // !grabbed (locked token's cycle click): no hold was ever requested.
   }, [renderScale, releaseToken, commitTokenMove]);
+
+  // A hold outlives its gesture if the layer unmounts mid-drag (map switch,
+  // panel teardown, session end): pointerup never fires, so nothing releases
+  // it. With idle expiry gone (decision 54) it would hold the mini for the
+  // whole table until its owner disconnects. Putback semantics — release at
+  // the committed position, never commit one the user didn't deliberately
+  // drop.
+  //
+  // releaseToken is read through a ref so this effect can have empty deps:
+  // its identity changes whenever the socket reconnects, and a cleanup fired
+  // by that would release a live hand's hold mid-drag. Assigned during
+  // render for the same reason lerpInputsRef is — an effect-updated ref
+  // would lag a commit behind at teardown.
+  const releaseTokenRef = useRef(releaseToken);
+  releaseTokenRef.current = releaseToken;
+  useEffect(() => () => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag && drag.grabbed) {
+      releaseTokenRef.current(drag.tokenId, drag.token.x, drag.token.y);
+    }
+  }, []);
 
   // Server denied our grab — first hand was someone else's. Snap home,
   // then consume the denial so it can never cancel a later legitimate drag.
@@ -350,6 +389,29 @@ export default function MapTokenLayer({
   // Removal lives on the token's chip ("return" CTA) — right-click removal
   // was dropped 2026-07-21: the OS context menu wins that gesture.
 
+  // Committed position — the third and last writer of left/top (decision
+  // 53), owning every disc that is not under a hand right now. React renders
+  // discs without a position precisely so this can write unconditionally:
+  // there is no previous value to compare against and therefore nothing that
+  // can be skipped, which is what used to strand a disc at drag end.
+  //
+  // Layout, not passive: a disc must be positioned before its first paint or
+  // a newly placed token would flash at the wrapper's origin.
+  useLayoutEffect(() => {
+    if (!(renderScale > 0)) return;
+    for (const token of tokens) {
+      // Skip the two discs that have another writer: the one under the local
+      // hand (the pointer handler) and, while the loop runs, ones under a
+      // remote hand (the rAF loop).
+      if (token.id === draggingTokenId) continue;
+      if (remoteSteerRuns && heldTokens[token.id]) continue;
+      const element = tokenElementsRef.current[token.id];
+      if (!element) continue;
+      element.style.left = `${token.x * renderScale}px`;
+      element.style.top = `${token.y * renderScale}px`;
+    }
+  }, [tokens, renderScale, heldTokens, draggingTokenId, remoteSteerRuns]);
+
   // Remote lerp loop (v1.1 live-drag): while any remote hand holds a token,
   // an rAF loop steers its disc toward the latest relayed frame — direct
   // style writes on the hot path, zero React re-renders per frame.
@@ -362,7 +424,7 @@ export default function MapTokenLayer({
   // out again. Everything the loop needs it reads per frame from
   // lerpInputsRef instead.
   useEffect(() => {
-    if (!LIVE_DRAG_STREAMING || !remoteDragFramesRef || !mapAssetId) return;
+    if (!remoteSteerRuns) return;
     if (!hasRemoteHolds) return;
 
     let frameHandle = null;
@@ -378,19 +440,14 @@ export default function MapTokenLayer({
       return committedByTokenId;
     };
 
-    // Direct mutations bypass React, and a settled token's committed values
-    // usually match React's last render (the diff then skips the write), so
-    // a disc this loop steered has to be put back by hand.
-    const settleToCommitted = (tokenId, committedByTokenId) => {
-      const element = tokenElementsRef.current[tokenId];
-      const committed = committedByTokenId[tokenId];
-      if (element && committed) {
-        element.style.left = `${committed.left}px`;
-        element.style.top = `${committed.top}px`;
-      }
+    // Bookkeeping only. The disc itself passes to the layout effect the
+    // moment its hold clears, and that effect writes the committed position
+    // in the same commit — so writing it here too would make this a second
+    // writer again, which is the whole bug.
+    const stopSteering = (tokenId) => {
       delete lerpPositionsRef.current[tokenId];
       // The frame outlived its release on purpose (it steered the handover);
-      // once the disc has settled it is spent, and leaving it would let it
+      // once the hold has cleared it is spent, and leaving it would let it
       // steer a later grab of the same token.
       if (remoteDragFramesRef.current[mapAssetId]) {
         delete remoteDragFramesRef.current[mapAssetId][tokenId];
@@ -406,11 +463,11 @@ export default function MapTokenLayer({
 
       const committedByTokenId = committedPositions(boardTokens, scale);
 
-      // Someone let go while others kept dragging — settle just that disc,
-      // without disturbing the hands still in flight.
+      // Someone let go while others kept dragging — stop steering just that
+      // disc, without disturbing the hands still in flight.
       for (const steeredTokenId of Object.keys(lerpPositionsRef.current)) {
         if (!currentHolds[steeredTokenId]) {
-          settleToCommitted(steeredTokenId, committedByTokenId);
+          stopSteering(steeredTokenId);
         }
       }
 
@@ -421,8 +478,10 @@ export default function MapTokenLayer({
 
         // Frames have no staleness cutoff by design (see config.js): a gap
         // means the hand paused, not that it vanished, so keep steering to
-        // the last known position. Hold expiry resolves a hand gone dark.
-        // No frame at all (markers-only sender) still degrades to committed.
+        // the last known position. A hand that really went dark is resolved
+        // by its holder's disconnect, which clears the hold room-wide
+        // (decision 54). No frame at all (markers-only sender) still
+        // degrades to committed.
         const frame = remoteDragFramesRef.current[mapAssetId]?.[tokenId];
         const target = frame
           ? { left: frame.x * scale, top: frame.y * scale }
@@ -451,16 +510,14 @@ export default function MapTokenLayer({
     return () => {
       cancelAnimationFrame(frameHandle);
       // Loop stopping for real — last hold released, map switched, unmount.
-      const { tokens: boardTokens, renderScale: scale } = lerpInputsRef.current;
-      if (scale > 0) {
-        const committedByTokenId = committedPositions(boardTokens, scale);
-        for (const steeredTokenId of Object.keys(lerpPositionsRef.current)) {
-          settleToCommitted(steeredTokenId, committedByTokenId);
-        }
+      // The discs it was steering belong to the layout effect again, which
+      // has already positioned them; only the spent frames need clearing.
+      for (const steeredTokenId of Object.keys(lerpPositionsRef.current)) {
+        stopSteering(steeredTokenId);
       }
       lerpPositionsRef.current = {};
     };
-  }, [hasRemoteHolds, remoteDragFramesRef, mapAssetId]);
+  }, [remoteSteerRuns, hasRemoteHolds, remoteDragFramesRef, mapAssetId]);
 
 
   return (
@@ -506,11 +563,8 @@ export default function MapTokenLayer({
         const holderName = hold
           ? (displayNameMap[hold.holderUserId] || 'someone') : null;
         const isDragging = draggingTokenId === token.id;
-        const drag = isDragging ? dragRef.current : null;
         const diameter = tokenDiameterPx(
           token, gridConfig, naturalDims.w, naturalDims.h, pcTokenScale) * renderScale;
-        const left = drag ? drag.currentLeft : token.x * renderScale;
-        const top = drag ? drag.currentTop : token.y * renderScale;
         const lifted = !!hold || isDragging;
         // npc tokens are inert for players (decision 16) — no grab cursor,
         // and pointerdown falls through to panning — UNLESS assigned as a
@@ -534,8 +588,9 @@ export default function MapTokenLayer({
             }}
             className={`absolute group ${cursorClass}`}
             style={{
-              left: `${left}px`,
-              top: `${top}px`,
+              // No left/top here on purpose (decision 53) — position is this
+              // file's to write, so React holds no memory of it to skip
+              // against. `absolute` comes from className.
               width: `${diameter}px`,
               height: `${diameter}px`,
               transform: `translate(-50%, -50%)${lifted ? ' scale(1.08)' : ''}`,

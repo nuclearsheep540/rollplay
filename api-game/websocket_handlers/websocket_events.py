@@ -772,6 +772,19 @@ class WebsocketEvent():
         """Handle player disconnect event"""
         display_name = WebsocketEvent._display_name(client_id, user_id)
 
+        # A user can have more than one socket for a room (second tab, or a
+        # reconnect that raced the old socket's close). Only the CURRENT one
+        # closing means the user left; a stale duplicate closing must drop
+        # itself and nothing else. Since decision 54 removed idle expiry, an
+        # unguarded teardown here is the only remaining way a live hand can
+        # lose its map-token holds mid-drag.
+        if not manager.is_current_connection(websocket, client_id, user_id):
+            logger.info(
+                "MAPTOKENS stale socket closed for user %s in room %s — "
+                "live connection kept, holds untouched", user_id, client_id)
+            manager.remove_connection(websocket, client_id, user_id)
+            return WebsocketEventResult(broadcast_message=None)
+
         # Drop any map-token holds the leaver had — remote clients clear their
         # lift affordances off this handler's player_disconnected broadcast.
         released_hold_keys = map_token_holds.release_all_for_user(client_id, user_id)
@@ -1983,13 +1996,12 @@ class WebsocketEvent():
                 _hidden_held_tokens.add((room_id, asset_id, token_id))
         elif phase == "move":
             if map_token_holds.holder(room_id, asset_id, token_id) != user_id:
-                # Stale frame after an expired/denied hold — drop silently,
-                # no error spam at stream frequency.
+                # A frame from a hand that does not hold this token: a denied
+                # grab still streaming, or frames overtaking their own
+                # release. Drop silently — no error spam at stream frequency.
                 return WebsocketEventResult(broadcast_message=None)
-            # A live stream is an active hand — refresh the hold so a long
-            # careful drag can't staleness-expire mid-stream (same-user
-            # try_grab resets the clock).
-            map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
+            # Nothing to refresh: holds have no clock (decision 54). A move
+            # frame is movement, not proof of life.
         else:
             released = map_token_holds.release(room_id, asset_id, token_id, user_id)
             if not released and map_token_holds.holder(room_id, asset_id, token_id) is not None:
@@ -1997,8 +2009,9 @@ class WebsocketEvent():
                 # (denied grab's pointerup, stale client) must not clear the
                 # real holder's lift affordance room-wide. Drop silently.
                 return WebsocketEventResult(broadcast_message=None)
-            # released, or unheld (expired hold): relay so remote lift
-            # affordances clear; the lane-1 commit settles actual position.
+            # released, or already unheld (the holder's disconnect got here
+            # first): relay so remote lift affordances clear; the lane-1
+            # commit settles actual position.
 
         # Hidden token's hand: no relay at all (decision 17). Players don't
         # have the token; grab/frame/release presence would leak the ambush

@@ -17,4 +17,9 @@ RUN pip install pyyaml
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8081", "--reload", "--log-config", "./config/log_conf.yaml"]
+# Websocket ping is api-game's liveness check, and since decision 54 it is the ONLY
+# thing that ends a map-token hold left by a browser that vanished without a clean
+# close: the ping failure closes the socket, which runs player_disconnect ->
+# release_all_for_user. Passed explicitly rather than left to uvicorn's defaults
+# because the design depends on the values (worst case ~40s to reclaim a hold).
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8081", "--reload", "--ws-ping-interval", "20", "--ws-ping-timeout", "20", "--log-config", "./config/log_conf.yaml"]

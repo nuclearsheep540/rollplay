@@ -36,20 +36,36 @@ class ConnectionManager:
         # Send lobby update to all clients in this room
         await self.broadcast_lobby_update(room_id)
 
+    def is_current_connection(self, websocket: WebSocket, room_id: str, user_id: str) -> bool:
+        """Is this the socket currently registered for the user in this room?
+
+        connect() stores one socket per user per room, so a second tab (or a
+        reconnect that raced the old socket's close) displaces the previous
+        entry. The displaced socket is still open and will close later; that
+        close must not be read as the user leaving.
+        """
+        entry = self.room_users.get(room_id, {}).get(user_id)
+        return entry is not None and entry["websocket"] is websocket
+
     def remove_connection(self, websocket: WebSocket, room_id: str = None, user_id: str = None):
-        """Remove a disconnected websocket from the connections list"""
+        """Remove a disconnected websocket from the connections list.
+
+        Only the user's CURRENT socket closing disconnects them. Without the
+        identity check, closing a stale duplicate nulled the live socket and
+        scheduled the removal of a player who was sitting right there.
+        """
         if websocket in self.connections:
             self.connections.remove(websocket)
 
         # Mark user as disconnected but keep in room tracking for 30 seconds
-        if room_id and user_id and room_id in self.room_users:
-            if user_id in self.room_users[room_id]:
-                # Mark as disconnected instead of removing immediately
-                self.room_users[room_id][user_id]["status"] = "disconnecting"
-                self.room_users[room_id][user_id]["websocket"] = None
+        if room_id and user_id and self.is_current_connection(websocket, room_id, user_id):
+            entry = self.room_users[room_id][user_id]
+            # Mark as disconnected instead of removing immediately
+            entry["status"] = "disconnecting"
+            entry["websocket"] = None
 
-                # Set up 30-second timeout for complete removal
-                self.schedule_user_removal(room_id, user_id)
+            # Set up 30-second timeout for complete removal
+            self.schedule_user_removal(room_id, user_id)
 
     def schedule_user_removal(self, room_id: str, user_id: str):
         """Schedule a user for complete removal after 30 seconds"""

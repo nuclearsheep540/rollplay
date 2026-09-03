@@ -511,7 +511,11 @@ def register_websocket_routes(app: FastAPI):
             # Send lobby update after disconnect (will show user as disconnecting)
             await room_manager.broadcast_lobby_update()
 
-            # Broadcast disconnect and seat change messages
-            await room_manager.update_room_data(result.broadcast_message)
+            # Broadcast disconnect and seat change messages. No broadcast at
+            # all when a stale duplicate socket closed — the user never left,
+            # so there is nothing to tell the room (and update_room_data would
+            # otherwise send a bare null to every client).
+            if result.broadcast_message:
+                await room_manager.update_room_data(result.broadcast_message)
             if result.clear_prompt_message:  # This contains the seat change message
                 await room_manager.update_room_data(result.clear_prompt_message)
