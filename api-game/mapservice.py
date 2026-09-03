@@ -123,8 +123,15 @@ class MapService:
     
     async def update_map_config(self, room_id: str, filename: str,
                          grid_config: Optional[Dict[str, Any]] = ...,
-                         map_image_config: Optional[Dict[str, Any]] = ...) -> bool:
-        """Update map configuration (grid settings, image positioning, etc.)"""
+                         map_image_config: Optional[Dict[str, Any]] = ...,
+                         pc_token_scale: Optional[float] = ...) -> bool:
+        """Update map configuration (grid settings, image positioning, etc.).
+
+        Every field is written by path in one `$set`, so a caller changing one
+        of them cannot disturb the others or the fog sharing the document. An
+        omitted argument is not written at all; passing None writes null,
+        which is why the sentinel is `...` rather than None.
+        """
         try:
             update_data = {}
 
@@ -137,6 +144,12 @@ class MapService:
             if map_image_config is not ...:
                 update_data["map_config.map_image_config"] = map_image_config
                 logger.info(f"Setting map_config.map_image_config to: {map_image_config}")
+
+            # Handle pc_token_scale parameter (including explicit None, which
+            # resets the map to the default size) — nested path
+            if pc_token_scale is not ...:
+                update_data["map_config.pc_token_scale"] = pc_token_scale
+                logger.info(f"Setting map_config.pc_token_scale to: {pc_token_scale}")
 
             if not update_data:
                 return True  # Nothing to update
