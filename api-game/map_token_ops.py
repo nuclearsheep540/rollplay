@@ -14,6 +14,19 @@ from typing import Any, Dict, Optional, Tuple
 VALID_MAP_TOKEN_OPS = ("place", "move", "remove", "configure")
 
 
+def is_valid_mongo_key(key: Any) -> bool:
+    """Hard-block invariant for any value interpolated into a Mongo field path.
+
+    A dot splits the path, a leading '$' is an update operator, and a NUL byte
+    corrupts the key — each would silently write somewhere other than intended
+    rather than error. Used wherever a user_id or field name becomes part of a
+    dotted $set path (player_metadata.<user_id>.<field>).
+    """
+    if not key or not isinstance(key, str):
+        return False
+    return "." not in key and "\x00" not in key and not key.startswith("$")
+
+
 def is_valid_asset_key(asset_id: Any) -> bool:
     """Hard-block invariant: asset_id becomes a Mongo field name under
     map_token_state, so a dot (nested-path split), a leading '$' (operator),

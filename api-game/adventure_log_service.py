@@ -3,8 +3,8 @@
 import time
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
-from pymongo.collection import Collection
-from pymongo.database import Database
+from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.database import AsyncDatabase
 import logging
 
 logger = logging.getLogger()
@@ -14,28 +14,29 @@ class AdventureLogService:
     Service for managing adventure logs with per-room limits using MongoDB aggregation pipelines
     """
     
-    def __init__(self, db: Database):
-        self.adventure_logs: Collection = db.adventure_logs
-        self.create_indexes()
+    def __init__(self, db: AsyncDatabase):
+        self.adventure_logs: AsyncCollection = db.adventure_logs
+        # No I/O in the constructor: create_indexes() is awaited once at boot
+        # from app.py's lifespan, where there is an event loop to await on.
 
-    def create_indexes(self):
+    async def create_indexes(self):
         """
         Creates indexes for the adventure_logs collection:
         (room_id, log_id desc) for paginated reads and the cleanup
         pipeline, (room_id, timestamp desc) for stat aggregations.
         """
-        self.adventure_logs.create_index([("room_id", 1), ("log_id", -1)])
-        self.adventure_logs.create_index([("room_id", 1), ("timestamp", -1)])
+        await self.adventure_logs.create_index([("room_id", 1), ("log_id", -1)])
+        await self.adventure_logs.create_index([("room_id", 1), ("timestamp", -1)])
         logger.info(f"Created indexes for {self.adventure_logs.name} collection")
 
-    def clear_system_messages(self, room_id: str) -> int:
+    async def clear_system_messages(self, room_id: str) -> int:
         """
         Clear all system messages for a room
         Returns the number of deleted messages
         """
         try:           
             # Delete all system-type messages for this room
-            result = self.adventure_logs.delete_many({
+            result = await self.adventure_logs.delete_many({
                 "room_id": room_id,
                 "type": "system"
             })
@@ -47,14 +48,14 @@ class AdventureLogService:
             logger.error(f"Error clearing system messages: {e}")
             raise
     
-    def clear_all_messages(self, room_id: str) -> int:
+    async def clear_all_messages(self, room_id: str) -> int:
         """
         Clear all adventure log messages for a room
         Returns the number of deleted messages
         """
         try:           
             # Delete all messages for this room
-            result = self.adventure_logs.delete_many({
+            result = await self.adventure_logs.delete_many({
                 "room_id": room_id
             })
             
@@ -65,7 +66,7 @@ class AdventureLogService:
             logger.error(f"Error clearing all messages: {e}")
             raise
     
-    def remove_log_by_prompt_id(self, room_id: str, prompt_id: str) -> int:
+    async def remove_log_by_prompt_id(self, room_id: str, prompt_id: str) -> int:
         """
         Remove a specific log entry by prompt_id
         
@@ -77,7 +78,7 @@ class AdventureLogService:
             int: Number of deleted documents
         """
         try:
-            result = self.adventure_logs.delete_one({
+            result = await self.adventure_logs.delete_one({
                 "room_id": room_id,
                 "prompt_id": prompt_id
             })
@@ -89,7 +90,7 @@ class AdventureLogService:
             logger.error(f"Error removing log by prompt_id: {e}")
             raise
     
-    def add_log_entry(
+    async def add_log_entry(
         self, 
         room_id: str, 
         message: str, 
@@ -135,11 +136,11 @@ class AdventureLogService:
         
         try:
             # Insert the new log entry
-            result = self.adventure_logs.insert_one(new_log)
+            result = await self.adventure_logs.insert_one(new_log)
             new_log["_id"] = result.inserted_id
             
             # Use aggregation pipeline to efficiently maintain log limit
-            self._cleanup_old_logs_pipeline(room_id, max_logs)
+            await self._cleanup_old_logs_pipeline(room_id, max_logs)
             
             return new_log
             
@@ -147,7 +148,7 @@ class AdventureLogService:
             logger.error(f"Error adding log entry: {e}")
             raise
     
-    def _cleanup_old_logs_pipeline(self, room_id: str, max_logs: int):
+    async def _cleanup_old_logs_pipeline(self, room_id: str, max_logs: int):
         """
         Use aggregation pipeline to efficiently clean up old logs for a room
         
@@ -190,8 +191,10 @@ class AdventureLogService:
                 }
             ]
             
-            # Execute aggregation
-            result = list(self.adventure_logs.aggregate(pipeline))
+            # Execute aggregation. Unlike find(), aggregate() IS a coroutine —
+            # it must be awaited to get the cursor, which is then drained.
+            cleanup_cursor = await self.adventure_logs.aggregate(pipeline)
+            result = await cleanup_cursor.to_list()
             
             if result and len(result) > 0:
                 keep_ids = result[0]["keep_ids"]
@@ -200,7 +203,7 @@ class AdventureLogService:
                 # Only delete if we have more than max_logs
                 if kept_count == max_logs:
                     # Delete all logs for this room that aren't in the keep list
-                    delete_result = self.adventure_logs.delete_many({
+                    delete_result = await self.adventure_logs.delete_many({
                         "room_id": room_id,
                         "_id": {"$nin": keep_ids}
                     })
@@ -212,7 +215,7 @@ class AdventureLogService:
             logger.error(f"Error during log cleanup for room {room_id}: {e}")
             # Don't raise here - log cleanup failure shouldn't break log insertion
     
-    def restore_room_logs(self, room_id: str, entries: List[Dict]) -> int:
+    async def restore_room_logs(self, room_id: str, entries: List[Dict]) -> int:
         """
         Bulk re-seed a room's logs from cold storage (session resume ETL).
 
@@ -236,7 +239,7 @@ class AdventureLogService:
         if not entries:
             return 0
 
-        self.delete_room_logs(room_id)
+        await self.delete_room_logs(room_id)
 
         docs = []
         for entry in entries:
@@ -260,13 +263,13 @@ class AdventureLogService:
             docs.append(doc)
 
         try:
-            self.adventure_logs.insert_many(docs)
+            await self.adventure_logs.insert_many(docs)
             return len(docs)
         except Exception as e:
             logger.error(f"Error restoring logs for room {room_id}: {e}")
             raise
 
-    def get_room_logs(
+    async def get_room_logs(
         self,
         room_id: str,
         limit: int = 50,
@@ -285,13 +288,14 @@ class AdventureLogService:
         """
         
         try:
-            logs = list(
+            logs = await (
                 self.adventure_logs.find(
                     {"room_id": room_id},
                     {"_id": 0}  # Exclude MongoDB _id from results
                 ).sort("log_id", -1)  # Newest first
                 .skip(skip)
                 .limit(limit)
+                .to_list()
             )
             
             return logs
@@ -300,15 +304,15 @@ class AdventureLogService:
             logger.error(f"Error retrieving logs for room {room_id}: {e}")
             return []
     
-    def get_room_log_count(self, room_id: str) -> int:
+    async def get_room_log_count(self, room_id: str) -> int:
         """Get total number of logs for a room"""
         try:
-            return self.adventure_logs.count_documents({"room_id": room_id})
+            return await self.adventure_logs.count_documents({"room_id": room_id})
         except Exception as e:
             logger.error(f"Error counting logs for room {room_id}: {e}")
             return 0
     
-    def delete_room_logs(self, room_id: str) -> int:
+    async def delete_room_logs(self, room_id: str) -> int:
         """
         Delete all logs for a room (useful when room is deleted)
         
@@ -316,14 +320,14 @@ class AdventureLogService:
             Number of logs deleted
         """
         try:
-            result = self.adventure_logs.delete_many({"room_id": room_id})
+            result = await self.adventure_logs.delete_many({"room_id": room_id})
             logger.info(f"Deleted {result.deleted_count} logs for room {room_id}")
             return result.deleted_count
         except Exception as e:
             logger.error(f"Error deleting logs for room {room_id}: {e}")
             return 0
     
-    def bulk_cleanup_all_rooms(self, max_logs: int = 200):
+    async def bulk_cleanup_all_rooms(self, max_logs: int = 200):
         """
         Perform cleanup for all rooms (useful for maintenance)
         Uses aggregation to efficiently process all rooms
@@ -331,15 +335,15 @@ class AdventureLogService:
         
         try:
             # Get all unique room IDs
-            room_ids = self.adventure_logs.distinct("room_id")
+            room_ids = await self.adventure_logs.distinct("room_id")
             
             logger.info(f"Starting bulk cleanup for {len(room_ids)} rooms...")
             
             total_cleaned = 0
             for room_id in room_ids:
-                initial_count = self.get_room_log_count(room_id)
-                self._cleanup_old_logs_pipeline(room_id, max_logs)
-                final_count = self.get_room_log_count(room_id)
+                initial_count = await self.get_room_log_count(room_id)
+                await self._cleanup_old_logs_pipeline(room_id, max_logs)
+                final_count = await self.get_room_log_count(room_id)
                 
                 cleaned = initial_count - final_count
                 if cleaned > 0:
@@ -350,7 +354,7 @@ class AdventureLogService:
         except Exception as e:
             logger.error(f"Error during bulk cleanup: {e}")
     
-    def get_room_stats(self, room_id: str) -> Dict:
+    async def get_room_stats(self, room_id: str) -> Dict:
         """Get statistics for a room's logs"""
         
         try:
@@ -369,7 +373,8 @@ class AdventureLogService:
                 }
             ]
             
-            result = list(self.adventure_logs.aggregate(pipeline))
+            stats_cursor = await self.adventure_logs.aggregate(pipeline)
+            result = await stats_cursor.to_list()
             
             if result:
                 stats = result[0]

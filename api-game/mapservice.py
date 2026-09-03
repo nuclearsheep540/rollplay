@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from pydantic import BaseModel
-from pymongo.collection import Collection
-from pymongo.database import Database
+from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.database import AsyncDatabase
 from gameservice import GameService
 from shared_contracts.map import MapConfig
 import logging
@@ -23,37 +23,38 @@ class MapSettings(BaseModel):
 class MapService:
     """Managing active maps for rooms"""
 
-    def __init__(self, db: Database):
-        self.collection: Collection = db.active_maps
-        self.create_indexes()
+    def __init__(self, db: AsyncDatabase):
+        self.collection: AsyncCollection = db.active_maps
+        # No I/O in the constructor: create_indexes() is awaited once at boot
+        # from app.py's lifespan, where there is an event loop to await on.
 
-    def create_indexes(self):
+    async def create_indexes(self):
         """
         Creates indexes for the active_maps collection
         optimizing queries for active maps by room_id
         """
-        self.collection.create_index([("room_id", 1), ("active", 1)])
+        await self.collection.create_index([("room_id", 1), ("active", 1)])
         logger.info(f"Created indexes for {self.collection.name} collection")
         
-    def set_active_map(self, room_id: str, map_settings: MapSettings) -> bool:
+    async def set_active_map(self, room_id: str, map_settings: MapSettings) -> bool:
         """Set the active map for a room"""
         try:
             # First, deactivate any existing active maps for this room
-            self.collection.update_many(
+            await self.collection.update_many(
                 {"room_id": room_id, "active": True},
                 {"$set": {"active": False}}
             )
 
             # Insert or update the map (nested shape stored in MongoDB)
             map_data = map_settings.model_dump()
-            self.collection.replace_one(
+            await self.collection.replace_one(
                 {"room_id": room_id, "map_config.filename": map_settings.map_config.filename},
                 map_data,
                 upsert=True
             )
 
             # Update active_display on the game session document
-            GameService.set_active_display(room_id, "map")
+            await GameService.set_active_display(room_id, "map")
 
             logger.info(f"Set active map for room {room_id}: {map_settings.map_config.filename}")
             return True
@@ -62,10 +63,10 @@ class MapService:
             logger.error(f"Failed to set active map for room {room_id}: {e}")
             return False
     
-    def get_active_map(self, room_id: str) -> Optional[Dict[str, Any]]:
+    async def get_active_map(self, room_id: str) -> Optional[Dict[str, Any]]:
         """Get the currently active map for a room"""
         try:
-            map_doc = self.collection.find_one(
+            map_doc = await self.collection.find_one(
                 {"room_id": room_id, "active": True}
             )
             
@@ -83,10 +84,32 @@ class MapService:
             logger.error(f"Failed to get active map for room {room_id}: {e}")
             return None
     
-    def clear_active_map(self, room_id: str) -> bool:
+    async def get_room_map_by_filename(self, room_id: str, filename: str) -> Optional[Dict[str, Any]]:
+        """One room's stored doc for a specific map file, active or not.
+
+        Backs the per-map preservation on map_load: cycling from map A to B
+        and back restores A's painted fog and tuned grid, which needs the
+        inactive doc that get_active_map cannot return.
+
+        Returns None when the room has never held that map, and when filename
+        is empty — an empty filename would otherwise match on a missing field
+        and hand back an unrelated document.
+        """
+        if not filename:
+            return None
+
+        try:
+            return await self.collection.find_one(
+                {"room_id": room_id, "map_config.filename": filename}
+            )
+        except Exception as e:
+            logger.error(f"Failed to look up map {filename} for room {room_id}: {e}")
+            return None
+
+    async def clear_active_map(self, room_id: str) -> bool:
         """Clear the active map for a room"""
         try:
-            self.collection.update_many(
+            await self.collection.update_many(
                 {"room_id": room_id, "active": True},
                 {"$set": {"active": False}}
             )
@@ -98,7 +121,7 @@ class MapService:
             logger.error(f"Failed to clear active map for room {room_id}: {e}")
             return False
     
-    def update_map_config(self, room_id: str, filename: str,
+    async def update_map_config(self, room_id: str, filename: str,
                          grid_config: Optional[Dict[str, Any]] = ...,
                          map_image_config: Optional[Dict[str, Any]] = ...) -> bool:
         """Update map configuration (grid settings, image positioning, etc.)"""
@@ -118,7 +141,7 @@ class MapService:
             if not update_data:
                 return True  # Nothing to update
 
-            existing_map = self.collection.find_one(
+            existing_map = await self.collection.find_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True}
             )
 
@@ -129,7 +152,7 @@ class MapService:
             map_conf = existing_map.get("map_config", {})
             logger.info(f"Found existing map before update: {map_conf.get('filename')} with grid_config: {map_conf.get('grid_config')}")
 
-            result = self.collection.update_one(
+            result = await self.collection.update_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True},
                 {"$set": update_data}
             )
@@ -142,7 +165,7 @@ class MapService:
             logger.error(f"Failed to update map config for room {room_id}: {e}")
             return False
     
-    def update_fog_config(self, room_id: str, filename: str,
+    async def update_fog_config(self, room_id: str, filename: str,
                           fog_config: Optional[Dict[str, Any]]) -> bool:
         """Replace the fog-of-war regions list on the active map for a room.
 
@@ -152,7 +175,7 @@ class MapService:
         Per-region partial updates are deferred to dedicated WS events.
         """
         try:
-            existing_map = self.collection.find_one(
+            existing_map = await self.collection.find_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True}
             )
             if not existing_map:
@@ -167,7 +190,7 @@ class MapService:
             )
             logger.info(f"Updating fog_config for room {room_id} ({filename}): {meta}")
 
-            result = self.collection.update_one(
+            result = await self.collection.update_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True},
                 {"$set": {"map_config.fog_config": fog_config}}
             )
@@ -179,7 +202,7 @@ class MapService:
             logger.error(f"Failed to update fog config for room {room_id}: {e}")
             return False
 
-    def update_complete_map(self, room_id: str, updated_map: Dict[str, Any]) -> bool:
+    async def update_complete_map(self, room_id: str, updated_map: Dict[str, Any]) -> bool:
         """Replace entire map object atomically"""
         try:
             map_conf = updated_map.get("map_config", {})
@@ -189,7 +212,7 @@ class MapService:
                 logger.error(f"No filename provided in updated map")
                 return False
 
-            existing_map = self.collection.find_one(
+            existing_map = await self.collection.find_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True}
             )
 
@@ -207,7 +230,7 @@ class MapService:
             }
 
             # Replace entire document atomically
-            result = self.collection.replace_one(
+            result = await self.collection.replace_one(
                 {"room_id": room_id, "map_config.filename": filename, "active": True},
                 updated_map_doc
             )
@@ -220,20 +243,4 @@ class MapService:
             logger.error(f"Failed to update complete map for room {room_id}: {e}")
             return False
     
-    def get_room_maps(self, room_id: str) -> list:
-        """Get all maps uploaded to a room (for future map management UI)"""
-        try:
-            maps = list(self.collection.find(
-                {"room_id": room_id}
-            ).sort("upload_date", -1))
-            
-            # Convert ObjectIds to strings
-            for map_doc in maps:
-                map_doc["_id"] = str(map_doc["_id"])
-                
-            return maps
-            
-        except Exception as e:
-            logger.error(f"Failed to get maps for room {room_id}: {e}")
-            return []
 

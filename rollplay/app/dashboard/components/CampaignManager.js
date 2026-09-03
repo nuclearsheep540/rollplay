@@ -1715,7 +1715,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                   // invite". Remaining empties stay as plain
                                   // numbered placeholders.
                                   const memberCount = campaign.members?.length || 0
-                                  const isInviteSlot = slotIdx === memberCount
+                                  // Only the DM may invite (the backend refuses
+                                  // anyone else), so only the DM gets the CTA —
+                                  // same guard the remove/session controls use.
+                                  const isInviteSlot = slotIdx === memberCount && campaign.host_id === user.id
                                   if (isInviteSlot) {
                                     return (
                                       <button

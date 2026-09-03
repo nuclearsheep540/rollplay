@@ -1,5 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Response, Request, Query
 import logging
 import time
@@ -13,13 +15,21 @@ from sentry_config import init_sentry
 init_sentry()
 
 from gameservice import GameService, GameSettings
-from adventure_log_service import AdventureLogService
-from mapservice import MapService, MapSettings
-from imageservice import ImageService, ImageSettings
+from mapservice import MapSettings
+from imageservice import ImageSettings
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
-from websocket_handlers.websocket_events import grid_resnap_fragment, send_map_token_fragment
+# The service instances live in websocket_events and are imported — NOT rebuilt —
+# here (decision 3). Two sets meant two of everything, including a duplicate set
+# of index creations at boot.
+from websocket_handlers.websocket_events import (
+    grid_resnap_fragment,
+    send_map_token_fragment,
+    adventure_log,
+    map_service,
+    image_service,
+)
 from shared_contracts.session import (
     LogEntry,
     SessionStartPayload,
@@ -38,7 +48,37 @@ from datetime import datetime, timezone
 from mongo_service import mongo_service
 
 logger = logging.getLogger()
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Boot and shutdown for api-game's hot store.
+
+    Everything that talks to MongoDB before the first request happens here.
+    Under the async driver there is no event loop at import time, so neither
+    the reachability ping nor index creation can live in a module-level
+    constructor the way they used to.
+
+    Raises:
+        ServerSelectionTimeoutError: MongoDB was unreachable at boot. Left
+            deliberately unhandled — api-game cannot serve a game without its
+            hot store, so the container must die loudly rather than accept
+            connections it will fail. Do not add a retry here.
+    """
+    await mongo_service.verify_connection()
+
+    # create_index is an idempotent no-op when the index already exists, so
+    # this runs safely on every boot.
+    await adventure_log.create_indexes()
+    await map_service.create_indexes()
+    await image_service.create_indexes()
+
+    yield
+
+    await mongo_service.close()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,11 +87,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-adventure_log = AdventureLogService(mongo_service.db)
-map_service = MapService(mongo_service.db)
-image_service = ImageService(mongo_service.db)
 
 
 @app.get("/health")
@@ -68,8 +103,8 @@ async def health_check():
     }
 
 
-def build_role_change_payload(room_id: str, action: str, target_user_id: str, changed_by: str, message: str) -> dict:
-    room = GameService.get_room(id=room_id) or {}
+async def build_role_change_payload(room_id: str, action: str, target_user_id: str, changed_by: str, message: str) -> dict:
+    room = await GameService.get_room(id=room_id) or {}
     return {
         "event_type": "role_change",
         "data": {
@@ -87,8 +122,8 @@ def build_role_change_payload(room_id: str, action: str, target_user_id: str, ch
 async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
     """Get adventure logs for a room"""
     try:
-        logs = adventure_log.get_room_logs(room_id, limit, skip)
-        count = adventure_log.get_room_log_count(room_id)
+        logs = await adventure_log.get_room_logs(room_id, limit, skip)
+        count = await adventure_log.get_room_log_count(room_id)
         
         return {
             "logs": logs,
@@ -102,7 +137,7 @@ async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
 async def get_room_log_stats(room_id: str):
     """Get log statistics for a room"""
     try:
-        stats = adventure_log.get_room_stats(room_id)
+        stats = await adventure_log.get_room_stats(room_id)
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -111,7 +146,7 @@ async def get_room_log_stats(room_id: str):
 async def get_active_map(room_id: str):
     """Get the currently active map for a room"""
     try:
-        active_map = map_service.get_active_map(room_id)
+        active_map = await map_service.get_active_map(room_id)
         
         if active_map:
             mc = active_map.get('map_config', {})
@@ -129,8 +164,8 @@ async def get_active_map(room_id: str):
 async def get_active_image(room_id: str):
     """Get the currently active image for a room"""
     try:
-        active_image = image_service.get_active_image(room_id)
-        active_display = image_service.get_active_display(room_id)
+        active_image = await image_service.get_active_image(room_id)
+        active_display = await image_service.get_active_display(room_id)
 
         if active_image:
             logger.info(f"HTTP endpoint returning active image for room {room_id}: {active_image.get('image_config', {}).get('filename')}")
@@ -162,7 +197,7 @@ async def update_map(room_id: str, request: dict):
         #
         # Guarded on filename so a map *switch* through this endpoint never
         # re-snaps: old and new would be different boards entirely.
-        pre_update_map_config = (map_service.get_active_map(room_id) or {}).get("map_config", {})
+        pre_update_map_config = (await map_service.get_active_map(room_id) or {}).get("map_config", {})
         old_grid_config = None
         map_asset_id = None
         if pre_update_map_config.get("filename") == filename:
@@ -171,11 +206,11 @@ async def update_map(room_id: str, request: dict):
 
         # Replace entire map in database (atomic)
         logger.info(f"HTTP: Updating complete map for room {room_id}, filename {filename} by {updated_by}")
-        success = map_service.update_complete_map(room_id, updated_map)
+        success = await map_service.update_complete_map(room_id, updated_map)
 
         if success:
             # Get the updated map to broadcast via WebSocket
-            updated_map_result = map_service.get_active_map(room_id)
+            updated_map_result = await map_service.get_active_map(room_id)
 
             if updated_map_result:
                 result_mc = updated_map_result.get("map_config", {})
@@ -204,7 +239,7 @@ async def update_map(room_id: str, request: dict):
                 # through this same endpoint costs one dict comparison.
                 # Per-recipient delivery: a raw room broadcast would hand
                 # players every hidden token's position (decision 17).
-                resnap_fragment = grid_resnap_fragment(
+                resnap_fragment = await grid_resnap_fragment(
                     room_id, map_asset_id, updated_by,
                     old_grid_config, result_mc.get("grid_config"),
                 )
@@ -229,7 +264,7 @@ async def update_map(room_id: str, request: dict):
 async def update_seat_count(room_id: str, request: dict):
     """Update the maximum number of seats for a game room and handle displaced players"""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         max_players = request.get("max_players")
         updated_by = request.get("updated_by")
         displaced_players = request.get("displaced_players", [])
@@ -239,7 +274,7 @@ async def update_seat_count(room_id: str, request: dict):
             raise HTTPException(status_code=400, detail="Seat count must be between 1 and 8")
         
         # Update seat count in database
-        GameService.update_seat_count(room_id, max_players)
+        await GameService.update_seat_count(room_id, max_players)
         
         # Handle displaced players - move them back to lobby
         for displaced_player in displaced_players:
@@ -265,7 +300,7 @@ async def update_seat_count(room_id: str, request: dict):
 
                     # Log displacement to adventure log
                     log_message = f"{displaced_user_id} was moved to lobby due to seat reduction"
-                    adventure_log.add_log_entry(
+                    await adventure_log.add_log_entry(
                         room_id=room_id,
                         message=log_message,
                         log_type=LogType.SYSTEM,
@@ -279,7 +314,7 @@ async def update_seat_count(room_id: str, request: dict):
         # Get current seat layout from database after displacement
         try:
             # Get updated room data to get actual seat layout
-            updated_room = GameService.get_room(id=room_id)
+            updated_room = await GameService.get_room(id=room_id)
             current_seats = updated_room.get("seat_layout", [])
             
             # Create new_seats array matching the new max_players count
@@ -321,17 +356,17 @@ async def update_seat_count(room_id: str, request: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/game/{room_id}")
-def gameservice_get(room_id):
-    check_room = GameService.get_room(id=room_id)
+async def gameservice_get(room_id):
+    check_room = await GameService.get_room(id=room_id)
     if check_room:
         # Add current seat layout to response (colors are character-owned and
         # travel inside player_metadata, not per-seat)
-        seat_layout = GameService.get_seat_layout(room_id)
+        seat_layout = await GameService.get_seat_layout(room_id)
         # Include active_map and active_image so the client gets asset URLs in the
         # first response, eliminating separate round trips on initial page load.
         # The server component uses these for <link rel="preload"> hints.
-        active_map = map_service.get_active_map(room_id)
-        active_image = image_service.get_active_image(room_id)
+        active_map = await map_service.get_active_map(room_id)
+        active_image = await image_service.get_active_image(room_id)
         # Token boards and image refs are stripped: this endpoint has no
         # requesting-user context to filter hidden tokens for (decision
         # 17 — the refs would leak hidden monsters' artwork), and clients
@@ -348,15 +383,15 @@ def gameservice_get(room_id):
         return Response(status_code=404, content=f'{{"error": "Room {room_id} not found"}}')
 
 @app.get("/game/{room_id}/roles")
-def get_player_roles(room_id: str, userId: str):
+async def get_player_roles(room_id: str, userId: str):
     """Check user's roles (moderator, DM) in a room"""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
-        is_moderator = GameService.is_moderator(room_id, userId)
-        is_dm = GameService.is_dm(room_id, userId)
+        is_moderator = await GameService.is_moderator(room_id, userId)
+        is_dm = await GameService.is_dm(room_id, userId)
 
         return {
             "is_host": is_dm,  # host = DM for backward compat
@@ -371,7 +406,7 @@ def get_player_roles(room_id: str, userId: str):
 async def add_moderator(room_id: str, request: dict):
     """Add a user as moderator — proxies to api-site for domain validation."""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
@@ -391,9 +426,9 @@ async def add_moderator(room_id: str, request: dict):
         await site_client.request_role_change(campaign_id, requesting_user_id, user_id, "mod")
 
         # api-site approved — update hot state
-        GameService.update_player_role(room_id, user_id, "mod")
+        await GameService.update_player_role(room_id, user_id, "mod")
 
-        role_change_message = build_role_change_payload(
+        role_change_message = await build_role_change_payload(
             room_id, "add_moderator", user_id, requesting_user_id,
             f"Added as moderator",
         )
@@ -412,7 +447,7 @@ async def add_moderator(room_id: str, request: dict):
 async def remove_moderator(room_id: str, request: dict):
     """Remove a user from moderators — proxies to api-site for domain validation."""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
@@ -427,9 +462,9 @@ async def remove_moderator(room_id: str, request: dict):
         await site_client.request_role_change(campaign_id, requesting_user_id, user_id, "spectator")
 
         # api-site approved — update hot state
-        GameService.update_player_role(room_id, user_id, "spectator")
+        await GameService.update_player_role(room_id, user_id, "spectator")
 
-        role_change_message = build_role_change_payload(
+        role_change_message = await build_role_change_payload(
             room_id, "remove_moderator", user_id, requesting_user_id,
             f"Removed from moderators",
         )
@@ -448,7 +483,7 @@ async def remove_moderator(room_id: str, request: dict):
 async def set_dm(room_id: str, request: dict):
     """Set a user as dungeon master"""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
@@ -461,9 +496,9 @@ async def set_dm(room_id: str, request: dict):
         meta = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
         player_name = request.get("player_name") or meta.get("player_name", "")
 
-        success = GameService.set_dm(room_id, user_id, player_name)
+        success = await GameService.set_dm(room_id, user_id, player_name)
         if success:
-            role_change_message = build_role_change_payload(
+            role_change_message = await build_role_change_payload(
                 room_id,
                 "set_dm",
                 user_id,
@@ -483,17 +518,17 @@ async def set_dm(room_id: str, request: dict):
 async def unset_dm(room_id: str):
     """Remove the current dungeon master"""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
         # Get current DM user_id before removing
         current_dm = check_room.get("dungeon_master", {}).get("user_id", "")
 
-        success = GameService.unset_dm(room_id)
+        success = await GameService.unset_dm(room_id)
         if success:
             # Broadcast role change event to all clients in the room
-            role_change_message = build_role_change_payload(
+            role_change_message = await build_role_change_payload(
                 room_id,
                 "unset_dm",
                 current_dm,
@@ -510,14 +545,14 @@ async def unset_dm(room_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/game/")
-def gameservice_create(settings: GameSettings):
-    new_room = GameService.create_room(settings=settings)
+async def gameservice_create(settings: GameSettings):
+    new_room = await GameService.create_room(settings=settings)
     return {"id": new_room}
 
 @app.post("/game/{room_id}")
-def gameservice_create_with_id(room_id: str, settings: GameSettings):
+async def gameservice_create_with_id(room_id: str, settings: GameSettings):
     """Create a game room with a specific ID (for PostgreSQL integration)"""
-    new_room = GameService.create_room(settings=settings, room_id=room_id)
+    new_room = await GameService.create_room(settings=settings, room_id=room_id)
     return {"id": new_room}
 
 @app.post("/game/session/start", response_model=SessionStartResponse)
@@ -544,7 +579,7 @@ async def create_session(request: SessionStartPayload):
     """
     try:
         # Check if game already exists for this session
-        existing = GameService.get_room(request.session_id)
+        existing = await GameService.get_room(request.session_id)
         if existing:
             raise HTTPException(
                 status_code=409,
@@ -605,7 +640,7 @@ async def create_session(request: SessionStartPayload):
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
-        game_id = GameService.create_room(settings, room_id=request.session_id)
+        game_id = await GameService.create_room(settings, room_id=request.session_id)
 
         logger.info(f"Created game {game_id} for session {request.session_id} with {len(request.joined_user_ids)} joined players")
 
@@ -618,7 +653,7 @@ async def create_session(request: SessionStartPayload):
                     uploaded_by="system",
                     map_config=map_config,
                 )
-                map_service.set_active_map(request.session_id, restored_map)
+                await map_service.set_active_map(request.session_id, restored_map)
                 logger.info(f"Restored map '{map_config.filename}' for session {request.session_id}")
             except Exception as e:
                 logger.warning(f"Map restoration failed (non-fatal): {e}")
@@ -632,7 +667,7 @@ async def create_session(request: SessionStartPayload):
                     loaded_by="system",
                     image_config=image_config,
                 )
-                image_service.set_active_image(request.session_id, restored_image)
+                await image_service.set_active_image(request.session_id, restored_image)
                 logger.info(f"Restored image '{image_config.filename}' for session {request.session_id}")
             except Exception as e:
                 logger.warning(f"Image restoration failed (non-fatal): {e}")
@@ -640,7 +675,7 @@ async def create_session(request: SessionStartPayload):
         # Restore active_display from previous session
         if request.active_display:
             try:
-                GameService.set_active_display(request.session_id, request.active_display)
+                await GameService.set_active_display(request.session_id, request.active_display)
                 logger.info(f"Restored active_display '{request.active_display}' for session {request.session_id}")
             except Exception as e:
                 logger.warning(f"active_display restoration failed (non-fatal): {e}")
@@ -648,7 +683,7 @@ async def create_session(request: SessionStartPayload):
         # Restore adventure log from previous session (timestamps/log_ids preserved)
         if request.adventure_log:
             try:
-                restored_count = adventure_log.restore_room_logs(
+                restored_count = await adventure_log.restore_room_logs(
                     request.session_id,
                     [entry.model_dump() for entry in request.adventure_log],
                 )
@@ -698,7 +733,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
     """
     try:
         # Get game room from MongoDB using session_id (which maps to MongoDB _id)
-        room = GameService.get_room(request.session_id)
+        room = await GameService.get_room(request.session_id)
         if not room:
             raise HTTPException(status_code=404, detail="Game not found for session")
 
@@ -731,12 +766,12 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 duration_minutes = int(duration.total_seconds() / 60)
 
         # Get adventure log count
-        log_count = adventure_log.get_room_log_count(request.session_id)
+        log_count = await adventure_log.get_room_log_count(request.session_id)
 
         # Full adventure log for cold storage, chronological (oldest first).
         # Bounded by the service's 200-per-room cap; timestamps go out as
         # ISO-8601 with explicit UTC offset (stored naive-UTC in Mongo).
-        raw_logs = adventure_log.get_room_logs(request.session_id, limit=200)
+        raw_logs = await adventure_log.get_room_logs(request.session_id, limit=200)
         log_entries = []
         for log_doc in sorted(raw_logs, key=lambda log_doc: log_doc.get("log_id") or 0):
             log_timestamp = log_doc.get("timestamp")
@@ -774,19 +809,19 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                     token_boards[board_asset_id] = salvaged_tokens
 
         # Get active map state for ETL — contract data is nested under map_config
-        active_map = map_service.get_active_map(request.session_id)
+        active_map = await map_service.get_active_map(request.session_id)
         map_state = None
         if active_map and active_map.get("map_config", {}).get("filename"):
             map_state = MapConfig(**active_map["map_config"])
 
         # Get active image state for ETL — contract data is nested under image_config
-        active_image = image_service.get_active_image(request.session_id)
+        active_image = await image_service.get_active_image(request.session_id)
         image_state = None
         if active_image and active_image.get("image_config", {}).get("filename"):
             image_state = ImageConfig(**active_image["image_config"])
 
         # Get active_display from game session
-        active_display = image_service.get_active_display(request.session_id)
+        active_display = await image_service.get_active_display(request.session_id)
 
         # Build final state — extract __master_volume from audio_state (it's a float,
         # not an AudioChannelState) before passing to the typed contract
@@ -831,7 +866,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         # If not validate_only, delete the game (deprecated flow)
         if not validate_only:
             logger.warning(f"Using deprecated delete flow for session {request.session_id}")
-            GameService.delete_room(request.session_id)
+            await GameService.delete_room(request.session_id)
 
         logger.info(f"Returned final state for session {request.session_id} (validate_only={validate_only})")
 
@@ -867,7 +902,7 @@ async def delete_session(game_id: str, keep_logs: bool = True):
     """
     try:
         # Check if session exists
-        room = GameService.get_room(game_id)
+        room = await GameService.get_room(game_id)
         if not room:
             # Already deleted - return success
             logger.info(f"Session {game_id} already deleted")
@@ -881,14 +916,14 @@ async def delete_session(game_id: str, keep_logs: bool = True):
         await connection_manager.close_room_connections(game_id, reason="Session ended")
 
         # Delete active_session from MongoDB
-        GameService.delete_room(game_id)
+        await GameService.delete_room(game_id)
 
         # Optionally delete logs and maps
         if not keep_logs:
             logger.info(f"Deleting logs, maps, and images for {game_id}")
-            adventure_log.delete_room_logs(game_id)
-            map_service.clear_active_map(game_id)
-            image_service.delete_room_images(game_id)
+            await adventure_log.delete_room_logs(game_id)
+            await map_service.clear_active_map(game_id)
+            await image_service.delete_room_images(game_id)
 
         logger.info(f"Deleted session {game_id} (keep_logs={keep_logs})")
 
@@ -932,18 +967,18 @@ async def update_player_character(room_id: str, character_data: dict):
     """
     try:
         # Verify room exists
-        room = GameService.get_room(room_id)
+        room = await GameService.get_room(room_id)
         if not room:
             raise HTTPException(status_code=404, detail="Session not found")
 
         # Update the character in room metadata
-        GameService.update_player_character(room_id, character_data)
+        await GameService.update_player_character(room_id, character_data)
 
         # Broadcast character change to all clients via WebSocket. Forward the
         # merged record from MongoDB rather than the inbound delta so the event
         # carries every field clients need (including campaign_role for the
         # spectator-derivation effect). Frontend handler merges fields.
-        refreshed = GameService.get_room(room_id) or {}
+        refreshed = await GameService.get_room(room_id) or {}
         merged = (refreshed.get("player_metadata") or {}).get(character_data.get("user_id", "")) or character_data
         player_name = merged.get("player_name", "unknown")
         character_name = merged.get("character_name", "unknown")
@@ -983,70 +1018,45 @@ async def update_player_character(room_id: str, character_data: dict):
 
 @app.put("/game/{room_id}/seat-layout")
 async def update_seat_layout(room_id: str, request: dict):
-    """Update the seat layout for a game room"""
-    try:
-        logger.debug(f"Received seat layout update request for room {room_id}")
-        logger.debug(f"Request data: {request}")
+    """Seat one user (or "empty") at ONE seat, and return the resulting layout.
 
-        check_room = GameService.get_room(id=room_id)
+    Takes the seat being changed, not the array the client believes in. An
+    array carries every other seat as the sender last saw it, so a stale
+    "empty" is indistinguishable from a seat being vacated and the write erases
+    whoever sat down in between — two players joining at once used to lose one
+    of the seats (plan api-game/03).
+
+    The response carries the authoritative resulting layout, which is what the
+    caller should render rather than its own optimistic array.
+    """
+    try:
+        logger.debug(f"Received seat change for room {room_id}: {request}")
+
+        seat_index = request.get("seat_index")
+        user_id = request.get("user_id")
+        updated_by = request.get("updated_by", "System")
+
+        if not isinstance(seat_index, int) or isinstance(seat_index, bool):
+            raise HTTPException(status_code=400, detail="seat_index must be an integer")
+        if not isinstance(user_id, str) or not user_id:
+            raise HTTPException(status_code=400, detail="user_id must be a user id or 'empty'")
+
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             logger.error(f"Room {room_id} not found")
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
-        seat_layout = request.get("seat_layout")
-        updated_by = request.get("updated_by", "System")
+        # Validation lives in the service, against the layout this change would
+        # produce — it is a rule about the whole party, not about one seat.
+        seat_layout = await GameService.set_seat_occupant(room_id, seat_index, user_id)
+        logger.info(f"Seat {seat_index} in room {room_id} set to {user_id}")
 
-        logger.debug(f"Updated by: {updated_by}")
-        logger.debug(f"New seat layout: {seat_layout}")
-        
-        # Validate seat layout
-        if not isinstance(seat_layout, list):
-            logger.error(f"Invalid seat layout type: {type(seat_layout)}")
-            raise HTTPException(status_code=400, detail="Seat layout must be an array")
-
-        # Get current max_players to validate layout length
-        current_max = check_room.get("max_players", 4)
-        if len(seat_layout) > current_max:
-            logger.error(f"Seat layout too long: {len(seat_layout)} > {current_max}")
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Seat layout cannot exceed {current_max} seats"
-            )
-
-        non_empty_players = [seat for seat in seat_layout if isinstance(seat, str) and seat != "empty"]
-
-        room_dm = check_room.get("dungeon_master", {}).get("user_id", "")
-        if room_dm and room_dm in non_empty_players:
-            raise HTTPException(status_code=409, detail="Dungeon Master cannot sit in party seats")
-
+        # Log the change (only if there are actual players). Resolve each seat's user_id to a
+        # display name — NEVER bake raw UUIDs into the message (the client renders it verbatim).
         player_metadata = check_room.get("player_metadata", {})
         if not isinstance(player_metadata, dict):
             player_metadata = {}
 
-        seated_mods = [
-            uid for uid in non_empty_players
-            if player_metadata.get(uid, {}).get("campaign_role") == "mod"
-        ]
-        if seated_mods:
-            raise HTTPException(status_code=409, detail="Moderators cannot sit in party seats")
-
-        invalid_players = [
-            uid for uid in non_empty_players
-            if not player_metadata.get(uid, {}).get("character_id")
-        ]
-        if invalid_players:
-            raise HTTPException(
-                status_code=409,
-                detail="Only adventurers with selected characters can sit in party seats",
-            )
-        
-        # Update MongoDB record
-        logger.debug(f"Calling GameService.update_seat_layout({room_id}, {seat_layout})")
-        GameService.update_seat_layout(room_id, seat_layout)
-        logger.info(f"Successfully saved seat layout to database")
-        
-        # Log the change (only if there are actual players). Resolve each seat's user_id to a
-        # display name — NEVER bake raw UUIDs into the message (the client renders it verbatim).
         non_empty_seats = [seat for seat in seat_layout if seat != "empty"]
         if non_empty_seats:  # Only log if there are actual players
             def _seat_name(uid):
@@ -1057,26 +1067,24 @@ async def update_seat_layout(room_id: str, request: dict):
             log_message = format_message(MESSAGE_TEMPLATES["party_updated"], players=player_list)
 
             logger.debug(f"Adding adventure log: {log_message}")
-            adventure_log.add_log_entry(
+            await adventure_log.add_log_entry(
                 room_id=room_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
                 from_player=updated_by  # user_id — the client resolves it to a name (never shows the UUID)
             )
-        
-        response_data = {
+
+        return {
             "success": True,
             "room_id": room_id,
             "seat_layout": seat_layout,
             "updated_by": updated_by
         }
-        logger.debug(f"Returning response: {response_data}")
-        return response_data
 
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except ValueError as e:
-        logger.warning(f"Seat layout validation failed: {str(e)}")
+        logger.warning(f"Seat change validation failed: {str(e)}")
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error in update_seat_layout: {str(e)}")
@@ -1086,7 +1094,7 @@ async def update_seat_layout(room_id: str, request: dict):
 async def clear_system_messages(room_id: str, request: dict):
     """Clear all system messages from the adventure log"""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
@@ -1095,14 +1103,14 @@ async def clear_system_messages(room_id: str, request: dict):
         logger.info(f"Clearing system messages for room {room_id} by {cleared_by}")
 
         # Clear system messages from the database
-        deleted_count = adventure_log.clear_system_messages(room_id)
+        deleted_count = await adventure_log.clear_system_messages(room_id)
 
         logger.info(f"Cleared {deleted_count} system messages")
         
         # Add a log entry about the clearing action
         log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
         
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=room_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -1124,7 +1132,7 @@ async def clear_system_messages(room_id: str, request: dict):
 async def clear_all_messages(room_id: str, request: dict):
     """Clear all adventure log messages"""
     try:
-        check_room = GameService.get_room(id=room_id)
+        check_room = await GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
@@ -1133,14 +1141,14 @@ async def clear_all_messages(room_id: str, request: dict):
         logger.info(f"Clearing all messages for room {room_id} by {cleared_by}")
 
         # Clear all messages from the database
-        deleted_count = adventure_log.clear_all_messages(room_id)
+        deleted_count = await adventure_log.clear_all_messages(room_id)
 
         logger.info(f"Cleared {deleted_count} total messages")
         
         # Add a log entry about the clearing action
         log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
         
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=room_id,
             message=log_message,
             log_type=LogType.SYSTEM,

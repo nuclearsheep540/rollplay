@@ -180,6 +180,21 @@ class TestRuntimeUpdate:
         assert body["character_race"] == "human"
         assert body["level"] == 1 and body["hp_max"] == char["hp_max"] and "ac" in body
 
+    def test_character_summary_omits_color(self, client, auth_as, owner):
+        """Colour must NOT ride this snapshot.
+
+        api-game re-reads this endpoint on every seat change to refresh runtime
+        fields. Colour is the one character-owned field edited inside the hot
+        session and synced back to PostgreSQL only at session end, so returning
+        it here overwrote a player's live choice with the pre-session value on
+        their next seat interaction.
+        """
+        char = _finalize_a_character(client, auth_as, owner)
+        body = client.get(f"/api/characters/internal/{char['id']}/summary").json()
+        assert "color" not in body, (
+            "colour re-entered the summary; a seat change will now revert live colour choices"
+        )
+
     def test_conditions_reference_endpoint(self, client, auth_as, owner):
         auth_as(owner.id)
         body = client.get("/api/editions/srd_5_2_1/conditions").json()

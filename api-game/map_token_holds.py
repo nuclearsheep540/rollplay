@@ -17,51 +17,41 @@ unique per map board, and NPC drafts deliberately reuse one id across maps
 (per-map stamps) — a hold on map A must never block or steer the same-id
 token on map B across an active-map switch.
 
-Staleness is lazily expired on access: a hold older than
-HOLD_STALENESS_SECONDS with no activity is treated as abandoned (browser
-gone mid-drag without a clean disconnect). A same-user re-grab — and each
-live-drag move frame — refreshes the clock.
+A hold lives until its holder releases it or disconnects, and there is
+deliberately NO idle expiry (decision 54). A hand held still is still a hand:
+holding a mini in place while the table talks is ordinary play, and the
+10-second staleness this module used to enforce ended those holds mid-drag,
+telling the table a mini was free while its owner's hand was visibly on it.
+Liveness is the websocket connection, never the pointer — a browser that
+vanishes without a clean close is caught by uvicorn's websocket ping
+(--ws-ping-interval / --ws-ping-timeout, set explicitly in the api-game
+Dockerfiles), whose disconnect runs release_all_for_user below.
 """
 
-import time
 from typing import Dict, List, Optional, Tuple
-
-HOLD_STALENESS_SECONDS = 10.0
 
 
 class MapTokenHolds:
-    def __init__(self, staleness_seconds: float = HOLD_STALENESS_SECONDS, clock=time.monotonic):
-        # room_id -> {(asset_id, token_id): (holder_user_id, grabbed_at)}
-        self._holds: Dict[str, Dict[Tuple[str, str], Tuple[str, float]]] = {}
-        self._staleness_seconds = staleness_seconds
-        self._clock = clock
+    def __init__(self):
+        # room_id -> {(asset_id, token_id): holder_user_id}
+        self._holds: Dict[str, Dict[Tuple[str, str], str]] = {}
 
     def holder(self, room_id: str, asset_id: str, token_id: str) -> Optional[str]:
-        """Current holder's user_id, or None if unheld (stale holds expire here)."""
+        """Current holder's user_id, or None if unheld."""
         room_holds = self._holds.get(room_id)
         if not room_holds:
             return None
-
-        entry = room_holds.get((asset_id, token_id))
-        if entry is None:
-            return None
-
-        holder_user_id, grabbed_at = entry
-        if self._clock() - grabbed_at > self._staleness_seconds:
-            del room_holds[(asset_id, token_id)]
-            if not room_holds:
-                del self._holds[room_id]
-            return None
-        return holder_user_id
+        return room_holds.get((asset_id, token_id))
 
     def try_grab(self, room_id: str, asset_id: str, token_id: str, user_id: str) -> Optional[str]:
         """Grab a token. Returns None on success, or the blocking holder's
-        user_id when denied. A same-user grab succeeds and refreshes the clock."""
+        user_id when denied. A same-user grab succeeds as an idempotent
+        re-grab (a client that reconnects mid-drag reclaims its own hold)."""
         current_holder = self.holder(room_id, asset_id, token_id)
         if current_holder is not None and current_holder != user_id:
             return current_holder
 
-        self._holds.setdefault(room_id, {})[(asset_id, token_id)] = (user_id, self._clock())
+        self._holds.setdefault(room_id, {})[(asset_id, token_id)] = user_id
         return None
 
     def release(self, room_id: str, asset_id: str, token_id: str, user_id: str) -> bool:
@@ -75,14 +65,15 @@ class MapTokenHolds:
         return True
 
     def release_all_for_user(self, room_id: str, user_id: str) -> List[Tuple[str, str]]:
-        """Clear every hold user_id has in a room (disconnect cleanup).
+        """Clear every hold user_id has in a room (disconnect cleanup — the
+        only thing besides an explicit release that ends a hold).
         Returns the released (asset_id, token_id) pairs."""
         room_holds = self._holds.get(room_id)
         if not room_holds:
             return []
 
         released_keys = []
-        for hold_key, (holder_user_id, _grabbed_at) in list(room_holds.items()):
+        for hold_key, holder_user_id in list(room_holds.items()):
             if holder_user_id == user_id:
                 del room_holds[hold_key]
                 released_keys.append(hold_key)
