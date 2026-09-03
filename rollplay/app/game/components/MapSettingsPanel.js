@@ -119,9 +119,9 @@ const MapSettingsPanel = ({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        disabled={disabled}
+        disabled={false}
         className={`map-settings-tab ${isOpen ? 'is-open' : ''}`}
-        title={disabled ? 'Load a map to change its view settings' : 'Map settings'}
+        title={'Map settings'}
         aria-expanded={isOpen}
         aria-haspopup="true"
       >
