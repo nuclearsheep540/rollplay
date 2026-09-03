@@ -15,6 +15,14 @@ from .base import ContractModel
 # and bounded for performance.
 FOG_REGIONS_MAX = 12
 
+# Player-token scale bounds (tokens v4). Named rather than inline because a
+# write boundary outside this package validates against them — api-game's
+# PUT /game/{room}/map/config refuses a scale it would then be unable to
+# round-trip, and session end rebuilds a MapConfig from whatever the document
+# holds. Two copies of the numbers could drift; one cannot.
+PC_TOKEN_SCALE_MIN = 0.5
+PC_TOKEN_SCALE_MAX = 1.5
+
 
 class GridColorMode(ContractModel):
     """Color configuration for a single grid display mode (edit or display)."""
@@ -143,4 +151,6 @@ class MapConfig(ContractModel):
     # Bounded rather than free: an unbounded multiplier lets a disc wander
     # far enough from its cell to read as broken, which is a UI-quality
     # judgement the product principle does not protect.
-    pc_token_scale: Optional[float] = Field(default=None, ge=0.5, le=1.5)
+    pc_token_scale: Optional[float] = Field(
+        default=None, ge=PC_TOKEN_SCALE_MIN, le=PC_TOKEN_SCALE_MAX
+    )

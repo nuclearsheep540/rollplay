@@ -57,27 +57,34 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
     }
   }, []);
 
+  // Merges only the keys the sender actually announced. Each sending route
+  // carries the fields its own operation wrote, so an absent key means "not
+  // part of this change" and must be left alone — spreading a missing key as
+  // undefined would blank a config the sender never touched.
   const handleMapConfigUpdate = useCallback((data) => {
     console.log("🗺️ Map config updated (atomic):", data);
-    const { filename, grid_config, map_image_config, updated_by } = data;
+    const { filename, grid_config, map_image_config, pc_token_scale, updated_by } = data;
     const handlers = eventHandlersRef.current;
 
     if (handlers && handlers.setActiveMap) {
       const currentMap = handlers.activeMap;
       if (currentMap && currentMap.map_config?.filename === filename) {
-        const prevMc = currentMap.map_config || {};
+        const prevMapConfig = currentMap.map_config || {};
         const updatedMap = {
           ...currentMap,
           map_config: {
-            ...prevMc,
+            ...prevMapConfig,
             ...(grid_config !== undefined && { grid_config }),
             ...(map_image_config !== undefined && { map_image_config }),
+            // Player token size (tokens v4). Without this, a DM's slider
+            // change reached MongoDB and no other client's board until reload.
+            ...(pc_token_scale !== undefined && { pc_token_scale }),
           },
         };
 
         handlers.setActiveMap(updatedMap);
         console.log(`🗺️ Map ${filename} config updated atomically by ${updated_by}`);
-        console.log(`🗺️ Updated grid_config: ${!!updatedMap.map_config.grid_config}, map_image_config: ${!!updatedMap.map_config.map_image_config}`);
+        console.log(`🗺️ Updated keys: ${Object.keys(data).filter((key) => key !== 'filename' && key !== 'updated_by').join(', ')}`);
       } else {
         console.warn(`🗺️ Config update for ${filename} but current map is different or missing`);
       }

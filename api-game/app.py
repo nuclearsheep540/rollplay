@@ -40,7 +40,7 @@ from shared_contracts.session import (
     SessionStats,
 )
 from pydantic import ValidationError
-from shared_contracts.map import MapConfig
+from shared_contracts.map import MapConfig, PC_TOKEN_SCALE_MAX, PC_TOKEN_SCALE_MIN
 from shared_contracts.map_token import MapToken
 from shared_contracts.image import ImageConfig
 from schemas.session_schemas import SessionEndRequest
@@ -259,6 +259,69 @@ async def update_map(room_id: str, request: dict):
     except Exception as e:
         logger.error(f"Error updating map config for room {room_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/game/{room_id}/map/config")
+async def update_map_config_scoped(room_id: str, request: dict):
+    """Change one map_config field on the active map, and tell the room.
+
+    Takes the field, not the map. The whole-map PUT above replaces the
+    document with the sender's cached copy, and for this caller that copy is
+    stale by design: fog is written by path and broadcast into the client's
+    fog engine, never back into its cached map, so any save made after the
+    first brush stroke writes the fog away. Not a race — deterministic, and
+    silent (plan api-game/03, D3a: send the intent, not the resulting state).
+
+    The broadcast is the other half. `map_config_update` is what every other
+    client learns a change from, and the whole-map PUT's copy of it never
+    carried pc_token_scale — so a size change reached MongoDB and the DM's own
+    screen and nowhere else until someone reloaded.
+
+    Body: {filename, pc_token_scale, updated_by}. Only keys actually written
+    are announced; a key sent as null would clear that field on every client.
+
+    Raises:
+        HTTPException: 400 for a missing map name or a scale MapConfig would
+            refuse (session end rebuilds a MapConfig from the stored document,
+            so an out-of-range write would surface as a failed ETL rather than
+            a failed request). 404 when the room has no active map by that
+            name, in which case nothing is broadcast.
+    """
+    filename = request.get("filename")
+    pc_token_scale = request.get("pc_token_scale")
+    updated_by = request.get("updated_by", "unknown")
+
+    if not isinstance(filename, str) or not filename:
+        raise HTTPException(status_code=400, detail="filename is required")
+
+    # bool is an int in Python, and True would be written as a scale of 1.
+    if isinstance(pc_token_scale, bool) or not isinstance(pc_token_scale, (int, float)):
+        raise HTTPException(status_code=400, detail="pc_token_scale must be a number")
+    if not PC_TOKEN_SCALE_MIN <= pc_token_scale <= PC_TOKEN_SCALE_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"pc_token_scale must be between {PC_TOKEN_SCALE_MIN} and {PC_TOKEN_SCALE_MAX}",
+        )
+
+    logger.info(
+        f"HTTP: Setting pc_token_scale to {pc_token_scale} on {filename} "
+        f"in room {room_id} by {updated_by}"
+    )
+    success = await map_service.update_map_config(
+        room_id, filename, pc_token_scale=pc_token_scale
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail=f"No active map {filename} in room {room_id}")
+
+    await connection_manager.update_room_data(room_id, {
+        "event_type": "map_config_update",
+        "data": {
+            "filename": filename,
+            "pc_token_scale": pc_token_scale,
+            "updated_by": updated_by,
+        },
+    })
+
+    return {"success": True, "pc_token_scale": pc_token_scale}
 
 @app.put("/game/{room_id}/seats")
 async def update_seat_count(room_id: str, request: dict):

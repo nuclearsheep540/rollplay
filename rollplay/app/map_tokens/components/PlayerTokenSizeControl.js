@@ -32,6 +32,13 @@ const SAVE_DEBOUNCE_MS = 400;
  * never touches grid_config. Keeping token art and map geometry on separate
  * write paths is the point of the v4 redesign (see plans/tokens/04 §0).
  *
+ * Sends the field, not the map. Saving used to PUT this component's whole
+ * cached map, which the server wrote as a document replacement — and the copy
+ * in hand goes stale the moment the DM paints fog, because fog updates reach
+ * the fog engine and never the cached map. Every size nudge after a brush
+ * stroke wrote that fog away, silently. The scoped route also broadcasts the
+ * new size, which the whole-map path never did.
+ *
  * Saving is debounced, and that matters more than it looks: each save is a
  * MongoDB write plus a map broadcast to every client in the room. Firing one
  * per keypress meant holding an arrow key spammed the whole table.
@@ -55,7 +62,8 @@ export default function PlayerTokenSizeControl({ roomId, activeMap, setActiveMap
 
   // Live preview with no HTTP: the board reads pc_token_scale straight off
   // activeMap, so a local update resizes the discs as the slider moves. The
-  // broadcast from the PUT lands the same value moments later.
+  // save's broadcast then carries the same value to everyone else — including
+  // back to this client, where merging it is a no-op.
   const previewScale = (nextScale) => {
     if (!setActiveMap || !activeMap) return;
     setActiveMap({
@@ -65,17 +73,19 @@ export default function PlayerTokenSizeControl({ roomId, activeMap, setActiveMap
   };
 
   const persistScale = async (nextScale) => {
-    if (!activeMap) return;
-    const { _id, ...mapWithoutId } = activeMap;
-    const updatedMap = {
-      ...mapWithoutId,
-      map_config: { ...mapWithoutId.map_config, pc_token_scale: nextScale },
-    };
+    // The map is identified by name, not sent: the server writes this one
+    // field by path, leaving the fog and grid on that document untouched.
+    const filename = activeMap?.map_config?.filename;
+    if (!filename) return;
     try {
-      const response = await fetch(`/api/game/${roomId}/map`, {
+      const response = await fetch(`/api/game/${roomId}/map/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map: updatedMap, updated_by: 'dm' })
+        body: JSON.stringify({
+          filename,
+          pc_token_scale: nextScale,
+          updated_by: 'dm',
+        })
       });
       if (!response.ok) {
         console.error('🪙 Failed to save player token size:', await response.text());

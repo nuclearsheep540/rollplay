@@ -66,7 +66,11 @@ export default function MapTokenLayer({
   thisUserIsDm = false,
   tokenImages = {},          // image_asset_id → { url, token_area } (decision 27)
   mapViewScale = 1,          // camera zoom — annotations counter-scale so text/badges hold screen size
-  showTokenNames = true,     // per-user client-side label toggle: names + hidden/locked glyphs (held-by nameplates always show)
+  // Per-user client-side label toggles. Held-by nameplates ignore all three:
+  // they are a social signal about a live hand, not a label.
+  showPartyNames = true,
+  showEnemyNames = true,
+  showEnemyLockItems = true,
   gridConfig = null,
   // Map's player-token size (tokens v4): a 0.5-1.5 multiplier on player-side
   // discs only, and inert on a map with a usable grid (a cell IS the scale
@@ -624,9 +628,11 @@ export default function MapTokenLayer({
             )}
 
             {/* DM-only state glyphs: ghost eye for hidden (players never
-                receive these tokens), padlock for locked. Hidden alongside
-                the name labels by the per-user labels toggle. */}
-            {showTokenNames && (token.hidden || token.locked) && (
+                receive these tokens), padlock for locked. Enemy-only by
+                contract, and on their own per-user toggle — names and these
+                markers used to share one, which meant hiding clutter also
+                hid which tokens a DM had pinned. */}
+            {showEnemyLockItems && (token.hidden || token.locked) && (
               <div
                 className="absolute -top-1 -left-1 flex gap-0.5 text-xs leading-none pointer-events-none"
                 style={{ transform: `scale(${labelScale})`, transformOrigin: 'top left' }}
@@ -670,7 +676,7 @@ export default function MapTokenLayer({
             {/* Name subtitle on a 50%-opacity backing (product decision 3).
                 Client-side toggleable; the held-by nameplate above is a
                 social signal and always shows. */}
-            {showTokenNames && (
+            {(isPc || isCompanion ? showPartyNames : showEnemyNames) && (
               <div
                 className="absolute top-full left-1/2 px-1.5 rounded bg-black/50 text-white text-sm whitespace-nowrap pointer-events-none"
                 style={{ transform: `translate(-50%, 3px) scale(${labelScale})`, transformOrigin: 'top center' }}

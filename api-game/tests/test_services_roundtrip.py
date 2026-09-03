@@ -32,7 +32,7 @@ from models.log_type import LogType
 from mongo_service import mongo_service
 from pymongo.errors import ServerSelectionTimeoutError
 from shared_contracts.image import ImageConfig
-from shared_contracts.map import MapConfig
+from shared_contracts.map import FogConfig, FogRegion, MapConfig
 
 pytestmark = pytest.mark.anyio
 
@@ -342,6 +342,124 @@ class TestMapServiceRoundTrip:
             await GameService.delete_room(room_id)
 
         assert await service.get_active_map(room_id) is None
+
+
+class TestScopedMapConfigWrites:
+    """What a map save is allowed to touch.
+
+    The DM's player-token size slider used to save by PUTting its whole cached
+    map, which `update_complete_map` writes with `replace_one`. Nothing about
+    that is a race: the DM's own fog edits are written by path and broadcast
+    into the fog engine, never back into the cached map the slider sends, so
+    the copy in hand is stale by design from the first brush stroke onward.
+
+    Both tests below build their own map and delete it; neither reads anything
+    another test wrote.
+    """
+
+    @staticmethod
+    def _map_settings(room_id: str) -> MapSettings:
+        return MapSettings(
+            room_id=room_id,
+            uploaded_by=str(uuid.uuid4()),
+            map_config=MapConfig(
+                asset_id=str(uuid.uuid4()),
+                filename="scoped.png",
+                file_path="maps/scoped.png",
+            ),
+        )
+
+    @staticmethod
+    def _painted_fog() -> dict:
+        return FogConfig(regions=[FogRegion(
+            id="region-1",
+            name="Cave mouth",
+            mask="data:image/png;base64,iVBORw0KGgo=",
+            mask_width=64,
+            mask_height=64,
+        )]).model_dump()
+
+    async def test_whole_map_write_from_a_stale_copy_erases_fresh_fog(self, mongo_up):
+        """Evidence for why the slider left this path, NOT a regression guard.
+
+        `update_complete_map` still backs the in-game grid save, so this test
+        passes both before and after that change and must keep passing. It
+        documents the cost of sending a whole document: fog painted after the
+        sender took its copy is written away, with nothing raised.
+        """
+        room_id = make_room_id()
+        service = MapService(mongo_service.db)
+        try:
+            await service.set_active_map(room_id, self._map_settings(room_id))
+
+            # What a client holds: the map as it was when it last loaded.
+            stale_copy = await service.get_active_map(room_id)
+            del stale_copy["_id"]
+            assert stale_copy["map_config"]["fog_config"] is None
+
+            # The DM paints fog. Written by path, exactly as the fog event does.
+            await service.update_fog_config(room_id, "scoped.png", self._painted_fog())
+
+            # The DM now nudges the size slider, which sends the stale copy.
+            stale_copy["map_config"]["pc_token_scale"] = 1.2
+            assert await service.update_complete_map(room_id, stale_copy) is True
+
+            after = await service.get_active_map(room_id)
+            assert after["map_config"]["pc_token_scale"] == 1.2
+            assert after["map_config"]["fog_config"] is None, (
+                "fog painted after the client's copy was taken survived a "
+                "whole-document write — the clobber this route was left for "
+                "is no longer reproducible, so this test needs rewriting"
+            )
+        finally:
+            await mongo_service.db.active_maps.delete_many({"room_id": room_id})
+            await GameService.delete_room(room_id)
+
+    async def test_scoped_scale_write_keeps_fog_painted_since_the_clients_copy(self, mongo_up):
+        """The fix: write the field, leave the document alone.
+
+        Same sequence as the test above — load, paint, then change the size —
+        differing only in how the size is written. Fails before the scoped
+        writer exists.
+        """
+        room_id = make_room_id()
+        service = MapService(mongo_service.db)
+        try:
+            await service.set_active_map(room_id, self._map_settings(room_id))
+            await service.update_fog_config(room_id, "scoped.png", self._painted_fog())
+
+            assert await service.update_map_config(
+                room_id, "scoped.png", pc_token_scale=1.2
+            ) is True
+
+            after_config = (await service.get_active_map(room_id))["map_config"]
+            assert after_config["pc_token_scale"] == 1.2
+            regions = after_config["fog_config"]["regions"]
+            assert [region["id"] for region in regions] == ["region-1"]
+            assert regions[0]["mask"] == "data:image/png;base64,iVBORw0KGgo="
+        finally:
+            await mongo_service.db.active_maps.delete_many({"room_id": room_id})
+            await GameService.delete_room(room_id)
+
+    async def test_a_scale_write_leaves_the_grid_alone(self, mongo_up):
+        """The other cargo field on the same document."""
+        room_id = make_room_id()
+        service = MapService(mongo_service.db)
+        try:
+            await service.set_active_map(room_id, self._map_settings(room_id))
+            await service.update_map_config(
+                room_id, "scoped.png",
+                grid_config={"grid_width": 30, "grid_height": 20, "enabled": True},
+            )
+
+            await service.update_map_config(room_id, "scoped.png", pc_token_scale=0.9)
+
+            after_config = (await service.get_active_map(room_id))["map_config"]
+            assert after_config["pc_token_scale"] == 0.9
+            assert after_config["grid_config"]["grid_width"] == 30
+        finally:
+            await mongo_service.db.active_maps.delete_many({"room_id": room_id})
+            await GameService.delete_room(room_id)
 
 
 class TestImageServiceRoundTrip:

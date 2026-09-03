@@ -845,6 +845,169 @@ body {
   text-shadow: none;
 }
 
+/* Map settings overlay
+   ==========================================================================
+   The map's per-user view settings — one hanging tab and its menu. Lives in
+   MapSafeArea, so both track the right drawer; replaces the three separate
+   hanging buttons (grid inspect mode, labels, lock map) these settings were.
+
+   The tab is a parallelogram in the app's 8° family: the box skews and the
+   label counter-skews so the text stays upright. --map-settings-scale is set
+   inline by the component (1.5 on desktop, 1 on touch), matching the size the
+   buttons rendered at. */
+
+.map-settings {
+  pointer-events: auto;
+}
+
+.map-settings-tab {
+  display: flex;
+  align-items: center;
+  height: calc(36px * var(--map-settings-scale));
+  padding: 0 calc(14px * var(--map-settings-scale));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  border-radius: 0 0 calc(6px * var(--map-settings-scale)) calc(6px * var(--map-settings-scale));
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.5);
+  font-family: system-ui;
+  font-size: calc(11px * var(--map-settings-scale));
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 200ms, color 200ms;
+  transform: skewX(-8deg);
+}
+
+/* Only the closed tab lightens on hover. Open, it is dark text on a light
+   ground, and brightening there washes the label out. */
+.map-settings-tab:hover:not(:disabled):not(.is-open) {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Open reads like an active drawer tab — smoke on silver — so the two tab
+   families in the game view agree on what "this one is open" looks like. */
+.map-settings-tab.is-open {
+  background: rgba(247, 244, 243, 0.9);
+  border-color: rgba(181, 173, 166, 1);
+  color: var(--content-primary);
+}
+
+.map-settings-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.map-settings-tab-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--map-settings-scale));
+  transform: skewX(8deg);
+}
+
+.map-settings-gear {
+  font-size: calc(12px * var(--map-settings-scale));
+  transition: transform 300ms ease;
+}
+
+.map-settings-tab:hover:not(:disabled) .map-settings-gear {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-settings-gear { transition: none; }
+}
+
+/* The menu itself stays a rectangle: the slant is the tab's signature, and
+   skewed switch rows would be a nuisance to read and to hit. */
+.map-settings-menu {
+  position: absolute;
+  top: calc(100% + calc(6px * var(--map-settings-scale)));
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: calc(236px * var(--map-settings-scale));
+  padding: calc(6px * var(--map-settings-scale));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: calc(4px * var(--map-settings-scale));
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(8px);
+  color: #e2e8f0;
+  font-family: system-ui;
+  font-size: calc(11px * var(--map-settings-scale));
+}
+
+.map-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--map-settings-scale));
+  width: 100%;
+  padding: calc(6px * var(--map-settings-scale)) calc(9px * var(--map-settings-scale));
+  border: none;
+  border-radius: calc(3px * var(--map-settings-scale));
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-settings-row:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* A row the viewer's role holds open: still readable, plainly not theirs to
+   change. The title attribute carries the reason. */
+.map-settings-row:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.map-settings-row--child {
+  padding-left: calc(20px * var(--map-settings-scale));
+}
+
+.map-settings-group {
+  padding: calc(8px * var(--map-settings-scale)) calc(9px * var(--map-settings-scale)) calc(2px * var(--map-settings-scale));
+  color: rgba(255, 255, 255, 0.45);
+  font-size: calc(10px * var(--map-settings-scale));
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-settings-hint {
+  padding: 0 calc(9px * var(--map-settings-scale)) calc(4px * var(--map-settings-scale));
+  color: rgba(255, 255, 255, 0.4);
+  font-size: calc(10px * var(--map-settings-scale));
+}
+
+.map-settings-divider {
+  height: 1px;
+  margin: calc(4px * var(--map-settings-scale)) calc(9px * var(--map-settings-scale));
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.map-settings-select {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--map-settings-scale));
+  padding: calc(4px * var(--map-settings-scale)) calc(8px * var(--map-settings-scale));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: calc(3px * var(--map-settings-scale));
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.map-settings-select:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
 /* Bottom Mixer Drawer
    ========================================================================== */
 .bottom-mixer-drawer {

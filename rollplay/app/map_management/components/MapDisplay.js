@@ -52,7 +52,11 @@ const MapDisplay = ({
   thisUserId = null,
   thisUserIsDm = false,      // npc tokens are DM-only to move (decision 16); DM sees hidden ghosts (17)
   tokenImages = {},          // image_asset_id → { url, token_area } for image-faced discs (decision 27)
-  showTokenNames = true,     // per-user client-side toggle for token name labels
+  // Per-user client-side label toggles. Party and enemy names are separate
+  // settings, and the lock/hidden glyphs are enemy-only by contract.
+  showPartyNames = true,
+  showEnemyNames = true,
+  showEnemyLockItems = true,
 }) => {
   useRenderTracker('MapDisplay');
   const mapImageRef = useRef(null);
@@ -402,7 +406,9 @@ const MapDisplay = ({
             thisUserId={thisUserId}
             thisUserIsDm={thisUserIsDm}
             tokenImages={tokenImages}
-            showTokenNames={showTokenNames}
+            showPartyNames={showPartyNames}
+            showEnemyNames={showEnemyNames}
+            showEnemyLockItems={showEnemyLockItems}
             mapViewScale={viewTransform.scale}
             gridConfig={activeMap?.map_config?.grid_config || null}
             pcTokenScale={activeMap?.map_config?.pc_token_scale ?? null}
