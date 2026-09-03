@@ -42,19 +42,30 @@ const STATUS_LABEL = {
 }
 
 /**
- * Full-page notes workspace: note list on the left, editor on the right.
+ * Full-page notes workspace: campaigns and their notes on the left, editor on
+ * the right.
  *
  * The same hooks and the same `NoteEditor` as the in-game drawer — only the
  * chrome differs. The drawer squeezes note switching into a Dropdown because it
  * has 280-560px to work with; here there is room for the list to simply be a
  * list, which is also what makes the multi-file model legible.
  *
- * Selection lives in the URL (`?note=`) rather than in state, matching the
- * workshop tools: a refresh or a pasted link lands on the same note.
+ * The sidebar lists every campaign, not only the one arrived from, and expands
+ * the open one to its notes. A notebook is created on demand, so a campaign
+ * with none belongs in the list exactly as much as one with ten — otherwise the
+ * only route to a first note is back out through the dashboard.
+ *
+ * Only the open campaign's notes are fetched: the collapsed rows need a title,
+ * not a notebook, so switching costs one request rather than the list costing N.
+ *
+ * Selection lives in the URL (`?campaign_id=`, `?note=`) rather than in state,
+ * matching the workshop tools: a refresh or a pasted link lands on the same
+ * note.
  */
 export default function NotesWorkspace({
   campaignId,
-  campaignTitle,
+  campaigns = [],
+  onSelectCampaign,
   activeNoteId,
   onSelectNote,
   onBack,
@@ -156,6 +167,7 @@ export default function NotesWorkspace({
   }, [lockedBySession, activeNoteId, campaignId, queryClient])
 
   const handleCreate = async () => {
+    if (!campaignId) return
     const created = await createNote.mutateAsync()
     onSelectNote(created.id)
   }
@@ -172,33 +184,68 @@ export default function NotesWorkspace({
         <div className="notes-workspace__sidebar-head">
           <button type="button" onClick={onBack} className="notes-workspace__back">
             <FontAwesomeIcon icon={faArrowLeft} className="w-3" />
-            <span>Campaigns</span>
+            <span>Dashboard</span>
           </button>
-          <h1 className="notes-workspace__campaign">{campaignTitle || 'Campaign notes'}</h1>
+          <h1 className="notes-workspace__campaign">Notes</h1>
         </div>
 
         <ul className="notes-workspace__list">
-          {notesList.isLoading && <li className="notes-workspace__empty">Loading…</li>}
-          {!notesList.isLoading && notes.length === 0 && (
+          {campaigns.length === 0 && (
             <li className="notes-workspace__empty">
-              No notes yet. They are private to you and stay with this campaign
-              between sessions.
+              No campaigns yet. Notes live with a campaign, so join or create one
+              first.
             </li>
           )}
-          {notes.map((note) => (
-            <li key={note.id}>
-              <button
-                type="button"
-                onClick={() => onSelectNote(note.id)}
-                className={`notes-workspace__row ${note.id === activeNoteId ? 'is-active' : ''}`}
-              >
-                <span className="notes-workspace__row-title">{note.title}</span>
-                <span className="notes-workspace__row-date">
-                  {dayjs(note.updated_at).format('D MMM, HH:mm')}
-                </span>
-              </button>
-            </li>
-          ))}
+
+          {campaigns.map((campaign) => {
+            const isOpen = campaign.id === campaignId
+            return (
+              <li key={campaign.id} className="notes-workspace__campaign-group">
+                <button
+                  type="button"
+                  onClick={() => onSelectCampaign?.(campaign.id)}
+                  aria-expanded={isOpen}
+                  className={`notes-workspace__campaign-row ${isOpen ? 'is-open' : ''}`}
+                >
+                  <span className="notes-workspace__row-title">{campaign.title}</span>
+                  {/* A live session makes this campaign's notes read-only here.
+                      Said on the row so it is known before the click, not only
+                      once the editor has loaded locked. */}
+                  {campaign.hasLiveSession && (
+                    <span className="notes-workspace__campaign-live">Live</span>
+                  )}
+                </button>
+
+                {isOpen && (
+                  <ul className="notes-workspace__campaign-notes">
+                    {notesList.isLoading && (
+                      <li className="notes-workspace__empty">Loading…</li>
+                    )}
+                    {!notesList.isLoading && notes.length === 0 && (
+                      <li className="notes-workspace__empty">
+                        No notes yet. They are private to you and stay with this
+                        campaign between sessions.
+                      </li>
+                    )}
+                    {notes.map((note) => (
+                      <li key={note.id}>
+                        <button
+                          type="button"
+                          onClick={() => onSelectNote(note.id)}
+                          className={`notes-workspace__row ${note.id === activeNoteId ? 'is-active' : ''}`}
+                        >
+                          <span className="notes-workspace__row-title">{note.title}</span>
+                          <span className="notes-workspace__row-date">
+                            {dayjs(note.updated_at).format('D MMM, HH:mm')}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            )
+          })}
         </ul>
       </aside>
 
@@ -213,12 +260,16 @@ export default function NotesWorkspace({
           onCreate={handleCreate}
           onRename={(title) => renameNote.mutate({ noteId: activeNoteId, title })}
           onDelete={() => setConfirmingDelete(true)}
-          isCreating={createNote.isPending}
+          isCreating={createNote.isPending || !campaignId}
         />
 
         {!activeNoteId ? (
           <div className="notes-workspace__placeholder">
-            <p>Select a note, or create one to get started.</p>
+            <p>
+              {campaignId
+                ? 'Select a note, or create one to get started.'
+                : 'Pick a campaign to open its notes.'}
+            </p>
           </div>
         ) : (
           <>
