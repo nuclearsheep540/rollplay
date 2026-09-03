@@ -1,6 +1,7 @@
 # api-game 03 — Write to the Operation's Scope
 
-**Status:** PLANNED 2026-09-03, not built. Same branch/PR as 01 (async driver) and 02
+**Status:** PARTIALLY IMPLEMENTED 2026-09-03. D1 built and verified. **D2 and D3 were
+wrong and are withdrawn** — see §3a; both need a wire change, not a server-side one. Same branch/PR as 01 (async driver) and 02
 (dispatch table), which are what exposed this.
 **Scope:** three write paths in api-game, one deletion, one CLAUDE.md refinement. No wire
 change: clients keep sending complete objects.
@@ -63,18 +64,27 @@ await collection.update_one(filter_criteria, {"$set": update_fields})
   is the connection's / api-site's UUID, never the payload's, at the WS call site; the HTTP
   route takes it from the body today — validate it as a UUID there.
 
-### D2 — `update_seat_layout` writes only the indices that changed
-The validation read already exists; keep every check. Then diff against the current layout
-and `$set` only `seat_layout.<i>` for changed indices, in one update. Two players sitting
-simultaneously touch two indices and both land. Length changes stay in `update_seat_count`.
-The client still sends the full array — the complete object on the wire — and the server
-writes its scope.
+### D2 — WITHDRAWN. `update_seat_layout` keeps its whole-array write
+Planned as a per-index diff. **Built, tested, and it does not work.** The failing test made
+the reason obvious: writer B reads the layout *after* writer A's write, so B's diff sees
+index 0 as changed (stored `alice` vs its own stale `empty`) and faithfully writes `empty`
+over Alice. The diff cannot tell "I am vacating this seat" from "my copy predates someone
+sitting there". Reverted, with the reasoning left in the code so nobody retries it.
 
-### D3 — `PUT /game/{room}/map` writes `map_config.pc_token_scale` and `update_complete_map` is deleted
-The route's only caller changes one field but sends its whole cached map. Write that field
-through the existing narrow shape (`update_map_config` already writes
-`map_config.grid_config` / `map_config.map_image_config` by path). The grid re-snap detection
-in the route stays. `update_complete_map` then has no callers and goes (delete-superseded-code).
+### D3 — WITHDRAWN. `PUT /game/{room}/map` unchanged
+Planned on the premise that the route had one caller changing one field. **It has two**:
+`MapControlsPanel` (grid save — the path the grid re-snap comment says the app actually uses)
+and `PlayerTokenSizeControl` (`pc_token_scale`). Both spread their whole cached map. A
+hardcoded narrow write would have broken grid saving, and diffing fails for D2's reason.
+`update_complete_map` therefore stays.
+
+### D2a/D3a — what would actually fix them (not scoped here)
+Both payloads *are* the container, and no server-side strategy can narrow what the client
+widened. The fix is at the wire: send the intent, not the resulting state — the seat index and
+its occupant, the map_config keys being changed. That is a frontend + backend change per
+route and wants its own plan. Note this does **not** violate the field-drift rule: that rule
+is about not dropping fields while *constructing* an object, not about sending state the
+caller did not change.
 
 ### D4 — Client payloads are unchanged
 "Send complete objects" still governs the wire. The frontend is untouched.
@@ -83,18 +93,43 @@ in the route stays. `update_complete_map` then has no callers and goes (delete-s
 Optimistic locks and multi-document transactions are the next tool up and nothing here needs
 them; disjoint `$set` paths are sufficient for every case in §2.
 
+## 3a. The distinction that decides which writes are fixable server-side
+
+**`update_player_character` was fixable because its payload is already scoped to one player.**
+The caller says "these fields, this user"; only the *server* widened that to the whole
+`player_metadata` map. Narrowing it back needs no wire change and loses nothing.
+
+**Seat layout and map config are not fixable server-side because the payload is the
+container.** The client sends the whole array / whole `map_config`, so stale members arrive
+looking exactly like intentional changes. Every server-side strategy either clobbers (write it
+whole) or writes stale values over fresh ones (diff it).
+
+**Test for the next case:** does the payload describe one thing the caller owns, or a
+collection others also write? Only the first can be fixed behind the wire.
+
 ## 4. Proof
 
-Round-trip tests in `tests/test_services_roundtrip.py`, each owning its room, **run against
-the unfixed code first and shown failing**:
-- Two `update_player_character` calls for different users via `asyncio.gather`; assert both
-  entries present. (Fails today: whole-map write.)
-- Two concurrent updates to the *same* user with disjoint fields (name vs `hp_current`); assert
-  both fields present.
-- Two concurrent `update_seat_layout` calls seating different users at different indices;
-  assert both seated.
-- A fog write, then a `PUT /map` carrying a pre-fog copy; assert fog survives.
-Manual: two players select characters at session start; both nameplates correct.
+`tests/test_services_roundtrip.py::TestConcurrentWrites`, each test owning its room,
+`asyncio.gather` forcing the interleave. **Run against the unfixed code first:**
+
+| Test | Unfixed | Fixed |
+|---|---|---|
+| Two players select characters at once | **failed** — Alice's entry erased | passes |
+| Same player, disjoint fields (rename vs damage) | passed (see below) | passes |
+| Two players sit down at once | **failed** — Alice's seat erased | **strict xfail**, the withdrawn D2 |
+
+The disjoint-fields test **passed against the unfixed code** — `gather` did not force those
+two to interleave — so it proves nothing about the bug and is kept only as a guarantee that
+the fixed shape holds. Labelled as such rather than cited as evidence.
+
+The seat test stays as a `strict=True` xfail so the gap is visible in the suite and fails
+loudly the day someone closes it without removing the marker.
+
+Live, through the real HTTP route (`PUT /game/{room}/player/character`): full character sync,
+then an `hp_current`-only update that **kept** `character_name` (the merge guarantee now comes
+from absent fields simply not being written), a second player unaffected, and both injection
+attempts (`user_id` containing `.`, a `$`-prefixed field name) refused rather than silently
+written elsewhere.
 
 ## 5. CLAUDE.md — replace "### Atomic State Updates (Game Service Only)"
 

@@ -24,10 +24,39 @@ When in plan mode, write plan files to the repository working directory `./.clau
 **Incorrect Flow**: User Action → WebSocket Message → Direct State Change
 
 ### Atomic State Updates (Game Service Only)
-**Always send complete game objects to MongoDB, never fragmented updates.**
+**Send complete objects; write only the operation's scope.**
 
-✅ **ATOMIC**: `{ game_session: { ...completeGameObject, map: { ...completeMapObject, grid_config: newConfig } } }`
-❌ **FRAGMENTED**: `{ grid_config: newConfig }` (missing rest of game session data)
+**Payloads (client → server).** Send the whole object you are changing, never a hand-built
+fragment. This rule exists because api-game's models used to copy contract fields one by one
+and silently dropped new ones four-plus times (`cine_config.style` most recently). Drift
+protection lives in *construction* — compose the contract, spread rather than whitelist — not
+in writing the whole document.
+
+✅ **COMPLETE**: `{ game_session: { ...completeGameObject, map: { ...completeMapObject, grid_config: newConfig } } }`
+❌ **FRAGMENTED**: `{ grid_config: newConfig }` hand-assembled, so every unlisted field is lost
+
+**Writes (server → MongoDB).** Write the fields the operation owns, by path, in one
+`update_one`. A multi-key `$set` is atomic over exactly those keys, so coupled fields (a
+character swap) land together while unrelated ones (another player's entry, the DM's fog) are
+untouched.
+
+✅ `{"$set": {"player_metadata.<uid>.hp_current": 12}}`
+✅ a character swap: all its fields in one `$set`
+❌ `{"$set": {"player_metadata": whole_map}}` — read-modify-write of a container other people
+   also write. Since api-game went async (2026-09-03) handlers interleave at every `await`, so
+   the second writer's copy predates the first's write and erases it.
+
+**The unit of atomicity is the operation, not a level of the document.** A character swap is
+atomic over its character fields; a damage tick over one field. Both are complete objects for
+what they are doing.
+
+**Caveat — this only works when the payload is already scoped to one thing.** Where the client
+sends a *container* it does not solely own (the whole `seat_layout` array, the whole
+`map_config`), no server-side write strategy helps: a stale member arrives looking exactly like
+an intentional change, so writing it whole clobbers and diffing writes stale values over fresh
+ones. Fixing those means sending the intent (which seat, which key) rather than the resulting
+state. Known open cases are recorded in `.claude/plans/api-game/03-write-to-operation-scope.md`,
+one held open by a `strict` xfail in the api-game suite.
 
 Violating these principles leads to game state desync, real-time session failures, and hard-to-debug multiplayer issues.
 
@@ -558,7 +587,9 @@ In-memory presence state — the map-token hold registry, the hidden-token set,
 `ConnectionManager.room_users` — is owned by the loop thread: read and mutate it
 between awaits, never across one, and re-read anything a decision depends on. This
 is why `map_token_update`'s read → write → read-back is no longer atomic (accepted:
-per-token positional `$set`s, same-token races are last-write-wins by design).
+per-token positional `$set`s, same-token races are last-write-wins by design). Concretely:
+never read a container, change one member, and write the container back — write the member by
+path (see Atomic State Updates above).
 
 ### HTTP-Based ETL (Session Lifecycle)
 **Game Start** (Cold→Hot): api-site gathers state from PostgreSQL → HTTP POST to api-game → MongoDB document created → game status set to ACTIVE

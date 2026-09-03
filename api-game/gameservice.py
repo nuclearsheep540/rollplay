@@ -3,7 +3,7 @@
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 from mongo_service import mongo_service
-from map_token_ops import build_map_token_update, map_token_array_path
+from map_token_ops import build_map_token_update, is_valid_mongo_key, map_token_array_path
 import logging
 import json
 from datetime import datetime, timezone
@@ -137,6 +137,17 @@ class GameService:
         logger.info(f"Updating seat layout with filter: {filter_criteria}")
         logger.info(f"New seat layout: {seat_layout}")
 
+        # Whole-array write, deliberately. A per-index diff was tried and is
+        # NOT an improvement: the client sends the layout it believes in, so a
+        # seat that reads "empty" in a stale copy is indistinguishable from a
+        # seat being vacated. Diffing against the stored array therefore writes
+        # that stale "empty" over whoever just sat down — the same loss, with
+        # more code. Unlike player_metadata (whose payload is already scoped to
+        # one player), the payload here IS the container, and no server-side
+        # write strategy can narrow what the client widened.
+        #
+        # Fixing this properly means sending the seat change (index + occupant)
+        # rather than the resulting array — a wire change (plan api-game/03).
         result = await collection.update_one(
             filter_criteria,
             {
@@ -360,33 +371,45 @@ class GameService:
 
         filter_criteria = GameService.room_filter(room_id)
 
-        # Get current room
-        room = await collection.find_one(filter_criteria)
-        if not room:
-            raise Exception(f"Room {room_id} not found")
-
         user_id = character_data.get("user_id", "")
         if not user_id:
             raise Exception("user_id is required")
+        if not is_valid_mongo_key(user_id):
+            raise Exception("user_id is not a valid metadata key")
 
-        player_metadata = room.get("player_metadata", {})
-        if not isinstance(player_metadata, dict):
-            player_metadata = {}
-
-        # Merge incoming fields into existing entry — a player-only sync
-        # (user joins campaign) must not wipe character fields, and a
-        # character sync must not wipe player fields. Spread rather than
-        # whitelist so new contract fields (e.g. color) can't silently drop.
-        existing = player_metadata.get(user_id, {})
+        # Write ONLY this player's fields, each at its own path, in one
+        # update_one — never the whole player_metadata map (plan api-game/03).
+        #
+        # The map holds one entry per player and every player writes it. Since
+        # api-game went async, handlers interleave at each await, so a
+        # read-modify-write of the whole map means the second writer's copy
+        # predates the first writer's write and erases it — two players
+        # selecting a character at session start lose one of them.
+        #
+        # One update_one is atomic over exactly these keys, so the fields of a
+        # character swap land together while another player's entry, or this
+        # player's unrelated fields, are untouched.
+        #
+        # Drift-proof for the same reason the old spread-merge was: this
+        # iterates whatever arrived instead of whitelisting, so a new contract
+        # field travels without anyone listing it. Absent fields are simply not
+        # written, which is what makes a player-only sync leave the character
+        # fields alone and vice versa.
         provided = {key: value for key, value in character_data.items() if value is not None}
-        merged = {**existing, **provided, "user_id": user_id}
-        player_metadata[user_id] = merged
+        for field_name in provided:
+            if not is_valid_mongo_key(field_name):
+                raise Exception(f"Invalid metadata field name: {field_name}")
 
-        result = await collection.update_one(
-            filter_criteria,
-            {"$set": {"player_metadata": player_metadata}}
-        )
+        update_fields = {
+            f"player_metadata.{user_id}.{field_name}": value
+            for field_name, value in provided.items()
+        }
+        update_fields[f"player_metadata.{user_id}.user_id"] = user_id
 
+        result = await collection.update_one(filter_criteria, {"$set": update_fields})
+
+        # No read-before-write: room existence comes from matched_count, the
+        # same way apply_map_token_op establishes it.
         if result.matched_count == 0:
             raise Exception(f"Room {room_id} not found")
 

@@ -18,6 +18,7 @@ They skip (never fail) when MongoDB is unreachable, so the suite still runs
 on a machine with no stack up.
 """
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 
@@ -158,6 +159,124 @@ class TestGameServiceRoundTrip:
             assert moved[0]["y"] == 400.0
 
             assert await GameService.get_map_tokens(room_id, asset_id) == moved
+        finally:
+            await GameService.delete_room(room_id)
+
+
+class TestConcurrentWrites:
+    """Two writers, one document, at the same time.
+
+    Under the old blocking driver these could not interleave: a handler ran
+    start to finish and the read-modify-write was an accidental critical
+    section. Awaiting every database call removed that, so a writer that reads
+    a container, changes one member and writes the whole container back now
+    erases whatever landed in between (plan api-game/03).
+
+    asyncio.gather is used where the bug needs two writers in flight at once.
+    It does NOT guarantee they interleave — each coroutine runs to its first
+    await, but which read resolves first is up to the driver's connection
+    pool — so a test that passes on the unfixed code is not evidence of the
+    bug. The seat test below avoids the question by reproducing its bug with
+    no concurrency at all.
+    """
+
+    async def test_two_players_selecting_characters_keep_both_entries(self, mongo_up):
+        """The session-start case: two players choose a character at once."""
+        room_id = make_room_id()
+        alice, bob = str(uuid.uuid4()), str(uuid.uuid4())
+        try:
+            await GameService.create_room(make_game_settings(), room_id=room_id)
+
+            await asyncio.gather(
+                GameService.update_player_character(
+                    room_id, {"user_id": alice, "player_name": "Alice",
+                              "character_name": "Lyra", "hp_current": 10}),
+                GameService.update_player_character(
+                    room_id, {"user_id": bob, "player_name": "Bob",
+                              "character_name": "Kade", "hp_current": 12}),
+            )
+
+            room = await GameService.get_room(room_id)
+            metadata = room.get("player_metadata", {})
+            assert metadata.get(alice, {}).get("character_name") == "Lyra"
+            assert metadata.get(bob, {}).get("character_name") == "Kade"
+        finally:
+            await GameService.delete_room(room_id)
+
+    async def test_concurrent_edits_to_one_player_keep_both_fields(self, mongo_up):
+        """The DM reduces a player's health while that player renames.
+
+        Same entry, disjoint fields, two actors. Both must survive.
+
+        NOT evidence that the bug existed: this test also PASSED against the
+        unfixed whole-map write, because gather happened not to interleave
+        these two reads. It is kept as a guarantee of the fixed shape — the
+        two writes now touch disjoint paths, so they cannot lose each other
+        regardless of ordering — and must not be cited as a reproduction.
+        """
+        room_id = make_room_id()
+        player = str(uuid.uuid4())
+        try:
+            await GameService.create_room(make_game_settings(), room_id=room_id)
+            await GameService.update_player_character(
+                room_id, {"user_id": player, "player_name": "Old", "hp_current": 20})
+
+            await asyncio.gather(
+                GameService.update_player_character(
+                    room_id, {"user_id": player, "player_name": "New"}),
+                GameService.update_player_character(
+                    room_id, {"user_id": player, "hp_current": 5}),
+            )
+
+            entry = (await GameService.get_room(room_id))["player_metadata"][player]
+            assert entry["player_name"] == "New"
+            assert entry["hp_current"] == 5
+        finally:
+            await GameService.delete_room(room_id)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="Known gap (plan api-game/03): seat_change sends the whole array, "
+               "so a stale 'empty' is indistinguishable from a vacated seat and "
+               "no server-side write strategy can narrow it. Needs a wire change "
+               "to send the seat index + occupant. Remove this marker when fixed.",
+    )
+    async def test_stale_seat_layout_copy_erases_another_players_seat(self, mongo_up):
+        """Seat layout is an array every player writes whole.
+
+        Unlike the player_metadata cases above, this one is NOT fixed: it is
+        here to hold the gap open and will fail loudly (strict xfail) the day
+        someone makes it pass, so the marker cannot rot.
+
+        Deliberately sequential, not concurrent. The bug is a stale-payload
+        bug — a race is just one way to produce a stale copy — and a sequence
+        reproduces it on every run, which is what a strict xfail needs. A
+        gather-based version would pass whenever the driver happened not to
+        interleave the reads, and strict would then fail the whole suite for
+        a timing accident.
+        """
+        room_id = make_room_id()
+        alice, bob = str(uuid.uuid4()), str(uuid.uuid4())
+        try:
+            await GameService.create_room(make_game_settings(), room_id=room_id)
+            # Seating is gated on having selected a character.
+            for seat_user, name in ((alice, "Alice"), (bob, "Bob")):
+                await GameService.update_player_character(
+                    room_id, {"user_id": seat_user, "player_name": name,
+                              "character_id": str(uuid.uuid4())})
+
+            # Bob's client took its copy of the layout while every seat was
+            # empty. Alice then sits. Bob sits from his stale copy, which
+            # still shows seat 0 as empty — and the whole-array write makes
+            # that stale "empty" land on top of Alice.
+            bobs_stale_copy = ["empty", "empty", "empty", "empty"]
+            await GameService.update_seat_layout(room_id, [alice, "empty", "empty", "empty"])
+            bobs_stale_copy[1] = bob
+            await GameService.update_seat_layout(room_id, bobs_stale_copy)
+
+            layout = await GameService.get_seat_layout(room_id)
+            assert bob in layout, f"Bob's seat was erased: {layout}"
+            assert alice in layout, f"Alice's seat was erased by Bob's stale copy: {layout}"
         finally:
             await GameService.delete_room(room_id)
 
