@@ -99,7 +99,10 @@ def register_websocket_routes(app: FastAPI):
                 event_type = data.get("event_type")
                 event_data = data.get("data")
 
-                logger.debug(f"WebSocket received: {event_type} from {user_id}")
+                if event_type != 'map_token_drag':
+                    # TODO: this is a horrible event type map/switch. drag events
+                    # clog up the async threads and cause performance issues, so skip those logs.
+                    logger.debug(f"WebSocket received: {event_type} from {user_id}")
 
                 # Initialize variables for post-processing
                 broadcast_message = None
