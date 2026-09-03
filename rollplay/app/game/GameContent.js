@@ -36,12 +36,14 @@ import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../f
 import { useMapTokens, MapTokenChipList, MapTokenCreator, PlayerTokenSizeControl } from '../map_tokens';
 import MapSettingsPanel from './components/MapSettingsPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge, faAnglesLeft, faAnglesRight } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge, faAnglesLeft, faAnglesRight, faFlagCheckered } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
 import PerfOverlay from '@/app/shared/components/PerfOverlay';
+import ConfirmDialog from '@/app/shared/components/ConfirmDialog';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useMapSettings } from './hooks/useMapSettings';
+import { useFinishSession } from './hooks/useFinishSession';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import { NotesPanel } from '../notes';
@@ -360,6 +362,12 @@ export default function GameContent() {
 
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
+
+  // Finish Session — the host ending the game from inside it. On success the
+  // server closes the room, so every client (this one included) arrives at
+  // the Session Ended modal above through the normal broadcast.
+  const [showFinishSessionConfirm, setShowFinishSessionConfirm] = useState(false);
+  const { finishSession, isFinishing, error: finishSessionError, clearError: clearFinishSessionError } = useFinishSession();
 
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
@@ -2140,6 +2148,21 @@ export default function GameContent() {
               <FontAwesomeIcon icon={isFullscreen ? faDownLeftAndUpRightToCenter : faUpRightAndDownLeftFromCenter} />
             </button>
 
+            {/* Host-only. Gated on host rather than DM because api-site
+                refuses anyone but the session's host, and the DM role can be
+                handed to another player mid-game. */}
+            {isHost && (
+              <button
+                onClick={() => { clearFinishSessionError(); setShowFinishSessionConfirm(true); }}
+                className="fullscreen-btn finish-session-btn"
+                title="End this session for everyone"
+                disabled={isFinishing}
+              >
+                Finish Session
+                <FontAwesomeIcon icon={faFlagCheckered} style={{ marginLeft: 'calc(6px * var(--ui-scale))' }} />
+              </button>
+            )}
+
             <button
               onClick={() => router.push('/dashboard')}
               className="fullscreen-btn"
@@ -2818,6 +2841,23 @@ export default function GameContent() {
           </div>
         );
       })()}
+
+      {/* Finish Session confirmation — same wording as the dashboard's, since
+          it is the same command and the same consequences. */}
+      <ConfirmDialog
+        show={showFinishSessionConfirm}
+        title="Finish Session"
+        message="This will finish the session for everyone, ending this game. This saves all data for all players."
+        description={finishSessionError || 'Everyone still in the game will be returned to their dashboard.'}
+        confirmText="Finish Session"
+        loadingText="Finishing..."
+        variant="danger"
+        icon={faFlagCheckered}
+        isLoading={isFinishing}
+        confirmDelaySeconds={3}
+        onConfirm={() => finishSession(roomId)}
+        onCancel={() => { setShowFinishSessionConfirm(false); clearFinishSessionError(); }}
+      />
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (

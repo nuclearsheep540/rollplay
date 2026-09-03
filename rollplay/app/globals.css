@@ -563,6 +563,25 @@ body {
   border-color: var(--content-on-dark);
 }
 
+/* Finish Session — the host's end-of-game CTA. A fullscreen-btn in danger
+   colours: it is the only control in the nav that ends the game for everyone,
+   so it must not read as one more neutral button beside Dashboard. */
+.finish-session-btn {
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #fca5a5;
+}
+
+.finish-session-btn:hover:not(:disabled) {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.15);
+  color: #fecaca;
+}
+
+.finish-session-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Main Game Area Grid - Single column, all panels are fixed-position drawers
    ========================================================================== */
 .main-game-area {
@@ -1858,6 +1877,50 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 }
 
 .notes-workspace__row-date { font-size: 0.65rem; color: #B5ADA6; }
+
+/* Campaign rows — the sidebar's outer level. Every campaign the user has
+   joined is listed whether or not it has notes, and the open one expands to
+   its notebook, so a first note can be started without leaving the page. */
+.notes-workspace__campaign-group + .notes-workspace__campaign-group {
+  margin-top: 2px;
+}
+
+.notes-workspace__campaign-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.notes-workspace__campaign-row:hover { background: rgba(255, 255, 255, 0.05); }
+.notes-workspace__campaign-row.is-open { background: #211F1C; border-color: #37322F; }
+.notes-workspace__campaign-row .notes-workspace__row-title { font-weight: 600; }
+
+.notes-workspace__campaign-live {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.18);
+  color: #FCA5A5;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Notes hang off their campaign on a rule, so two levels stay legible in a
+   250px column without another indent step. */
+.notes-workspace__campaign-notes {
+  margin: 2px 0 6px 10px;
+  padding-left: 8px;
+  border-left: 1px solid #37322F;
+}
 
 .notes-workspace__main {
   flex: 1;

@@ -1395,6 +1395,24 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
               const isSelected = selectedCampaign?.id === campaign.id
 
+              // Notes — this user's private notebook for the campaign. Every
+              // member keeps their own (the API checks campaign membership to
+              // start one, then note ownership for everything after), so this
+              // is not the host's to withhold. Declared once because the two
+              // drawer footers below have different layouts but must offer the
+              // identical button; it previously lived inside the host-only
+              // branch, which hid it from every player.
+              const notesButton = (
+                <button
+                  onClick={() => router.push(`/notes?campaign_id=${campaign.id}`)}
+                  className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
+                  style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
+                >
+                  <FontAwesomeIcon icon={faNoteSticky} className="h-4 w-4" />
+                  <span className="text-sm font-medium">Notes</span>
+                </button>
+              )
+
               return (
                 <div
                   key={campaign.id}
@@ -1884,18 +1902,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                 <span className="text-sm font-medium">View Assets</span>
                               </button>
 
-                              {/* Notes — this user's private notebook for the
-                                  campaign. Not DM-gated: every member keeps
-                                  their own notes, and the server authorises by
-                                  ownership rather than membership. */}
-                              <button
-                                onClick={() => router.push(`/notes?campaign_id=${campaign.id}`)}
-                                className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
-                                style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
-                              >
-                                <FontAwesomeIcon icon={faNoteSticky} className="h-4 w-4" />
-                                <span className="text-sm font-medium">Notes</span>
-                              </button>
+                              {notesButton}
 
                               {/* Delete */}
                               <button
@@ -1919,19 +1926,27 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-between gap-3">
-                            <button
-                              onClick={() => setLeaveCampaignTarget(campaign)}
-                              className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 hover:bg-red-900/50"
-                              style={{
-                                backgroundColor: 'transparent',
-                                color: '#dc2626',
-                                borderColor: '#dc2626'
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faRightFromBracket} />
-                              Leave Campaign
-                            </button>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            {/* Same left-group shape as the host footer above,
+                                with the leave action last so the destructive
+                                one sits at the end of the group either way. */}
+                            <div className="flex flex-wrap items-center gap-3">
+                              {notesButton}
+
+                              <button
+                                onClick={() => setLeaveCampaignTarget(campaign)}
+                                className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 hover:bg-red-900/50"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  color: '#dc2626',
+                                  borderColor: '#dc2626'
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faRightFromBracket} />
+                                Leave Campaign
+                              </button>
+                            </div>
+
                             <button
                               onClick={() => setSelectedCampaignId(null)}
                               className="transition-colors text-sm flex items-center"
