@@ -112,3 +112,12 @@ class InternalUserResolveResponse(BaseModel):
     """
     user_id: str
     email: str
+
+
+class InternalUserActiveResponse(BaseModel):
+    """
+    Internal API response for api-auth's token refresh: is this account still active?
+
+    Read-only contract. NOT exposed via NGINX - /api/users/internal/ returns 404 at the edge.
+    """
+    active: bool

@@ -13,6 +13,16 @@ from .short_code_generator import ShortCodeGenerator
 
 logger = logging.getLogger(__name__)
 
+
+class UserServiceUnavailable(Exception):
+    """api-site could not be reached, or answered with an error, while confirming an account.
+
+    Distinct from "the account is gone" on purpose: the refresh endpoint answers 401 and
+    clears cookies for the latter, but 503 and keeps them for this, so an api-site restart
+    cannot log every user out at their next refresh.
+    """
+
+
 class PasswordlessAuth:
     """
     Handles passwordless authentication using magic links
@@ -40,6 +50,34 @@ class PasswordlessAuth:
         except Exception as e:
             logger.warning(f"Could not check user for {email}: {e}")
         return None
+
+    async def _is_user_active(self, user_id: str) -> bool:
+        """Ask api-site whether the account behind a refresh token still exists and is active.
+
+        Read-only, no side effects. Never reach for resolve-user here: it get-or-creates,
+        and would resurrect a soft-deleted account on refresh.
+
+        Raises:
+            UserServiceUnavailable: on a network failure or a non-200 answer. Deliberately
+                not swallowed — reporting "unknown" as "inactive" would log every user out
+                whenever api-site restarts. The endpoint turns this into a 503 and keeps
+                the cookies.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    f"{self.api_site_url}/api/users/internal/check-active",
+                    params={"user_id": user_id},
+                )
+        except httpx.RequestError as error:
+            raise UserServiceUnavailable(f"api-site unreachable: {error}") from error
+
+        if response.status_code != 200:
+            raise UserServiceUnavailable(
+                f"api-site check-active returned {response.status_code}: {response.text}"
+            )
+
+        return bool(response.json().get("active"))
 
     async def send_magic_link(self, email: str) -> dict:
         """
@@ -196,7 +234,42 @@ class PasswordlessAuth:
         except Exception as e:
             logger.error(f"Error verifying OTP token: {str(e)}")
             return None
-    
+
+    async def refresh_tokens(self, refresh_token: str) -> Optional[Dict[str, Any]]:
+        """
+        Exchange a valid refresh token for a new access + refresh pair (rotation).
+
+        Same shape as verify_magic_link / verify_otp_token: verify the presented
+        credential, confirm the account with api-site, mint a pair. Because the new
+        refresh token restarts the refresh lifetime, a user seen at least once per
+        lifetime is never asked to log in again. There is deliberately no absolute
+        ceiling and no server-side record, so a superseded refresh token stays valid
+        until its own exp.
+
+        Returns None when the token is unusable or the account is gone — the caller
+        answers 401 and clears both cookies.
+
+        Raises:
+            UserServiceUnavailable: propagated from _is_user_active, see there.
+        """
+        user_data = self.jwt_handler.verify_refresh_token(refresh_token)
+        if not user_data:
+            return None
+
+        if not await self._is_user_active(user_data["id"]):
+            logger.info(f"Refresh refused: user {user_data['id']} is not active")
+            return None
+
+        tokens = self.jwt_handler.create_tokens(user_data)
+        logger.info(f"Rotated tokens for {user_data['email']}")
+
+        return {
+            "user": user_data,
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "token_type": "bearer",
+        }
+
     async def _resolve_user_for_token(self, email: str) -> Dict[str, str]:
         """
         Resolve user_id from email via api-site internal endpoint.

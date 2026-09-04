@@ -7,9 +7,13 @@
  * Wrapper around fetch that handles automatic token refresh on 401 responses.
  *
  * When an access token expires (401), this automatically:
- * 1. Calls /api/users/auth/refresh to get a new access token
+ * 1. Calls /api/auth/refresh to get a new access + refresh pair
  * 2. Retries the original request with the new token
  * 3. Redirects to login if refresh also fails
+ *
+ * The refresh response carries both cookies, and the rotated refresh token restarts
+ * the refresh lifetime, so an active user is never logged out. The browser stores
+ * them; nothing here reads the body.
  *
  * Usage:
  *   import { authFetch } from '@/app/shared/utils/authFetch'
@@ -20,10 +24,15 @@ let isRefreshing = false
 let refreshPromise = null
 
 /**
- * Attempt to refresh the access token using the refresh token cookie.
+ * Attempt to refresh the token pair using the refresh token cookie.
+ *
+ * Exported so the proactive timer in useTokenRefresh shares this one definition,
+ * and with it the in-flight guard below: a timer tick and a 401 retry landing
+ * together issue a single refresh rather than racing two.
+ *
  * @returns {Promise<boolean>} True if refresh succeeded, false otherwise
  */
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   // If already refreshing, wait for that to complete
   if (isRefreshing && refreshPromise) {
     return refreshPromise
@@ -32,7 +41,7 @@ async function refreshAccessToken() {
   isRefreshing = true
   refreshPromise = (async () => {
     try {
-      const response = await fetch('/api/users/auth/refresh', {
+      const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include'
       })

@@ -4,7 +4,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { API_SITE_INTERNAL_URL, API_AUTH_INTERNAL_URL } from './app/shared/config'
+import { API_AUTH_INTERNAL_URL } from './app/shared/config'
 
 // Define protected routes that require authentication
 const PROTECTED_ROUTES = [
@@ -23,15 +23,23 @@ const AUTH_ROUTES = [
 ]
 
 /**
- * Attempt to refresh the access token using the refresh token.
- * Returns the new auth_token if successful, null otherwise.
+ * Attempt a refresh against api-auth using the refresh cookie on the incoming request.
+ * Returns api-auth's Set-Cookie headers (a new access + refresh pair) or null.
+ *
+ * This runs on the Next server, where there is no cookie jar: the Cookie header is
+ * built by hand on the way out, and the Set-Cookie headers have to be copied onto our
+ * own response on the way back. They are forwarded verbatim, so the browser receives
+ * exactly the cookies api-auth decided on, lifetimes and flags included, and this file
+ * never has to know a token lifetime.
+ *
+ * getSetCookie() is the only safe way to read several Set-Cookie headers: the joined
+ * string form cannot be split on commas, because Expires values contain them.
  */
 async function tryRefreshToken(refreshToken) {
   try {
-    const refreshResponse = await fetch(`${API_SITE_INTERNAL_URL}/api/users/auth/refresh`, {
+    const refreshResponse = await fetch(`${API_AUTH_INTERNAL_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Cookie': `refresh_token=${refreshToken}`
       }
     })
@@ -40,12 +48,22 @@ async function tryRefreshToken(refreshToken) {
       return null
     }
 
-    const data = await refreshResponse.json()
-    return data.access_token || null
+    return refreshResponse.headers.getSetCookie()
   } catch (error) {
     console.error(`Token refresh failed: ${error.message}`)
   }
   return null
+}
+
+/**
+ * Let the request through, carrying the refreshed cookies back to the browser.
+ */
+function passThroughWithCookies(setCookieHeaders) {
+  const response = NextResponse.next()
+  for (const setCookieHeader of setCookieHeaders) {
+    response.headers.append('set-cookie', setCookieHeader)
+  }
+  return response
 }
 
 export async function middleware(request) {
@@ -71,20 +89,11 @@ export async function middleware(request) {
     if (!authToken) {
       if (refreshToken) {
         console.log(`Protected route: ${pathname} - No auth token, attempting refresh`)
-        const newAuthToken = await tryRefreshToken(refreshToken)
+        const refreshedCookies = await tryRefreshToken(refreshToken)
 
-        if (newAuthToken) {
+        if (refreshedCookies) {
           console.log(`Protected route access granted: ${pathname} (after refresh)`)
-          const response = NextResponse.next()
-          // Set the new auth token cookie
-          response.cookies.set('auth_token', newAuthToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'lax',
-            maxAge: 900, // 15 minutes
-            path: '/'
-          })
-          return response
+          return passThroughWithCookies(refreshedCookies)
         }
       }
 
@@ -107,20 +116,13 @@ export async function middleware(request) {
         // Token is invalid - try to refresh before giving up
         if (refreshToken) {
           console.log(`Protected route: ${pathname} - Invalid token, attempting refresh`)
-          const newAuthToken = await tryRefreshToken(refreshToken)
+          const refreshedCookies = await tryRefreshToken(refreshToken)
 
-          if (newAuthToken) {
+          if (refreshedCookies) {
             console.log(`Protected route access granted: ${pathname} (after refresh)`)
-            const response = NextResponse.next()
-            response.cookies.set('auth_token', newAuthToken, {
-              httpOnly: true,
-              secure: true,
-              sameSite: 'lax',
-              maxAge: 900,
-              path: '/'
-            })
-            return response
+            return passThroughWithCookies(refreshedCookies)
           }
+
         }
 
         // Refresh failed or no refresh token

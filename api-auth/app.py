@@ -1,21 +1,20 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
 import logging
 from fastapi import FastAPI, HTTPException, Depends, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime, timedelta
+from fastapi.responses import JSONResponse
+from typing import Dict
+from datetime import datetime
 
 # Initialize Sentry for monitoring and security alerts
 from sentry_config import init_sentry
 init_sentry()
 
-from auth.passwordless import PasswordlessAuth
+from auth.passwordless import PasswordlessAuth, UserServiceUnavailable
 from auth.jwt_handler import JWTHandler
-from models.user import User, UserCreate, UserResponse
+from models.user import UserCreate, UserResponse
 from models.session import LoginRequest, LoginResponse, ValidateRequest, ValidateResponse
 from config.settings import Settings
 
@@ -45,6 +44,51 @@ app.add_middleware(
 # Initialize auth services
 passwordless_auth = PasswordlessAuth(settings)
 jwt_handler = JWTHandler(settings)
+
+
+def set_auth_cookies(response: Response, tokens: Dict[str, str]) -> None:
+    """Set the access + refresh httpOnly cookies from a token pair.
+
+    Takes any dict carrying 'access_token' and 'refresh_token', which is the shape of
+    both create_tokens() output and the auth_result the passwordless flows return.
+
+    Each cookie's max-age mirrors its own JWT's exp, so the browser drops a cookie at
+    the moment its token stops verifying. Both numbers come from JWTHandler, which
+    reads them from Settings — the one place a lifetime is defined.
+    """
+    response.set_cookie(
+        key="auth_token",
+        value=tokens["access_token"],
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=jwt_handler.access_token_expire_minutes * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens["refresh_token"],
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=jwt_handler.refresh_token_expire_days * 24 * 60 * 60,
+        path="/",
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    """Expire both auth cookies, with the same attributes they were set with so the
+    browser matches and replaces them."""
+    for cookie_name in ("auth_token", "refresh_token"):
+        response.set_cookie(
+            key=cookie_name,
+            value="",
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=0,
+            path="/",
+        )
 
 # Health check endpoint
 @app.get("/health")
@@ -126,27 +170,7 @@ async def verify_magic_link(token: str, response: Response):
         
         logger.info(f"Successfully authenticated user: {auth_result['user']['email']}")
 
-        # Set httpOnly cookie with the access token (short-lived)
-        response.set_cookie(
-            key="auth_token",
-            value=auth_result["access_token"],
-            httponly=True,
-            secure=True,  # Use HTTPS in production
-            samesite="lax",
-            max_age=900,  # 15 minutes
-            path="/"
-        )
-
-        # Set httpOnly cookie with the refresh token (long-lived)
-        response.set_cookie(
-            key="refresh_token",
-            value=auth_result["refresh_token"],
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=604800,  # 7 days
-            path="/"
-        )
+        set_auth_cookies(response, auth_result)
 
         return {
             "success": True,
@@ -173,27 +197,7 @@ async def verify_otp_token(request: ValidateRequest, response: Response):
         
         logger.info(f"Successfully authenticated user via OTP: {auth_result['user']['email']}")
 
-        # Set httpOnly cookie with the access token (short-lived)
-        response.set_cookie(
-            key="auth_token",
-            value=auth_result["access_token"],
-            httponly=True,
-            secure=True,  # Use HTTPS in production
-            samesite="lax",
-            max_age=900,  # 15 minutes
-            path="/"
-        )
-
-        # Set httpOnly cookie with the refresh token (long-lived)
-        response.set_cookie(
-            key="refresh_token",
-            value=auth_result["refresh_token"],
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=604800,  # 7 days
-            path="/"
-        )
+        set_auth_cookies(response, auth_result)
 
         return {
             "success": True,
@@ -236,33 +240,63 @@ async def validate_token(request: Request):
         logger.error(f"Error validating token: {str(e)}")
         raise HTTPException(status_code=500, detail="Token validation failed")
 
+
+def _refresh_rejected(detail: str) -> JSONResponse:
+    """A 401 that also expires both cookies, so a client holding a dead refresh token
+    stops presenting it instead of retrying every twelve minutes.
+
+    The cookies are set on the object that is actually returned: anything written to
+    FastAPI's injected `response` is discarded when an HTTPException is raised, which
+    is why this path returns rather than raises.
+    """
+    rejected = JSONResponse(status_code=401, content={"detail": detail})
+    clear_auth_cookies(rejected)
+    return rejected
+
+
+@app.post("/auth/refresh")
+async def refresh_tokens(request: Request, response: Response):
+    """
+    Exchange the refresh_token cookie for a new access + refresh pair.
+
+    Rotation: a success re-issues BOTH cookies, so the refresh lifetime restarts on
+    every use and an active user is never asked to log in again. Tokens travel only as
+    httpOnly cookies; the body never carries them.
+
+    401, both cookies cleared: no cookie presented, or the token is expired, invalid,
+        or not a refresh token, or the account is no longer active.
+    503, cookies kept: api-site could not confirm the account. A transient outage there
+        must not log every user out.
+    """
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        return _refresh_rejected("No refresh token")
+
+    try:
+        auth_result = await passwordless_auth.refresh_tokens(refresh_token)
+    except UserServiceUnavailable as error:
+        logger.error(f"Refresh could not confirm account with api-site: {error}")
+        raise HTTPException(status_code=503, detail="Account service unavailable")
+
+    if not auth_result:
+        return _refresh_rejected("Invalid or expired refresh token")
+
+    set_auth_cookies(response, auth_result)
+
+    return {
+        "success": True,
+        "user": auth_result["user"],
+        "message": "Tokens refreshed"
+    }
+
+
 @app.post("/auth/logout")
 async def logout(response: Response):
     """
     Logout user by clearing httpOnly cookies
     """
     try:
-        # Clear the access token cookie
-        response.set_cookie(
-            key="auth_token",
-            value="",
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=0,  # Immediate expiry
-            path="/"
-        )
-
-        # Clear the refresh token cookie
-        response.set_cookie(
-            key="refresh_token",
-            value="",
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=0,  # Immediate expiry
-            path="/"
-        )
+        clear_auth_cookies(response)
 
         logger.info("User logged out successfully")
 

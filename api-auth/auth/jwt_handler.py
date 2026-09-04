@@ -1,12 +1,11 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+from uuid import UUID
 from fastapi import HTTPException, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,9 +19,11 @@ class JWTHandler:
         self.settings = settings
         self.secret_key = settings.JWT_SECRET_KEY
         self.algorithm = "HS256"
-        self.access_token_expire_minutes = 15  # 15 minutes for access tokens
-        self.refresh_token_expire_days = 7  # 7 days for refresh tokens
-        self.magic_token_expire_minutes = 15  # 15 minutes for magic links
+        # Lifetimes live in Settings so a JWT's exp and the cookie max-age that
+        # mirrors it can never drift apart. See config/settings.py.
+        self.access_token_expire_minutes = settings.jwt_access_token_expire_minutes
+        self.refresh_token_expire_days = settings.jwt_refresh_token_expire_days
+        self.magic_token_expire_minutes = 15  # magic links: not part of the refresh work
         
     def create_token(self, user_data: Dict[str, Any]) -> str:
         """
@@ -34,8 +35,8 @@ class JWTHandler:
                 "user_id": user_data["id"],
                 "email": user_data["email"],
                 "display_name": user_data.get("display_name"),
-                "exp": datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes),
-                "iat": datetime.utcnow(),
+                "exp": datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes),
+                "iat": datetime.now(timezone.utc),
                 "type": "access"
             }
             
@@ -57,8 +58,8 @@ class JWTHandler:
         try:
             payload = {
                 "email": email,
-                "exp": datetime.utcnow() + timedelta(minutes=self.magic_token_expire_minutes),
-                "iat": datetime.utcnow(),
+                "exp": datetime.now(timezone.utc) + timedelta(minutes=self.magic_token_expire_minutes),
+                "iat": datetime.now(timezone.utc),
                 "type": "magic_link",
                 "iss": "tabletop-tavern-auth",
                 "aud": "tabletop-tavern"
@@ -107,7 +108,54 @@ class JWTHandler:
         except Exception as e:
             logger.error(f"Error verifying JWT token: {str(e)}")
             raise
-    
+
+    def verify_refresh_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Verify a refresh token and return the user data needed to mint a new pair.
+
+        Returns {"id": <uuid str>, "email": <str>} — the shape create_tokens() takes,
+        so a caller can hand the result straight back in — or None when the token is
+        expired, tampered with, signed with another key, not of type "refresh", or
+        carries a malformed user_id. Every one of those is an expected input at this
+        boundary and is reported as None rather than raised: the endpoint answers 401
+        and clears both cookies.
+        """
+        try:
+            # verify_exp is PyJWT's default, and `require` additionally rejects a token
+            # that carries no exp at all. Both are spelled out because enforcing expiry
+            # is the entire point of this check; a missing claim raises
+            # MissingRequiredClaimError, a subclass of InvalidTokenError.
+            payload = jwt.decode(
+                token,
+                self.secret_key,
+                algorithms=[self.algorithm],
+                options={"verify_exp": True, "require": ["exp"]},
+            )
+        except jwt.ExpiredSignatureError:
+            logger.warning("Refresh token has expired")
+            return None
+        except jwt.InvalidTokenError as error:
+            logger.warning(f"Invalid refresh token: {str(error)}")
+            return None
+
+        if payload.get("type") != "refresh":
+            logger.warning(f"Invalid token type for refresh: {payload.get('type')}")
+            return None
+
+        user_id = payload.get("user_id")
+        email = payload.get("email")
+        if not user_id or not email:
+            logger.warning("Refresh token missing user_id or email")
+            return None
+
+        try:
+            UUID(user_id)
+        except (ValueError, TypeError):
+            logger.warning("Refresh token user_id is not a UUID")
+            return None
+
+        return {"id": user_id, "email": email}
+
     def get_token_from_header(self, request: Request) -> Optional[str]:
         """
         Extract JWT token from Authorization header
@@ -204,8 +252,8 @@ class JWTHandler:
             payload = {
                 "user_id": user_data["id"],
                 "email": user_data["email"],
-                "exp": datetime.utcnow() + timedelta(days=self.refresh_token_expire_days),
-                "iat": datetime.utcnow(),
+                "exp": datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days),
+                "iat": datetime.now(timezone.utc),
                 "type": "refresh"
             }
 
