@@ -248,12 +248,13 @@ class JWTHandler:
         """
         Create refresh token for user - long-lived, only used to get new access tokens.
         """
+        now = datetime.now(timezone.utc)
         try:
             payload = {
                 "user_id": user_data["id"],
                 "email": user_data["email"],
-                "exp": datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days),
-                "iat": datetime.now(timezone.utc),
+                "exp": now + timedelta(days=self.refresh_token_expire_days),
+                "iat": now,
                 "type": "refresh"
             }
 
