@@ -1,5 +1,5 @@
 {
-  "latest": "0.64.2",
+  "latest": "0.64.6",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -925,6 +925,66 @@
         "api_site": "0.43.0",
         "api_game": "0.29.1",
         "api_auth": "0.3.2",
+        "nginx": "0.9.2",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.64.3": {
+      "date": "2026-09-03",
+      "commit": "df4d8b6",
+      "description": "Fixes on tokens and imrpovements to pymongo async as well as non-atomic updates on field-only writes",
+      "services": {
+        "app": "0.47.2",
+        "api_site": "0.43.1",
+        "api_game": "0.29.2",
+        "api_auth": "0.3.2",
+        "nginx": "0.9.2",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.64.4": {
+      "date": "2026-09-03",
+      "commit": "f21ed57",
+      "description": "aggreates map settings into a single menu and fixes the broadcast player scale bug",
+      "services": {
+        "app": "0.47.3",
+        "api_site": "0.43.1",
+        "api_game": "0.29.3",
+        "api_auth": "0.3.2",
+        "nginx": "0.9.2",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.64.5": {
+      "date": "2026-09-03",
+      "commit": "37b49e4",
+      "description": "end game from session",
+      "services": {
+        "app": "0.47.4",
+        "api_site": "0.43.1",
+        "api_game": "0.29.3",
+        "api_auth": "0.3.2",
+        "nginx": "0.9.2",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.64.6": {
+      "date": "2026-09-05",
+      "commit": "19bdba7",
+      "description": "fix refresh tokens",
+      "services": {
+        "app": "0.47.5",
+        "api_site": "0.43.2",
+        "api_game": "0.29.3",
+        "api_auth": "0.3.3",
         "nginx": "0.9.2",
         "postgres": "0.1.10",
         "mongo": "0.4.2",

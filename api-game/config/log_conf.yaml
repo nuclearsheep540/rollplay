@@ -23,6 +23,16 @@ loggers:
     handlers:
       - access
     propagate: no
+  # PyMongo 4.x emits structured DEBUG logs for every command, connection
+  # checkout and server-selection round trip. Under our DEBUG root that is a
+  # line per driver call on the hot path — far noisier, and more expensive,
+  # than the per-message log we removed from the websocket loop. Pinned to
+  # WARNING so real driver problems still surface.
+  pymongo:
+    level: WARNING
+    handlers:
+      - default
+    propagate: no
 root:
   level: DEBUG
   handlers:

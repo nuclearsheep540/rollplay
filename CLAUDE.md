@@ -24,10 +24,39 @@ When in plan mode, write plan files to the repository working directory `./.clau
 **Incorrect Flow**: User Action → WebSocket Message → Direct State Change
 
 ### Atomic State Updates (Game Service Only)
-**Always send complete game objects to MongoDB, never fragmented updates.**
+**Send complete objects; write only the operation's scope.**
 
-✅ **ATOMIC**: `{ game_session: { ...completeGameObject, map: { ...completeMapObject, grid_config: newConfig } } }`
-❌ **FRAGMENTED**: `{ grid_config: newConfig }` (missing rest of game session data)
+**Payloads (client → server).** Send the whole object you are changing, never a hand-built
+fragment. This rule exists because api-game's models used to copy contract fields one by one
+and silently dropped new ones four-plus times (`cine_config.style` most recently). Drift
+protection lives in *construction* — compose the contract, spread rather than whitelist — not
+in writing the whole document.
+
+✅ **COMPLETE**: `{ game_session: { ...completeGameObject, map: { ...completeMapObject, grid_config: newConfig } } }`
+❌ **FRAGMENTED**: `{ grid_config: newConfig }` hand-assembled, so every unlisted field is lost
+
+**Writes (server → MongoDB).** Write the fields the operation owns, by path, in one
+`update_one`. A multi-key `$set` is atomic over exactly those keys, so coupled fields (a
+character swap) land together while unrelated ones (another player's entry, the DM's fog) are
+untouched.
+
+✅ `{"$set": {"player_metadata.<uid>.hp_current": 12}}`
+✅ a character swap: all its fields in one `$set`
+❌ `{"$set": {"player_metadata": whole_map}}` — read-modify-write of a container other people
+   also write. Since api-game went async (2026-09-03) handlers interleave at every `await`, so
+   the second writer's copy predates the first's write and erases it.
+
+**The unit of atomicity is the operation, not a level of the document.** A character swap is
+atomic over its character fields; a damage tick over one field. Both are complete objects for
+what they are doing.
+
+**Caveat — this only works when the payload is already scoped to one thing.** Where the client
+sends a *container* it does not solely own (the whole `seat_layout` array, the whole
+`map_config`), no server-side write strategy helps: a stale member arrives looking exactly like
+an intentional change, so writing it whole clobbers and diffing writes stale values over fresh
+ones. Fixing those means sending the intent (which seat, which key) rather than the resulting
+state. Known open cases are recorded in `.claude/plans/api-game/03-write-to-operation-scope.md`,
+one held open by a `strict` xfail in the api-game suite.
 
 Violating these principles leads to game state desync, real-time session failures, and hard-to-debug multiplayer issues.
 
@@ -330,7 +359,7 @@ const response = await fetch('/api/campaigns/', { method: 'GET', credentials: 'i
 ```
 
 **Exceptions** (plain `fetch` is correct here):
-- The token refresh endpoint itself (`/api/users/auth/refresh`) — using `authFetch` would cause infinite recursion
+- The token refresh endpoint itself (`/api/auth/refresh`) — using `authFetch` would cause infinite recursion
 - Auth/login pages (magic link, OTP) — user isn't authenticated yet
 - Public endpoints (patch notes) — no auth required
 - Direct S3 uploads (`PUT` to presigned URL) — not our backend
@@ -391,9 +420,32 @@ from modules.your_module.model.your_model import YourModel
 
 ### Event System
 - **Structure**: `{event_type: string, data: object}`
-- **Game Events**: `seat_change`, `dice_roll`, `combat_state`, `player_connection`, `system_message`, `role_change`
+- **Game Events**: `seat_change`, `dice_roll`, `combat_state`, `role_change`
 - **Audio Events**: `remote_audio_play`, `remote_audio_resume`, `remote_audio_batch`
 - Events validated server-side before broadcasting; malformed events logged and ignored
+
+**Routing: `EVENT_HANDLERS` in `api-game/websocket_handlers/app_websocket.py`.** One dict
+mapping wire event type → handler on `WebsocketEvent`, replacing what used to be 29 hand-written
+`if/elif` branches. Every handler shares the signature
+`(websocket, data, event_data, user_id, client_id, manager)` and returns a
+`WebsocketEventResult`, which is what lets the receive loop be a single body.
+
+**That dict IS the wire allowlist — never build it with `getattr(WebsocketEvent, event_type)`.**
+The same class carries `player_connection`, `player_disconnect`, `player_displaced` and
+`system_message`, which the server invokes on its own initiative and no client may ever reach,
+plus the private name/metadata/log helpers. Reflection would expose all of them to any client.
+`api-game/tests/test_event_dispatch.py` guards this and fails if the table is ever derived
+rather than declared.
+
+**Adding an event**: write the handler on `WebsocketEvent`, add one line to `EVENT_HANDLERS`,
+and validate the payload *inside the handler* (returning `WebsocketEventResult.error(...)`, which
+the loop sends to the sender alone). The loop handles the rest generically — a `None`
+`broadcast_message` means "already answered point-to-point, send nothing", handler exceptions
+become an error reply instead of a dead socket, and cleanup runs in a `finally` on every exit
+path so a socket that dies any way other than a clean disconnect still releases its map-token
+holds. Per-event post-dispatch behaviour (the seat lobby refresh, which must run *before* its own
+broadcast, and the dice log-removal follow-ups) is spelled out in the loop, not hidden in the
+table.
 
 ## Development Commands
 
@@ -416,8 +468,9 @@ npm run build        # Production build
 # api-site (Main DDD Application) — port 8082
 cd api-site && uvicorn main:app --reload
 
-# api-game (Game Service) — port 8081
-cd api-game && python app.py
+# api-game (Game Service) — port 8081. No `python app.py`: app.py defines the
+# ASGI app and has no __main__ block, and the lifespan needs a running loop.
+cd api-game && uvicorn app:app --reload --port 8081 --log-config ./config/log_conf.yaml
 
 # api-auth (Authentication Service) — port 8083
 cd api-auth && uvicorn app:app --reload
@@ -485,7 +538,7 @@ All API routes must be configured in NGINX. Config files: `docker/dev/nginx/ngin
 ### Service Map
 - **api-site** (8082): Users, campaigns, sessions, characters, assets, friendships, notifications
 - **api-game** (8081): Active game sessions, game WebSocket (`/ws/`)
-- **api-auth** (8083): Magic links, OTP, JWT generation
+- **api-auth** (8083): Magic links, OTP, JWT generation and refresh
 
 ### Current Routes
 ```nginx
@@ -512,19 +565,52 @@ location /api/auth { ... }
 ## Service Boundaries
 
 ### api-auth (Authentication)
-- **Does**: JWT generation, magic link emails, OTP verification
-- **Does NOT**: Create users, know about campaigns/games
+- **Does**: JWT generation and refresh, magic link emails, OTP verification. It owns every
+  token the system issues and every auth cookie the browser holds — token lifetimes are defined
+  once, in `config/settings.py`, and the cookie max-age is derived from them.
+- **Does NOT**: Create users, read PostgreSQL, know about campaigns/games. It asks api-site
+  through read-only internal endpoints (`resolve-user`, `check-email`, `check-active`).
 - **Tech**: Redis (OTP storage)
 
+**Refresh tokens rotate.** `POST /auth/refresh` re-issues *both* cookies, so the refresh window
+restarts on every use and an active user is never asked to log in again. Before this (fixed
+2026-09-04) only the access token was re-issued, so the refresh token expired a fixed 7 days
+after login and logged people out mid-session. There is deliberately no absolute ceiling and no
+server-side token store: a superseded refresh token stays valid until its own `exp`.
+
+The endpoint distinguishes two failures, and the distinction matters: **401** means the presented
+credential is unusable or the account is gone, and it clears both cookies so a client stops
+retrying a dead token. **503** means api-site could not confirm the account, and it deliberately
+leaves the cookies alone — reporting "unknown" as "inactive" would log every user out whenever
+api-site restarts.
+
 ### api-site (Main DDD Application)
-- **Does**: All business domain logic, CRUD for all aggregates, JWT validation (shared secret, no call to api-auth), game session lifecycle orchestration, S3 presigned URLs
-- **Does NOT**: Handle active game sessions, manage game WebSocket connections
+- **Does**: All business domain logic, CRUD for all aggregates, JWT validation (shared secret, no call to api-auth), game session lifecycle orchestration, S3 presigned URLs. Serves read-only internal user checks to api-auth under `/api/users/internal/` (404 at the NGINX edge, Docker network only)
+- **Does NOT**: Handle active game sessions, manage game WebSocket connections, **generate or refresh tokens** — api-auth owns that; `shared/jwt_helper.py` verifies only
 - **Tech**: PostgreSQL, SQLAlchemy, DDD aggregates
 
 ### api-game (Game Session Service)
 - **Does**: Manage atomic game state in MongoDB, handle game WebSocket connections, broadcast state changes
-- **Does NOT**: Know about campaigns/users/site concepts, read from PostgreSQL
-- **Tech**: MongoDB, WebSocket
+- **Does NOT**: Know about campaigns/users/site concepts, read from PostgreSQL, **block the event loop**
+- **Tech**: MongoDB via PyMongo's async client (`AsyncMongoClient`), WebSocket
+
+**Every database call in api-game is awaited.** One process, one event loop, every
+client in every room served by it — so a synchronous driver call freezes the whole
+service until it returns, including drag streams and broadcasts for players in
+other games. Blocking pymongo was measured stalling the loop for the length of
+each MongoDB round trip; a blocking call in a handler is now a bug, not a style
+choice. Boot (the reachability ping and index creation) runs in `app.py`'s FastAPI
+lifespan, because there is no event loop at import time to await on.
+
+**Awaits are suspension points, so handlers interleave.** A handler no longer runs
+start-to-finish uninterrupted; another client's message can run at any `await`.
+In-memory presence state — the map-token hold registry, the hidden-token set,
+`ConnectionManager.room_users` — is owned by the loop thread: read and mutate it
+between awaits, never across one, and re-read anything a decision depends on. This
+is why `map_token_update`'s read → write → read-back is no longer atomic (accepted:
+per-token positional `$set`s, same-token races are last-write-wins by design). Concretely:
+never read a container, change one member, and write the container back — write the member by
+path (see Atomic State Updates above).
 
 ### "Game" vs "Session" — the vocabulary boundary
 
@@ -603,7 +689,7 @@ into our code, not left in the library's documentation. A bare library call cann
 
   ```python
   try:
-      client.admin.command('ping')  # forces a real round-trip
+      await self.client.admin.command('ping')  # forces a real round-trip
   except ServerSelectionTimeoutError:
       logger.critical("MongoDB unreachable — refusing to start")
       raise
@@ -613,9 +699,11 @@ into our code, not left in the library's documentation. A bare library call cann
   next reader doesn't "helpfully" wrap it in a recovery path.
 - **Defaults we rely on**: pass them explicitly as kwargs (`serverSelectionTimeoutMS=5000`). If
   the design cares about a value, an invisible library default is not allowed to supply it.
-- **Semantics we lean on**: implicit behaviors the design depends on (pymongo's lazy connect,
-  `create_index` idempotency, Mongo auto-creating collections on first write) get a one-line
-  comment at the point of reliance.
+- **Semantics we lean on**: implicit behaviors the design depends on get a one-line comment at
+  the point of reliance — `AsyncMongoClient` connects lazily (constructing it proves nothing;
+  the lifespan's ping is what establishes reachability), `create_index` is an idempotent no-op,
+  Mongo auto-creates collections on first write, and `find()` returns a cursor *synchronously*
+  while `aggregate()` must be awaited before you can drain it.
 
 **Calibration**: this applies at I/O boundaries and designed failure paths — not to every line
 (any Python line can raise; annotating everything buries the signal). The test: can a reader who
@@ -624,7 +712,8 @@ decided to do about it?
 
 **Origin (2026-08-28)**: `client.admin.command('ping')` in api-game's `mongo_service.py` was the
 loud-crash half of boot — it raises when MongoDB is unreachable, and nothing in the code said so.
-The failure path the architecture depended on was invisible at the call site.
+The failure path the architecture depended on was invisible at the call site. Moved into the
+FastAPI lifespan on 2026-09-03 when api-game went async; the property it guards is unchanged.
 
 ### Variable Naming — Recognizable Words, Not Initials
 
@@ -674,13 +763,22 @@ place.
 - **Assert only on objects the test created.** Asserting on a module constant, or on anything a
   previous test could have touched, makes the result a function of the whole run.
 - **Leave nothing behind.** If a test must mutate shared state, restore it in teardown — but treat
-  needing that as a smell worth removing rather than managing.
+  needing that as a smell worth removing rather than managing. Against a real store this means
+  deleting rows, not just deactivating them: `api-game/tests/test_services_roundtrip.py` learned
+  this when `clear_active_map` turned out to only flip `active: false`, leaving a row per run.
+- **Skip, don't fail, when infrastructure is absent.** A test that needs MongoDB or PostgreSQL
+  should `pytest.skip` with a reason when it cannot reach it, so the suite still runs on a machine
+  with no stack up.
 
 **Verify a new test actually proves what you claim.** Run it alone against the *unfixed* code:
 
 ```bash
-docker exec api-site-dev python -m pytest "path::TestClass::test_name" -q
+docker exec api-site-dev python -m pytest "path::TestClass::test_name" -q   # api-site
+docker exec api-game-dev python -m pytest "path::TestClass::test_name" -q   # api-game
 ```
+
+Both images carry pytest; run the suite in the container that owns the code, so it sees the same
+dependencies and the same MongoDB/PostgreSQL the app talks to.
 
 If it passes there, it does not prove the bug — whatever it does in a full run. Temporarily
 reintroducing the bug to run this experiment is cheap and worth it (copy the file first, restore

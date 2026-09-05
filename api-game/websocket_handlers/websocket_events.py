@@ -33,6 +33,19 @@ map_service = MapService(db=mongo_service.db)
 image_service = ImageService(db=mongo_service.db)
 map_token_holds = MapTokenHolds()
 
+# CONCURRENCY CONTRACT (api-game went async 2026-09-03).
+#
+# Every database call is now awaited, so a handler can be suspended part-way
+# through and another client's message can run before it resumes. Blocking
+# pymongo used to make each handler an accidental critical section; it no
+# longer is.
+#
+# The rule: this registry, _hidden_held_tokens below, and the connection
+# manager's room_users are plain dicts owned by the event-loop thread. Read
+# and mutate them BETWEEN awaits, never across one — if a decision depends on
+# a value read before an await, re-read it after. Nothing here is ever touched
+# from another thread, which is why no locking is needed.
+
 # Hidden tokens whose hold is (or was recently) active, keyed
 # (room_id, asset_id, token_id). Move frames arrive at ~20 Hz — far too hot
 # for a per-frame board read — so the grab's board lookup caches the hidden
@@ -71,7 +84,7 @@ def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any
     return out
 
 
-def grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str,
+async def grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str,
                           old_grid_config: Optional[Dict[str, Any]],
                           new_grid_config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Rewrite a map's token board for a grid geometry change and build the
@@ -91,7 +104,7 @@ def grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str,
     if not grid_geometry_changed(old_grid_config, new_grid_config):
         return None
 
-    board_tokens = GameService.get_map_tokens(room_id, asset_id)
+    board_tokens = await GameService.get_map_tokens(room_id, asset_id)
     if not board_tokens:
         return None
 
@@ -112,7 +125,7 @@ def grid_resnap_fragment(room_id: str, asset_id: Optional[str], updated_by: str,
     if not any_token_moved:
         return None
 
-    if not GameService.replace_map_token_board(room_id, asset_id, resnapped_tokens):
+    if not await GameService.replace_map_token_board(room_id, asset_id, resnapped_tokens):
         logger.error(f"Grid re-snap board write failed for room {room_id}, map {asset_id}")
         return None
 
@@ -139,7 +152,7 @@ async def send_map_token_fragment(manager, room_id: str, fragment: Dict[str, Any
         await manager.update_room_data(room_id, fragment)
         return
 
-    dm_user_id = GameService.get_dm_user_id(room_id)
+    dm_user_id = await GameService.get_dm_user_id(room_id)
     player_fragment = {
         **fragment,
         "data": {**fragment["data"], "tokens": filter_hidden_tokens(fragment_tokens)},
@@ -218,13 +231,13 @@ class WebsocketEvent():
         return "".join(message_parts)
 
     @staticmethod
-    def _get_player_metadata(room_id: str) -> Dict[str, Any]:
-        room = GameService.get_room(room_id) or {}
+    async def _get_player_metadata(room_id: str) -> Dict[str, Any]:
+        room = await GameService.get_room(room_id) or {}
         player_metadata = room.get("player_metadata", {})
         return player_metadata if isinstance(player_metadata, dict) else {}
 
     @staticmethod
-    def _display_name(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
+    async def _display_name(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
         """Resolve user_id to display name via player_metadata.
 
         NEVER returns a raw user_id (UUID = PII). Falls back to a neutral, non-identifying
@@ -233,17 +246,17 @@ class WebsocketEvent():
         if not user_id:
             return "Unknown Adventurer"
         if player_metadata is None:
-            player_metadata = WebsocketEvent._get_player_metadata(room_id)
+            player_metadata = await WebsocketEvent._get_player_metadata(room_id)
         metadata = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
         return metadata.get("player_name") or "Unknown Adventurer"
 
     @staticmethod
-    def _character_name_for_prompt(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
+    async def _character_name_for_prompt(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
         if not user_id:
             return "Unknown Adventurer"
 
         if player_metadata is None:
-            player_metadata = WebsocketEvent._get_player_metadata(room_id)
+            player_metadata = await WebsocketEvent._get_player_metadata(room_id)
 
         metadata = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
         # Never fall through to user_id (UUID = PII).
@@ -254,12 +267,12 @@ class WebsocketEvent():
         # Note: manager.connect() is already called in app_websocket.py
         # This event just handles the logging and broadcast
 
-        display_name = WebsocketEvent._display_name(client_id, user_id)
+        display_name = await WebsocketEvent._display_name(client_id, user_id)
 
         # Log player connection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_connected"], player=display_name)
 
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -278,7 +291,24 @@ class WebsocketEvent():
 
     @staticmethod
     async def seat_change(websocket, data, event_data, user_id, client_id, manager):
-        seat_layout = data.get("data")
+        """Broadcast the seat layout after a change.
+
+        Reads the AUTHORITATIVE layout rather than trusting the array the
+        client sent. The sender built its array before its own change landed,
+        so under two simultaneous joins each client would broadcast a picture
+        missing the other's seat, and whichever arrived last would win on every
+        screen — the same stale-copy problem as the write, one layer up
+        (plan api-game/03). The write itself happens over HTTP, before this
+        event; this handler only reflects the result to the room.
+
+        Validates its own payload: the router used to do this before
+        dispatching, which meant the one handler with a shape requirement had
+        it enforced somewhere else entirely. The error result reaches the
+        sender only, exactly as the router's inline reply did.
+        """
+        seat_layout = await GameService.get_seat_layout(client_id)
+        if not isinstance(seat_layout, list):
+            return WebsocketEventResult.error("Room has no seat layout.")
 
         print(f"📡 Broadcasting seat layout change for room {client_id}: {seat_layout}")
 
@@ -290,13 +320,13 @@ class WebsocketEvent():
         # Phase I: pull this player's latest character snapshot from api-site so runtime changes
         # (level-up, HP, AC) flow into player_metadata on the next seat interaction. Best-effort.
         try:
-            metadata = WebsocketEvent._get_player_metadata(client_id) or {}
+            metadata = await WebsocketEvent._get_player_metadata(client_id) or {}
             character_id = (metadata.get(user_id) or {}).get("character_id")
             if character_id:
                 summary = await fetch_character_summary(character_id)
                 if summary:
                     summary["user_id"] = user_id
-                    GameService.update_player_character(client_id, summary)
+                    await GameService.update_player_character(client_id, summary)
         except Exception as e:
             print(f"⚠️ Character snapshot refresh failed for {user_id}: {e}")
 
@@ -315,14 +345,14 @@ class WebsocketEvent():
         prompted_by = event_data.get("prompted_by", user_id)
         prompt_id = event_data.get("prompt_id")
 
-        player_metadata = WebsocketEvent._get_player_metadata(client_id)
-        target_character = WebsocketEvent._character_name_for_prompt(client_id, prompted_player, player_metadata)
-        prompted_by_name = WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
+        player_metadata = await WebsocketEvent._get_player_metadata(client_id)
+        target_character = await WebsocketEvent._character_name_for_prompt(client_id, prompted_player, player_metadata)
+        prompted_by_name = await WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
 
         # Log the prompt to adventure log with prompt_id for later removal
         log_message = format_message(MESSAGE_TEMPLATES["dice_prompt"], target=target_character, roll_type=roll_type)
 
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
@@ -348,24 +378,31 @@ class WebsocketEvent():
     @staticmethod
     async def initiative_prompt_all(websocket, data, event_data, user_id, client_id, manager):
         players_to_prompt = event_data.get("players", [])  # user_ids
+        if not players_to_prompt:
+            # Nothing to prompt. Silent by design — the router dropped this
+            # before dispatch and never answered the sender, so returning no
+            # broadcast keeps the behaviour identical.
+            logger.warning("No players provided for initiative prompt")
+            return WebsocketEventResult(broadcast_message=None)
+
         prompted_by = event_data.get("prompted_by", user_id)
                 
         # Generate unique initiative prompt ID for potential removal
         initiative_prompt_id = f"initiative_all_{int(time.time() * 1000)}"
 
-        player_metadata = WebsocketEvent._get_player_metadata(client_id)
+        player_metadata = await WebsocketEvent._get_player_metadata(client_id)
 
         character_targets = [
-            WebsocketEvent._character_name_for_prompt(client_id, player, player_metadata)
+            await WebsocketEvent._character_name_for_prompt(client_id, player, player_metadata)
             for player in players_to_prompt
         ]
         
         # Log ONE adventure log entry for the collective action
         log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(character_targets))
         
-        prompted_by_name = WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
+        prompted_by_name = await WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
 
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
@@ -402,7 +439,7 @@ class WebsocketEvent():
         if prompt_id:
             # Remove specific prompt log entry
             try:
-                deleted_count = adventure_log.remove_log_by_prompt_id(client_id, prompt_id)
+                deleted_count = await adventure_log.remove_log_by_prompt_id(client_id, prompt_id)
                 if deleted_count > 0:
                     print(f"🗑️ Removed adventure log entry for cancelled prompt {prompt_id}")
                     
@@ -419,7 +456,7 @@ class WebsocketEvent():
         elif clear_all and initiative_prompt_id:
             # Remove initiative prompt log entry when clearing all
             try:
-                deleted_count = adventure_log.remove_log_by_prompt_id(client_id, initiative_prompt_id)
+                deleted_count = await adventure_log.remove_log_by_prompt_id(client_id, initiative_prompt_id)
                 if deleted_count > 0:
                     print(f"🗑️ Removed initiative prompt log entry {initiative_prompt_id}")
                     
@@ -462,7 +499,7 @@ class WebsocketEvent():
         # Format dice roll message on backend (moved from frontend)
         formatted_message = WebsocketEvent._format_dice_roll_message(roll_data)
         
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=formatted_message,
             log_type=LogType.PLAYER_ROLL, 
@@ -490,7 +527,7 @@ class WebsocketEvent():
         if prompt_id:
             # Remove the adventure log entry for this prompt
             try:
-                deleted_count = adventure_log.remove_log_by_prompt_id(client_id, prompt_id)
+                deleted_count = await adventure_log.remove_log_by_prompt_id(client_id, prompt_id)
                 if deleted_count > 0:
                     print(f"🗑️ Removed adventure log entry for completed prompt {prompt_id}")
                     
@@ -535,12 +572,12 @@ class WebsocketEvent():
         """Handle combat state changes"""
         combat_active = event_data.get("combatActive", False)
         action = "started" if combat_active else "ended"
-        display_name = WebsocketEvent._display_name(client_id, user_id)
+        display_name = await WebsocketEvent._display_name(client_id, user_id)
 
         template_key = "combat_started" if action == "started" else "combat_ended"
         log_message = format_message(MESSAGE_TEMPLATES[template_key], player=display_name)
 
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -557,7 +594,7 @@ class WebsocketEvent():
     @staticmethod
     async def seat_count_change(websocket, data, event_data, user_id, client_id, manager):
         """Handle seat count changes"""
-        display_name = WebsocketEvent._display_name(client_id, user_id)
+        display_name = await WebsocketEvent._display_name(client_id, user_id)
 
         max_players = event_data.get("max_players")
         displaced_players = event_data.get("displaced_players", [])
@@ -567,7 +604,7 @@ class WebsocketEvent():
             displaced_names = [p.get("playerName", p.get("userId", "unknown")) for p in displaced_players]
             log_message += f". Moved to lobby: {', '.join(displaced_names)}"
 
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -591,7 +628,7 @@ class WebsocketEvent():
         
         log_message = f"{displaced_player} was moved to lobby from seat {former_seat + 1} due to {reason}"
         
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -606,7 +643,7 @@ class WebsocketEvent():
         """Handle system messages"""
         message = event_data.get("message")
         
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=message,
             log_type=LogType.SYSTEM,
@@ -624,12 +661,12 @@ class WebsocketEvent():
     async def player_kicked(websocket, data, event_data, user_id, client_id, manager):
         """Handle player kicked events"""
         kicked_user_id = event_data.get("kicked_player")  # user_id of kicked player
-        display_name = WebsocketEvent._display_name(client_id, user_id)
-        kicked_name = WebsocketEvent._display_name(client_id, kicked_user_id)
+        display_name = await WebsocketEvent._display_name(client_id, user_id)
+        kicked_name = await WebsocketEvent._display_name(client_id, kicked_user_id)
 
         log_message = format_message(MESSAGE_TEMPLATES["player_kicked"], player=kicked_name)
 
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -650,11 +687,11 @@ class WebsocketEvent():
         cleared_by = event_data.get("cleared_by", user_id)
         
         try:
-            deleted_count = adventure_log.clear_system_messages(client_id)
+            deleted_count = await adventure_log.clear_system_messages(client_id)
             
             log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
             
-            adventure_log.add_log_entry(
+            await adventure_log.add_log_entry(
                 room_id=client_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
@@ -689,11 +726,11 @@ class WebsocketEvent():
         cleared_by = event_data.get("cleared_by", user_id)
         
         try:
-            deleted_count = adventure_log.clear_all_messages(client_id)
+            deleted_count = await adventure_log.clear_all_messages(client_id)
             
             log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
             
-            adventure_log.add_log_entry(
+            await adventure_log.add_log_entry(
                 room_id=client_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
@@ -742,7 +779,7 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message=error_message)
 
         try:
-            GameService.update_player_color(client_id, player_changing, new_color)
+            await GameService.update_player_color(client_id, player_changing, new_color)
 
             print(f"🎨 {changed_by} changed {player_changing}'s character color to {new_color}")
 
@@ -770,7 +807,20 @@ class WebsocketEvent():
     @staticmethod
     async def player_disconnect(websocket, data, event_data, user_id, client_id, manager):
         """Handle player disconnect event"""
-        display_name = WebsocketEvent._display_name(client_id, user_id)
+        display_name = await WebsocketEvent._display_name(client_id, user_id)
+
+        # A user can have more than one socket for a room (second tab, or a
+        # reconnect that raced the old socket's close). Only the CURRENT one
+        # closing means the user left; a stale duplicate closing must drop
+        # itself and nothing else. Since decision 54 removed idle expiry, an
+        # unguarded teardown here is the only remaining way a live hand can
+        # lose its map-token holds mid-drag.
+        if not manager.is_current_connection(websocket, client_id, user_id):
+            logger.info(
+                "MAPTOKENS stale socket closed for user %s in room %s — "
+                "live connection kept, holds untouched", user_id, client_id)
+            manager.remove_connection(websocket, client_id, user_id)
+            return WebsocketEventResult(broadcast_message=None)
 
         # Drop any map-token holds the leaver had — remote clients clear their
         # lift affordances off this handler's player_disconnected broadcast.
@@ -781,7 +831,7 @@ class WebsocketEvent():
         # Log player disconnection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=display_name)
 
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -796,7 +846,7 @@ class WebsocketEvent():
 
         # Try to clean up disconnected user's seat (may fail if room already closed)
         try:
-            current_seats = GameService.get_seat_layout(client_id)
+            current_seats = await GameService.get_seat_layout(client_id)
 
             # Remove disconnected user from their seat
             updated_seats = [
@@ -805,7 +855,7 @@ class WebsocketEvent():
             ]
 
             # Update seat layout in database (may fail if room was deleted)
-            GameService.update_seat_layout(client_id, updated_seats)
+            await GameService.update_seat_layout(client_id, updated_seats)
 
             # Broadcast player disconnection event
             disconnect_message = {
@@ -854,8 +904,8 @@ class WebsocketEvent():
         if not action or not target_user_id:
             return WebsocketEventResult.error(f"Invalid role change request: action={action}, target={target_user_id}")
 
-        display_name = WebsocketEvent._display_name(client_id, user_id)
-        target_name = WebsocketEvent._display_name(client_id, target_user_id)
+        display_name = await WebsocketEvent._display_name(client_id, user_id)
+        target_name = await WebsocketEvent._display_name(client_id, target_user_id)
 
         print(f"🎭 Role change: {action} for {target_user_id} by {user_id}")
 
@@ -870,7 +920,7 @@ class WebsocketEvent():
         log_message = log_messages.get(action, f"Role change: {action} for {target_name}")
 
         # Add to adventure log
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -948,7 +998,7 @@ class WebsocketEvent():
                         started_at=time.time(),
                         paused_elapsed=None,
                     )
-                    GameService.update_audio_state(client_id, channel_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, channel_id, channel_state.model_dump())
             print(f"🎵 Audio play state persisted for {len(tracks)} track(s)")
         except Exception as e:
             print(f"⚠️ Failed to persist audio play state: {e}")
@@ -1021,12 +1071,12 @@ class WebsocketEvent():
             return WebsocketEventResult.error(f"Invalid spotify action: {action}")
 
         # DM-only: the Spotify bed is authoritative for the whole table.
-        if not GameService.is_dm(client_id, user_id):
+        if not await GameService.is_dm(client_id, user_id):
             return WebsocketEventResult.error("Only the DM can control Spotify playback")
 
         # Normalise through the contract: fills defaults (e.g. channel_level = -12 dB) for
         # any document predating a field, and fails loudly on drift instead of guessing.
-        current = SpotifyState(**(GameService.get_spotify_state(client_id) or {})).model_dump()
+        current = SpotifyState(**(await GameService.get_spotify_state(client_id) or {})).model_dump()
         now = time.time()
 
         if action == "sync":
@@ -1115,7 +1165,7 @@ class WebsocketEvent():
                 return WebsocketEventResult.error("channel_volume requires a numeric level")
             snapshot = {**current, "channel_level": level, "updated_by": triggered_by}
 
-        GameService.update_spotify_state(client_id, snapshot)
+        await GameService.update_spotify_state(client_id, snapshot)
         logger.info(f"🎵 Spotify {action} by {triggered_by} in room {client_id}")
 
         return WebsocketEventResult(
@@ -1210,7 +1260,7 @@ class WebsocketEvent():
         # Fire-and-forget: persist audio state to MongoDB for late-joiner sync
         try:
             # Always pre-fetch current audio state — multiple operations need it for read-modify-write
-            current_audio_state = GameService.get_audio_state(client_id)
+            current_audio_state = await GameService.get_audio_state(client_id)
 
             for op in operations:
                 track_id = op.get("trackId")
@@ -1235,7 +1285,7 @@ class WebsocketEvent():
                     if op.get("loop_end") is not None:
                         play_fields["loop_end"] = op.get("loop_end")
                     channel_state = AudioChannelState(**{**ch, **play_fields})
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "stop":
                     # Stop playback but keep track loaded in channel
@@ -1243,7 +1293,7 @@ class WebsocketEvent():
                     channel_state = AudioChannelState(
                         **{**ch, "playback_state": "stopped", "started_at": None, "paused_elapsed": None}
                     )
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "pause":
                     ch = current_audio_state.get(track_id, {})
@@ -1252,7 +1302,7 @@ class WebsocketEvent():
                     channel_state = AudioChannelState(
                         **{**ch, "playback_state": "paused", "paused_elapsed": paused_elapsed}
                     )
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "resume":
                     ch = current_audio_state.get(track_id, {})
@@ -1264,12 +1314,12 @@ class WebsocketEvent():
                            "paused_elapsed": None,
                            }
                     )
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "volume":
                     ch = current_audio_state.get(track_id, {}) if current_audio_state else {}
                     channel_state = AudioChannelState(**{**ch, "volume": op.get("volume")})
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "loop":
                     ch = current_audio_state.get(track_id, {}) if current_audio_state else {}
@@ -1277,7 +1327,7 @@ class WebsocketEvent():
                     if op.get("loop_mode") is not None:
                         loop_update["loop_mode"] = op.get("loop_mode")
                     channel_state = AudioChannelState(**{**ch, **loop_update})
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "load":
                     # 1. Save outgoing track's full config to audio_track_config
@@ -1290,11 +1340,11 @@ class WebsocketEvent():
                             effects=AudioEffects(**(old_ch.get("effects") or {})),
                             paused_elapsed=old_ch.get("paused_elapsed"),
                         )
-                        GameService.save_track_config(client_id, old_asset_id, track_config.model_dump())
+                        await GameService.save_track_config(client_id, old_asset_id, track_config.model_dump())
 
                     # 2. Check for saved config for incoming track
                     new_asset_id = op.get("asset_id")
-                    saved_config = GameService.get_track_config(client_id, new_asset_id) if new_asset_id else None
+                    saved_config = await GameService.get_track_config(client_id, new_asset_id) if new_asset_id else None
 
                     # 3. Build channel state — restore from saved config or use provided defaults
                     if saved_config:
@@ -1326,11 +1376,11 @@ class WebsocketEvent():
                     channel_state.muted = old_ch.get("muted", False)
                     channel_state.soloed = old_ch.get("soloed", False)
 
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                     # 4. Remove saved config (it's now active in a channel)
                     if new_asset_id and saved_config:
-                        GameService.remove_track_config(client_id, new_asset_id)
+                        await GameService.remove_track_config(client_id, new_asset_id)
 
                     # Update op so the broadcast carries the resolved config
                     op["volume"] = channel_state.volume
@@ -1341,21 +1391,21 @@ class WebsocketEvent():
                 elif operation == "effects":
                     ch = current_audio_state.get(track_id, {})
                     channel_state = AudioChannelState(**{**ch, "effects": op.get("effects", {})})
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "mute":
                     ch = current_audio_state.get(track_id, {})
                     channel_state = AudioChannelState(**{**ch, "muted": op.get("muted", False)})
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "solo":
                     ch = current_audio_state.get(track_id, {})
                     channel_state = AudioChannelState(**{**ch, "soloed": op.get("soloed", False)})
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "master_volume":
                     # Store broadcast master volume as a top-level field on audio_state
-                    GameService.update_audio_state(client_id, "__master_volume", op.get("volume", 1.0))
+                    await GameService.update_audio_state(client_id, "__master_volume", op.get("volume", 1.0))
 
                 elif operation == "clear":
                     # Save outgoing track's full config before clearing
@@ -1368,13 +1418,13 @@ class WebsocketEvent():
                             effects=AudioEffects(**(old_ch.get("effects") or {})),
                             paused_elapsed=old_ch.get("paused_elapsed"),
                         )
-                        GameService.save_track_config(client_id, old_asset_id, track_config.model_dump())
+                        await GameService.save_track_config(client_id, old_asset_id, track_config.model_dump())
 
                     channel_state = AudioChannelState(
                         volume=op.get("volume", 0.8),
                         looping=False,
                     )
-                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+                    await GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
             print(f"🎵 Audio state persisted to MongoDB for {len(operations)} operations")
         except Exception as e:
@@ -1422,9 +1472,9 @@ class WebsocketEvent():
             # the DM cycles between maps in a session, in-session edits
             # are preserved per-map — switching to map B and back to map A
             # restores A's painted fog and tweaked grid.
-            existing_map = map_service.collection.find_one(
-                {"room_id": room_id, "map_config.filename": mc_data.get("filename")}
-            ) if map_service.collection is not None else None
+            existing_map = await map_service.get_room_map_by_filename(
+                room_id, mc_data.get("filename")
+            )
             existing_mc = existing_map.get("map_config", {}) if existing_map else {}
 
             preserved = _merge_preserved_map_fields(incoming=mc_data, existing=existing_mc)
@@ -1448,11 +1498,11 @@ class WebsocketEvent():
             )
             
             # Save to database
-            success = map_service.set_active_map(room_id, map_settings)
+            success = await map_service.set_active_map(room_id, map_settings)
             
             if success:
                 # Get the actual saved map from database (includes preserved grid_config)
-                saved_map = map_service.get_active_map(room_id)
+                saved_map = await map_service.get_active_map(room_id)
                 
                 if saved_map:
                     # Broadcast the actual saved map (with preserved grid_config from MongoDB)
@@ -1497,7 +1547,7 @@ class WebsocketEvent():
         
         try:
             # Clear from database
-            success = map_service.clear_active_map(room_id)
+            success = await map_service.clear_active_map(room_id)
             
             if success:
                 # Broadcast to all clients
@@ -1522,7 +1572,7 @@ class WebsocketEvent():
     async def map_config_update(websocket, data, event_data, user_id, client_id, manager):
         """Update map configuration (grid settings, etc.)"""
         room_id = client_id  # Use client_id as room_id
-        display_name = WebsocketEvent._display_name(room_id, user_id)
+        display_name = await WebsocketEvent._display_name(room_id, user_id)
         filename = event_data.get("filename")
         grid_config = event_data.get("grid_config")
         map_image_config = event_data.get("map_image_config")
@@ -1535,7 +1585,7 @@ class WebsocketEvent():
             # Capture the pre-update grid + the map's asset_id: token boards
             # are keyed by asset_id and the exact-cell re-snap (decision 20)
             # needs the old lattice to know which cell each token was in.
-            active_map = map_service.get_active_map(room_id)
+            active_map = await map_service.get_active_map(room_id)
             active_map_config = (active_map or {}).get("map_config", {})
             old_grid_config = None
             map_asset_id = None
@@ -1548,7 +1598,7 @@ class WebsocketEvent():
             print(f"   Grid config: {grid_config}")
             print(f"   Map image config: {map_image_config}")
 
-            success = map_service.update_map_config(
+            success = await map_service.update_map_config(
                 room_id,
                 filename,
                 grid_config=grid_config,
@@ -1572,7 +1622,7 @@ class WebsocketEvent():
                 # dispatcher broadcasts config_update_message after we
                 # return); both messages are self-contained so the one-tick
                 # ordering gap is cosmetic only.
-                resnap_fragment = grid_resnap_fragment(
+                resnap_fragment = await grid_resnap_fragment(
                     room_id, map_asset_id, user_id, old_grid_config, grid_config
                 )
                 if resnap_fragment:
@@ -1614,7 +1664,7 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": "Invalid fog config update"})
 
         try:
-            success = map_service.update_fog_config(room_id, filename, fog_config)
+            success = await map_service.update_fog_config(room_id, filename, fog_config)
             if success:
                 broadcast = {
                     "event_type": "fog_config_update",
@@ -1643,11 +1693,11 @@ class WebsocketEvent():
         return owner_metadata.get("character_name") or token.get("label") or fallback
 
     @staticmethod
-    def _map_token_place_cell_suffix(room_id: str, asset_id: str, token: Dict[str, Any]) -> str:
+    async def _map_token_place_cell_suffix(room_id: str, asset_id: str, token: Dict[str, Any]) -> str:
         """' at D7' when the placed token lands on the active map's addressable
         grid; empty string otherwise (gridless, untuned, off-grid, or the op
         targets a non-active map's board)."""
-        active_map = map_service.get_active_map(room_id)
+        active_map = await map_service.get_active_map(room_id)
         map_config = active_map.get("map_config", {}) if active_map else {}
         if map_config.get("asset_id") != asset_id:
             return ""
@@ -1656,19 +1706,19 @@ class WebsocketEvent():
         return f" at {cell_label}" if cell_label else ""
 
     @staticmethod
-    def _write_map_token_log(room_id: str, user_id: str, template_key: str,
+    async def _write_map_token_log(room_id: str, user_id: str, template_key: str,
                              subject_token: Dict[str, Any], cell_suffix: str = "") -> str:
         """Resolve names, format one map-token log line, and persist it.
         Called only from branches that actually log — routine ops must not
         pay the metadata fetch (see map_token_update docstring)."""
-        player_metadata = WebsocketEvent._get_player_metadata(room_id)
-        mover_name = WebsocketEvent._display_name(room_id, user_id, player_metadata)
+        player_metadata = await WebsocketEvent._get_player_metadata(room_id)
+        mover_name = await WebsocketEvent._display_name(room_id, user_id, player_metadata)
         token_name = WebsocketEvent._map_token_display_name(subject_token, player_metadata)
         log_message = format_message(
             MESSAGE_TEMPLATES[template_key],
             player=mover_name, token=token_name, cell_suffix=cell_suffix
         )
-        adventure_log.add_log_entry(
+        await adventure_log.add_log_entry(
             room_id=room_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -1682,6 +1732,14 @@ class WebsocketEvent():
 
         Validates shape + invariants (MapToken contract: finite x/y,
         footprint 1–4), applies the op as one atomic Mongo array update via
+        NOT atomic across the read → write → read-back sequence: each await
+        is a suspension point where another client's commit can interleave.
+        Accepted by design — ops are per-token positional $sets, so two
+        players committing different tokens cannot clobber each other, and
+        same-token races are last-write-wins (product decision 11). A
+        read-back that includes someone else's newer commit broadcasts a more
+        current board, never a wrong one.
+
         GameService.apply_map_token_op, then broadcasts the map's full token
         array as the reconciliation fragment (fog's no-flicker philosophy —
         the array is tiny). Attribution (created_by/updated_by) is stamped
@@ -1722,7 +1780,7 @@ class WebsocketEvent():
         # One projection read serves the whole op: DM identity (ACL +
         # filtering), the pre-op board (target lookup, denial answer), and
         # the image refs (place/reveal fragments carry them).
-        dm_user_id, pre_op_board, room_token_images = GameService.get_room_token_context(room_id, asset_id)
+        dm_user_id, pre_op_board, room_token_images = await GameService.get_room_token_context(room_id, asset_id)
         sender_is_dm = dm_user_id is not None and user_id == dm_user_id
 
         # Pre-op snapshot for every non-place op: the ACL/lock checks need
@@ -1783,7 +1841,7 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message=None)
 
         try:
-            tokens = GameService.apply_map_token_op(
+            tokens = await GameService.apply_map_token_op(
                 room_id, asset_id, op, token=token_payload, token_id=token_id
             )
         except ValueError as op_error:
@@ -1797,12 +1855,12 @@ class WebsocketEvent():
         # the ambush on a plate, decision 17). The reveal is the log moment.
         log_message = None
         if op == "place" and not token_payload.get("hidden"):
-            cell_suffix = WebsocketEvent._map_token_place_cell_suffix(room_id, asset_id, token_payload)
-            log_message = WebsocketEvent._write_map_token_log(
+            cell_suffix = await WebsocketEvent._map_token_place_cell_suffix(room_id, asset_id, token_payload)
+            log_message = await WebsocketEvent._write_map_token_log(
                 room_id, user_id, "map_token_placed", token_payload, cell_suffix
             )
         elif op == "remove" and pre_op_token and not was_hidden:
-            log_message = WebsocketEvent._write_map_token_log(
+            log_message = await WebsocketEvent._write_map_token_log(
                 room_id, user_id, "map_token_removed", pre_op_token
             )
         elif op == "move":
@@ -1822,7 +1880,7 @@ class WebsocketEvent():
                     move_template = ("map_token_moved_by_other"
                                      if moved_token.get("kind") == "pc"
                                      else "map_token_moved_party")
-                    log_message = WebsocketEvent._write_map_token_log(
+                    log_message = await WebsocketEvent._write_map_token_log(
                         room_id, user_id, move_template, moved_token
                     )
         elif op == "configure" and was_hidden and not now_hidden:
@@ -1832,8 +1890,8 @@ class WebsocketEvent():
                     revealed_token = candidate_token
                     break
             if revealed_token:
-                cell_suffix = WebsocketEvent._map_token_place_cell_suffix(room_id, asset_id, revealed_token)
-                log_message = WebsocketEvent._write_map_token_log(
+                cell_suffix = await WebsocketEvent._map_token_place_cell_suffix(room_id, asset_id, revealed_token)
+                log_message = await WebsocketEvent._write_map_token_log(
                     room_id, user_id, "map_token_revealed", revealed_token, cell_suffix
                 )
                 # Reveal mid-hold: stop suppressing its drag relays.
@@ -1937,12 +1995,17 @@ class WebsocketEvent():
                     return WebsocketEventResult.error("Invalid map token drag: x/y must be finite numbers")
 
         if phase == "grab":
+            # This read suspends, so the board it returns can be a few
+            # milliseconds stale by the time try_grab runs below. Accepted:
+            # the same class as any optimistic grab, and try_grab itself is
+            # synchronous, so first-hand-wins stays exact.
+            #
             # ACL before the hold (decisions 16/18): a non-DM grabbing an
             # npc token, or anyone grabbing a locked token, is denied on the
             # same rail as a concurrency loss — the optimistic drag snaps
             # back. One projection read at human hand frequency serves both
             # the target lookup and the DM check.
-            grab_dm_user_id, grab_board, _grab_token_images = GameService.get_room_token_context(room_id, asset_id)
+            grab_dm_user_id, grab_board, _grab_token_images = await GameService.get_room_token_context(room_id, asset_id)
             target_token = None
             for existing_token in grab_board:
                 if existing_token.get("id") == token_id:
@@ -1983,13 +2046,12 @@ class WebsocketEvent():
                 _hidden_held_tokens.add((room_id, asset_id, token_id))
         elif phase == "move":
             if map_token_holds.holder(room_id, asset_id, token_id) != user_id:
-                # Stale frame after an expired/denied hold — drop silently,
-                # no error spam at stream frequency.
+                # A frame from a hand that does not hold this token: a denied
+                # grab still streaming, or frames overtaking their own
+                # release. Drop silently — no error spam at stream frequency.
                 return WebsocketEventResult(broadcast_message=None)
-            # A live stream is an active hand — refresh the hold so a long
-            # careful drag can't staleness-expire mid-stream (same-user
-            # try_grab resets the clock).
-            map_token_holds.try_grab(room_id, asset_id, token_id, user_id)
+            # Nothing to refresh: holds have no clock (decision 54). A move
+            # frame is movement, not proof of life.
         else:
             released = map_token_holds.release(room_id, asset_id, token_id, user_id)
             if not released and map_token_holds.holder(room_id, asset_id, token_id) is not None:
@@ -1997,8 +2059,9 @@ class WebsocketEvent():
                 # (denied grab's pointerup, stale client) must not clear the
                 # real holder's lift affordance room-wide. Drop silently.
                 return WebsocketEventResult(broadcast_message=None)
-            # released, or unheld (expired hold): relay so remote lift
-            # affordances clear; the lane-1 commit settles actual position.
+            # released, or already unheld (the holder's disconnect got here
+            # first): relay so remote lift affordances clear; the lane-1
+            # commit settles actual position.
 
         # Hidden token's hand: no relay at all (decision 17). Players don't
         # have the token; grab/frame/release presence would leak the ambush
@@ -2033,7 +2096,7 @@ class WebsocketEvent():
         
         try:
             # Get active map from database
-            active_map = map_service.get_active_map(room_id)
+            active_map = await map_service.get_active_map(room_id)
             
             if active_map:
                 # Send current map to requesting client only
@@ -2070,7 +2133,7 @@ class WebsocketEvent():
     async def image_load(websocket, data, event_data, user_id, client_id, manager):
         """Load/set active image for the room"""
         room_id = client_id
-        display_name = WebsocketEvent._display_name(room_id, user_id)
+        display_name = await WebsocketEvent._display_name(room_id, user_id)
         print(f"🖼️ Image load handler called for room {client_id} by {display_name}")
         image_data = event_data.get("image_data")
 
@@ -2103,16 +2166,16 @@ class WebsocketEvent():
                 image_config=image_config,
             )
 
-            success = image_service.set_active_image(room_id, image_settings)
+            success = await image_service.set_active_image(room_id, image_settings)
 
             if success:
-                saved_image = image_service.get_active_image(room_id)
+                saved_image = await image_service.get_active_image(room_id)
 
                 if saved_image:
                     log_message = f"🖼️ {display_name.title()} loaded image: {image_settings.image_config.original_filename}"
-                    adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, user_id)
+                    await adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, user_id)
 
-                    active_display = image_service.get_active_display(room_id)
+                    active_display = await image_service.get_active_display(room_id)
 
                     broadcast_message = {
                         "event_type": "image_load",
@@ -2149,20 +2212,20 @@ class WebsocketEvent():
     async def image_clear(websocket, data, event_data, user_id, client_id, manager):
         """Clear the active image for the room"""
         room_id = client_id
-        display_name = WebsocketEvent._display_name(room_id, user_id)
+        display_name = await WebsocketEvent._display_name(room_id, user_id)
 
         if not room_id:
             print(f"❌ Invalid image clear request: missing room_id")
             return WebsocketEventResult(broadcast_message={"error": "Invalid image clear request"})
 
         try:
-            success = image_service.clear_active_image(room_id)
+            success = await image_service.clear_active_image(room_id)
 
             if success:
                 log_message = f"🖼️ {display_name.title()} cleared the active image"
-                adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, user_id)
+                await adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, user_id)
 
-                active_display = image_service.get_active_display(room_id)
+                active_display = await image_service.get_active_display(room_id)
 
                 broadcast_message = {
                     "event_type": "image_clear",
@@ -2196,7 +2259,7 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": "Invalid image config update request"})
 
         try:
-            success = image_service.update_image_config(
+            success = await image_service.update_image_config(
                 room_id,
                 image_fit=image_fit,
                 display_mode=display_mode,
@@ -2206,7 +2269,7 @@ class WebsocketEvent():
             )
 
             if success:
-                saved_image = image_service.get_active_image(room_id)
+                saved_image = await image_service.get_active_image(room_id)
                 saved_ic = saved_image.get("image_config", {}) if saved_image else {}
                 broadcast_message = {
                     "event_type": "image_config_update",
@@ -2238,8 +2301,8 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": "Invalid image request"})
 
         try:
-            active_image = image_service.get_active_image(room_id)
-            active_display = image_service.get_active_display(room_id)
+            active_image = await image_service.get_active_image(room_id)
+            active_display = await image_service.get_active_display(room_id)
 
             if active_image:
                 response_message = {

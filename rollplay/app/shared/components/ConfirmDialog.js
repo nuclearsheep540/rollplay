@@ -5,12 +5,11 @@
 
 'use client'
 
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DialogTitle } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import Modal from './Modal'
 import Spinner from './Spinner'
-import { Button } from '@/app/dashboard/components/shared/Button'
 
 const VARIANT_STYLES = {
   danger: 'bg-feedback-error hover:brightness-110',
@@ -37,6 +36,10 @@ const VARIANT_STYLES = {
  * @param {string} loadingText - Text shown while loading
  * @param {object} icon - FontAwesome icon object
  * @param {'danger'|'warning'|'info'} variant - Button color variant
+ * @param {number} confirmDelaySeconds - Seconds the confirm button stays
+ *   disabled after the dialog opens, counting down in its label. For actions
+ *   severe enough that a reflex click should not be able to complete them.
+ *   Defaults to 0, which is no delay at all.
  */
 export default function ConfirmDialog({
   show,
@@ -51,8 +54,30 @@ export default function ConfirmDialog({
   loadingText = 'Processing...',
   icon,
   variant = 'danger',
+  confirmDelaySeconds = 0,
 }) {
   const cancelRef = useRef(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
+
+  // Restart the guard each time the dialog opens, so dismissing and
+  // reopening cannot skip it.
+  useEffect(() => {
+    if (!show || confirmDelaySeconds <= 0) {
+      setSecondsLeft(0)
+      return
+    }
+    setSecondsLeft(confirmDelaySeconds)
+    const interval = setInterval(() => {
+      setSecondsLeft((remaining) => {
+        if (remaining <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return remaining - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [show, confirmDelaySeconds])
 
   return (
     <Modal open={show} onClose={isLoading ? () => {} : onCancel} size="sm" initialFocus={cancelRef}>
@@ -96,7 +121,7 @@ export default function ConfirmDialog({
 
           <button
             onClick={onConfirm}
-            disabled={isLoading}
+            disabled={isLoading || secondsLeft > 0}
             className={`flex-1 px-4 py-2 rounded-sm text-content-on-dark font-medium transition-all duration-100 disabled:opacity-50 flex items-center justify-center gap-2 ${VARIANT_STYLES[variant] || VARIANT_STYLES.danger}`}
           >
             {isLoading ? (
@@ -104,6 +129,8 @@ export default function ConfirmDialog({
                 <Spinner size="sm" />
                 {loadingText}
               </>
+            ) : secondsLeft > 0 ? (
+              `${confirmText} (${secondsLeft})`
             ) : (
               confirmText
             )}

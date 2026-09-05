@@ -9,7 +9,7 @@ import {
   createMapTokenSendFunctions,
   registerMapTokenHandlers,
 } from '../mapTokenWebSocketEvents';
-import { HELD_STALENESS_MS, mintTokenId, snapTokenCenter } from '../config';
+import { mintTokenId, snapTokenCenter } from '../config';
 import { screenPointToSpace } from '@/app/shared/utils/screenToImage';
 
 /**
@@ -41,16 +41,16 @@ export const useMapTokens = ({
   // (server-filtered to this user's visible tokens) and extended by
   // place/reveal fragments (decision 27).
   const [tokenImages, setTokenImages] = useState({});
-  // asset_id → { token_id → { holderUserId, heldAtMs } } — remote hands
-  // only (own drags live in MapTokenLayer's refs; the server echo is
-  // filtered out). Scoped per map: token ids are only unique per board and
-  // NPC stamps reuse one id across maps, so a hold on map A must never
-  // block or steer the same-id token on map B.
+  // asset_id → { token_id → { holderUserId } } — remote hands only (own
+  // drags live in MapTokenLayer's refs; the server echo is filtered out).
+  // Scoped per map: token ids are only unique per board and NPC stamps reuse
+  // one id across maps, so a hold on map A must never block or steer the
+  // same-id token on map B. A hold ends on its holder's release or their
+  // disconnect, and nothing else (decision 54) — no timestamp, no sweep.
   const [heldTokens, setHeldTokens] = useState({});
-  // asset_id → { token_id → { x, y, atMs } } (native px) — live-drag move
-  // frames. A ref, never state: frames arrive at ~20 Hz and must not
-  // re-render the tree; MapTokenLayer's rAF loop reads this and lerps
-  // discs directly.
+  // asset_id → { token_id → { x, y } } (native px) — live-drag move frames.
+  // A ref, never state: frames arrive at ~20 Hz and must not re-render the
+  // tree; MapTokenLayer's rAF loop reads this and lerps discs directly.
   const remoteDragFramesRef = useRef({});
   // Latest grab denial — MapTokenLayer watches this to snap an optimistic
   // drag back home.
@@ -96,7 +96,7 @@ export const useMapTokens = ({
         ...previousHolds,
         [assetId]: {
           ...(previousHolds[assetId] || {}),
-          [tokenId]: { holderUserId, heldAtMs: Date.now() },
+          [tokenId]: { holderUserId },
         },
       }));
     } else if (phase === 'move') {
@@ -108,7 +108,7 @@ export const useMapTokens = ({
         if (!remoteDragFramesRef.current[assetId]) {
           remoteDragFramesRef.current[assetId] = {};
         }
-        remoteDragFramesRef.current[assetId][tokenId] = { x, y, atMs: Date.now() };
+        remoteDragFramesRef.current[assetId][tokenId] = { x, y };
       }
     } else if (phase === 'release') {
       // The release frame carries where the hand let go, and the mover sends
@@ -119,9 +119,11 @@ export const useMapTokens = ({
       // fragment lands moments later and applies the grid snap on top — a
       // sub-cell correction rather than a round trip across the map.
       //
-      // The frame is deliberately NOT deleted here: it keeps steering the disc
-      // through the render that clears the hold, so the handover is seamless.
-      // MapTokenLayer disposes of it when the disc settles.
+      // The frame is deliberately NOT deleted here. It no longer has to carry
+      // the handover — the layer's committed-position effect writes the
+      // provisional position the moment the hold clears — but the layer's rAF
+      // loop is what disposes of frames, and reaching into its ref from here
+      // would just be a second owner of the same bookkeeping.
       if (typeof x === 'number' && typeof y === 'number') {
         setMapTokenState((previousState) => {
           const board = previousState[assetId];
@@ -157,49 +159,11 @@ export const useMapTokens = ({
   // it, so a stale denial can never cancel a later legitimate drag.
   const clearDenial = useCallback(() => setLastDenial(null), []);
 
-  // Ghost-hold cleanup (c): staleness — a lift with no release after
-  // HELD_STALENESS_MS reverts (mirrors the server's lazy expiry). Deps on
-  // the boolean, not the dict: hold churn must not keep resetting the
-  // interval or a crashed holder's ghost could outlive its timeout.
-  const hasHeldTokens = Object.values(heldTokens).some(
-    (boardHolds) => Object.keys(boardHolds).length > 0);
-  useEffect(() => {
-    if (!hasHeldTokens) return;
-    const sweep = setInterval(() => {
-      const nowMs = Date.now();
-      setHeldTokens((previousHolds) => {
-        const nextHolds = {};
-        let changed = false;
-        Object.entries(previousHolds).forEach(([assetId, boardHolds]) => {
-          const nextBoardHolds = {};
-          Object.entries(boardHolds).forEach(([tokenId, hold]) => {
-            // A recent move frame counts as hand activity — streaming drags
-            // refresh the hold without touching state (frames live in a ref).
-            const lastFrameAtMs = remoteDragFramesRef.current[assetId]?.[tokenId]?.atMs || 0;
-            const lastActivityMs = Math.max(hold.heldAtMs, lastFrameAtMs);
-            if (nowMs - lastActivityMs > HELD_STALENESS_MS) {
-              changed = true;
-              if (remoteDragFramesRef.current[assetId]) {
-                delete remoteDragFramesRef.current[assetId][tokenId];
-              }
-            } else {
-              nextBoardHolds[tokenId] = hold;
-            }
-          });
-          if (Object.keys(nextBoardHolds).length > 0) {
-            nextHolds[assetId] = nextBoardHolds;
-          } else if (Object.keys(boardHolds).length > 0) {
-            changed = true; // board emptied entirely
-          }
-        });
-        return changed ? nextHolds : previousHolds;
-      });
-    }, 2000);
-    return () => clearInterval(sweep);
-  }, [hasHeldTokens]);
-
-  // Ghost-hold cleanup (b): holder disconnected. Called from the core
-  // player_disconnected handler via gameContext.
+  // Ghost-hold cleanup: the holder disconnected. Called from the core
+  // player_disconnected handler via gameContext, and — since decision 54
+  // deleted the idle sweep that used to sit here — the only thing besides a
+  // release frame that clears a lift affordance. A hand held still is still
+  // a hand; the sweep ended live holds mid-drag and let the disc be stolen.
   const clearHoldsForUser = useCallback((userId) => {
     setHeldTokens((previousHolds) => {
       const nextHolds = {};

@@ -576,22 +576,38 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     }
   };
 
-  const sendSeatChange = async (newSeats) => {
+  /**
+   * Change ONE seat. `seatIndex` is the seat being taken or vacated, and
+   * `newSeats` is only used to read its new occupant.
+   *
+   * Deliberately does NOT send the whole layout. Every other seat in a local
+   * array is that seat as this client last saw it, so a stale "empty" is
+   * indistinguishable from a seat being vacated and the server would erase
+   * whoever sat down in between — two players joining at once lost one of the
+   * seats. The server writes the single seat and broadcasts the authoritative
+   * layout back, which is what every client renders.
+   */
+  const sendSeatChange = async (newSeats, seatIndex) => {
     if (!webSocket || !isConnected) {
       console.log("❌ Cannot send seat change - WebSocket not connected");
       return;
     }
 
+    if (!Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex >= newSeats.length) {
+      console.error(`❌ sendSeatChange needs the index of the seat being changed, got ${seatIndex}`);
+      return;
+    }
+
     try {
       console.log("🔄 Starting seat change process...");
-      // Send userId array to backend
-      const seatArray = newSeats.map(seat => seat.userId);
+      const seatOccupant = newSeats[seatIndex].userId;
 
       const response = await fetch(`/api/game/${roomId}/seat-layout`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          seat_layout: seatArray,
+          seat_index: seatIndex,
+          user_id: seatOccupant,
           updated_by: userId
         }),
       });
@@ -604,9 +620,11 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
       const responseData = await response.json();
       console.log("✅ HTTP PUT successful:", responseData);
 
+      // The server re-reads the authoritative layout for the broadcast, so
+      // this event only announces that a seat changed and who did it.
       webSocket.send(JSON.stringify({
         "event_type": "seat_change",
-        "data": seatArray,
+        "data": { "seat_index": seatIndex, "user_id": seatOccupant },
         "user_id": userId
       }));
 

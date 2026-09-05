@@ -311,7 +311,17 @@ async def character_summary(
     """Service-to-service snapshot for api-game's player_metadata sync (Phase I). Under the
     /internal path (mirrors /api/users/internal/*), which nginx returns 404 for — so it's reachable
     only over the private network (Docker/VPC); that isolation is the auth boundary. Returns only
-    low-sensitivity fields already broadcast to session peers."""
+    low-sensitivity fields already broadcast to session peers.
+
+    Deliberately EXCLUDES `color`. Every field here has PostgreSQL as its live
+    source of truth, so re-reading it mid-session is correct. Colour does not:
+    it is character-owned but edited inside the hot session (api-game writes
+    player_metadata.<user_id>.color) and only travels back to the character row
+    at session end, via _extract_and_sync_game_state. Including it here made
+    every seat change overwrite a player's live choice with the value the row
+    held when the session began. Session start seeds colour by a different
+    route — the SessionUser/PlayerCharacter contract in the ETL start payload —
+    so it is unaffected by this omission."""
     character = character_repo.get_by_id(character_id)
     if character is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")
@@ -324,7 +334,6 @@ async def character_summary(
         "hp_current": character.hp_current,
         "hp_max": character.hp_max,
         "ac": character.ac,
-        "color": character.color,
     }
 
 

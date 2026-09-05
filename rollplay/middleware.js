@@ -4,7 +4,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { API_SITE_INTERNAL_URL, API_AUTH_INTERNAL_URL } from './app/shared/config'
+import { API_AUTH_INTERNAL_URL } from './app/shared/config'
 
 // Define protected routes that require authentication
 const PROTECTED_ROUTES = [
@@ -24,29 +24,69 @@ const AUTH_ROUTES = [
 ]
 
 /**
- * Attempt to refresh the access token using the refresh token.
- * Returns the new auth_token if successful, null otherwise.
+ * Attempt a refresh against api-auth using the refresh cookie on the incoming request.
+ * Returns api-auth's Set-Cookie headers (a new access + refresh pair) or null.
+ *
+ * This runs on the Next server, where there is no cookie jar: the Cookie header is
+ * built by hand on the way out, and the Set-Cookie headers have to be copied onto our
+ * own response on the way back. They are forwarded verbatim, so the browser receives
+ * exactly the cookies api-auth decided on, lifetimes and flags included, and this file
+ * never has to know a token lifetime.
+ *
+ * getSetCookie() is the only safe way to read several Set-Cookie headers: the joined
+ * string form cannot be split on commas, because Expires values contain them.
+ *
+ * Returns { refreshed, cookies }. The cookies are returned on failure too, and that is
+ * the point: api-auth answers 401 with headers that clear both cookies, and 503 (it
+ * could not reach api-site to confirm the account) with no headers at all, so that a
+ * transient outage costs nobody their session. Collapsing those two into a single
+ * "failed" would force this file to guess which had happened, and guessing wrong on a
+ * 503 logs the user out for real.
  */
 async function tryRefreshToken(refreshToken) {
   try {
-    const refreshResponse = await fetch(`${API_SITE_INTERNAL_URL}/api/users/auth/refresh`, {
+    const refreshResponse = await fetch(`${API_AUTH_INTERNAL_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Cookie': `refresh_token=${refreshToken}`
       }
     })
 
-    if (!refreshResponse.ok) {
-      return null
+    return {
+      refreshed: refreshResponse.ok,
+      cookies: refreshResponse.headers.getSetCookie()
     }
-
-    const data = await refreshResponse.json()
-    return data.access_token || null
   } catch (error) {
+    // No response at all, so no cookie instructions to carry: an unreachable
+    // api-auth must not cost the user their session either.
     console.error(`Token refresh failed: ${error.message}`)
+    return { refreshed: false, cookies: [] }
   }
-  return null
+}
+
+/**
+ * Attach api-auth's Set-Cookie headers to a response, verbatim.
+ *
+ * Every auth cookie the browser receives from this file comes through here. The
+ * middleware never sets or clears one on its own initiative: api-auth owns that
+ * decision, and an empty list means it deliberately made none.
+ */
+function withAuthCookies(response, setCookieHeaders) {
+  for (const setCookieHeader of setCookieHeaders) {
+    response.headers.append('set-cookie', setCookieHeader)
+  }
+  return response
+}
+
+function passThroughWithCookies(setCookieHeaders) {
+  return withAuthCookies(NextResponse.next(), setCookieHeaders)
+}
+
+function redirectToLogin(request, setCookieHeaders = []) {
+  return withAuthCookies(
+    NextResponse.redirect(new URL('/auth/magic', request.url)),
+    setCookieHeaders
+  )
 }
 
 export async function middleware(request) {
@@ -70,28 +110,23 @@ export async function middleware(request) {
   if (isProtectedRoute) {
     // No auth token - try refresh first if we have a refresh token
     if (!authToken) {
+      let refreshCookies = []
+
       if (refreshToken) {
         console.log(`Protected route: ${pathname} - No auth token, attempting refresh`)
-        const newAuthToken = await tryRefreshToken(refreshToken)
+        const refreshResult = await tryRefreshToken(refreshToken)
 
-        if (newAuthToken) {
+        if (refreshResult.refreshed) {
           console.log(`Protected route access granted: ${pathname} (after refresh)`)
-          const response = NextResponse.next()
-          // Set the new auth token cookie
-          response.cookies.set('auth_token', newAuthToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'lax',
-            maxAge: 900, // 15 minutes
-            path: '/'
-          })
-          return response
+          return passThroughWithCookies(refreshResult.cookies)
         }
+
+        refreshCookies = refreshResult.cookies
       }
 
       // No refresh token or refresh failed
       console.log(`Protected route access denied: ${pathname} - No token`)
-      return NextResponse.redirect(new URL('/auth/magic', request.url))
+      return redirectToLogin(request, refreshCookies)
     }
 
     // Validate token with backend
@@ -105,31 +140,26 @@ export async function middleware(request) {
       })
 
       if (!validateResponse.ok) {
+        let refreshCookies = []
+
         // Token is invalid - try to refresh before giving up
         if (refreshToken) {
           console.log(`Protected route: ${pathname} - Invalid token, attempting refresh`)
-          const newAuthToken = await tryRefreshToken(refreshToken)
+          const refreshResult = await tryRefreshToken(refreshToken)
 
-          if (newAuthToken) {
+          if (refreshResult.refreshed) {
             console.log(`Protected route access granted: ${pathname} (after refresh)`)
-            const response = NextResponse.next()
-            response.cookies.set('auth_token', newAuthToken, {
-              httpOnly: true,
-              secure: true,
-              sameSite: 'lax',
-              maxAge: 900,
-              path: '/'
-            })
-            return response
+            return passThroughWithCookies(refreshResult.cookies)
           }
+
+          refreshCookies = refreshResult.cookies
         }
 
-        // Refresh failed or no refresh token
+        // Refresh failed or no refresh token. The cookies are cleared only if
+        // api-auth said to: this used to clear both unconditionally, which meant a
+        // 503 during an api-site outage logged the user out permanently.
         console.log(`Protected route access denied: ${pathname} - Invalid token`)
-        const response = NextResponse.redirect(new URL('/auth/magic', request.url))
-        response.cookies.set('auth_token', '', { maxAge: 0 })
-        response.cookies.set('refresh_token', '', { maxAge: 0 })
-        return response
+        return redirectToLogin(request, refreshCookies)
       }
 
       // Token is valid, allow access
@@ -137,11 +167,11 @@ export async function middleware(request) {
       return NextResponse.next()
 
     } catch (error) {
-      // Backend validation failed, redirect to login
+      // api-auth is unreachable, so nothing has been proven about these cookies.
+      // Send the user to login but leave them intact, so the session survives the
+      // outage rather than being ended by it.
       console.error(`Token validation failed: ${error.message}`)
-      const response = NextResponse.redirect(new URL('/auth/magic', request.url))
-      response.cookies.set('auth_token', '', { maxAge: 0 })
-      return response
+      return redirectToLogin(request)
     }
   }
   
@@ -163,17 +193,16 @@ export async function middleware(request) {
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
       
-      // Token is invalid, clear cookie and allow access to auth route
-      const response = NextResponse.next()
-      response.cookies.set('auth_token', '', { maxAge: 0 })
-      return response
-      
+      // Token is invalid: show the login page. The stale cookie is left alone —
+      // logging in replaces both cookies anyway, and this file does not clear one
+      // api-auth has not asked it to.
+      return NextResponse.next()
+
     } catch (error) {
-      // Backend validation failed, clear cookie and allow access to auth route
+      // api-auth is unreachable, so nothing is proven about the cookie. Show the
+      // login page and leave it intact.
       console.error(`Token validation failed on auth route: ${error.message}`)
-      const response = NextResponse.next()
-      response.cookies.set('auth_token', '', { maxAge: 0 })
-      return response
+      return NextResponse.next()
     }
   }
   

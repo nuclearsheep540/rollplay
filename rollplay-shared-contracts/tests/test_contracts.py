@@ -19,7 +19,16 @@ from shared_contracts.grid_math import (
     snap_axis_nearest,
 )
 from shared_contracts.image import FocalArea, ImageConfig
-from shared_contracts.map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
+from shared_contracts.map import (
+    FOG_REGIONS_MAX,
+    PC_TOKEN_SCALE_MAX,
+    PC_TOKEN_SCALE_MIN,
+    FogConfig,
+    FogRegion,
+    GridColorMode,
+    GridConfig,
+    MapConfig,
+)
 from shared_contracts.map_token import MapToken, TokenImageRef
 from shared_contracts.session import (
     LogEntry,
@@ -137,6 +146,19 @@ class TestMapRoundTrip:
             MapConfig.model_validate({**base, "pc_token_scale": 0.4})
         with pytest.raises(ValidationError):
             MapConfig.model_validate({**base, "pc_token_scale": 1.6})
+
+    def test_pc_token_scale_bounds_are_the_exported_constants(self):
+        """The Field's constraint and the module constants must stay one value.
+
+        api-game validates an incoming scale against the constants before
+        writing it, so a Field tightened without them would accept a value at
+        the write boundary that this contract later refuses — and the refusal
+        would land on the session-end ETL, not on the request that caused it.
+        """
+        constraints = MapConfig.model_fields["pc_token_scale"].metadata
+        lower = next(c.ge for c in constraints if hasattr(c, "ge"))
+        upper = next(c.le for c in constraints if hasattr(c, "le"))
+        assert (lower, upper) == (PC_TOKEN_SCALE_MIN, PC_TOKEN_SCALE_MAX)
 
     def test_pc_token_scale_is_not_grid_config(self):
         # Guards the shape decision that the reverted v4 design got wrong:

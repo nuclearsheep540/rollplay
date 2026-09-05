@@ -34,13 +34,16 @@ import { useSpotifyPlayback, SPOTIFY_DEFAULT_LEVEL } from '../audio_management/h
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import { useMapTokens, MapTokenChipList, MapTokenCreator, PlayerTokenSizeControl } from '../map_tokens';
-import MapOverlayPanel from './components/MapOverlayPanel';
+import MapSettingsPanel from './components/MapSettingsPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge, faAnglesLeft, faAnglesRight } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge, faAnglesLeft, faAnglesRight, faFlagCheckered } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
 import PerfOverlay from '@/app/shared/components/PerfOverlay';
+import ConfirmDialog from '@/app/shared/components/ConfirmDialog';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
+import { useMapSettings } from './hooks/useMapSettings';
+import { useFinishSession } from './hooks/useFinishSession';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import { NotesPanel } from '../notes';
@@ -308,11 +311,17 @@ export default function GameContent() {
   const [activeMap, setActiveMap] = useState(null); // Current active map data
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
-  const [isMapLocked, setIsMapLocked] = useState(false);
-  // Client-side per-user render preference — never sent, never stored.
-  const [showTokenLabels, setShowTokenLabels] = useState(true);
+  // Per-user map view settings (grid marker mode, label visibility, map lock),
+  // persisted as one localStorage blob. Client-side only — none of it is
+  // broadcast, so players may each see the board differently.
+  const {
+    settings: mapSettings,
+    updateSetting: updateMapSetting,
+    forcedSettings: forcedMapSettings,
+  } = useMapSettings({ isDM });
+  // Live inspect state, as opposed to the persisted mode that drives it: this
+  // follows the Shift key from moment to moment and is never stored.
   const [gridInspect, setGridInspect] = useState(false);
-  const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
 
   // Fog of war — engine owns the canvas (off-React, no flicker on re-render).
   // Single instance lives at GameContent level so it outlives panel toggles
@@ -329,16 +338,16 @@ export default function GameContent() {
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key !== 'Shift' || e.repeat) return;
-      setGridInspect(prev => gridInspectMode === 'toggle' ? !prev : true);
+      setGridInspect(prev => mapSettings.gridMarkerMode === 'toggle' ? !prev : true);
     };
     const onKeyUp = (e) => {
-      if (e.key !== 'Shift' || gridInspectMode === 'toggle') return;
+      if (e.key !== 'Shift' || mapSettings.gridMarkerMode === 'toggle') return;
       setGridInspect(false);
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
-  }, [gridInspectMode]);
+  }, [mapSettings.gridMarkerMode]);
 
   const [tuningMode, setTuningMode] = useState(null); // null | 'offset'
   const [mapNaturalDimensions, setMapNaturalDimensions] = useState(null); // { naturalWidth, naturalHeight }
@@ -353,6 +362,12 @@ export default function GameContent() {
 
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
+
+  // Finish Session — the host ending the game from inside it. On success the
+  // server closes the room, so every client (this one included) arrives at
+  // the Session Ended modal above through the normal broadcast.
+  const [showFinishSessionConfirm, setShowFinishSessionConfirm] = useState(false);
+  const { finishSession, isFinishing, error: finishSessionError, clearError: clearFinishSessionError } = useFinishSession();
 
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
@@ -973,8 +988,12 @@ export default function GameContent() {
   const handleKickPlayer = async (userIdToKick, disconnected) => {
     try {
       // Find the seat with this user and empty it
-      const updatedSeats = gameSeats.map(seat =>
-        seat.userId === userIdToKick
+      const kickedSeatIndex = gameSeats.findIndex(seat => seat.userId === userIdToKick);
+      if (kickedSeatIndex === -1) {
+        return; // not seated — nothing to vacate
+      }
+      const updatedSeats = gameSeats.map((seat, index) =>
+        index === kickedSeatIndex
           ? { ...seat, userId: "empty", playerName: "empty", characterData: null, isActive: false }
           : seat
       );
@@ -982,8 +1001,8 @@ export default function GameContent() {
       // Send kick event via websocket using hook method
       sendPlayerKick(userIdToKick);
 
-      // Send updated seat layout using hook method
-      sendSeatChange(updatedSeats);
+      // Vacate that one seat — never the whole layout
+      sendSeatChange(updatedSeats, kickedSeatIndex);
 
       // Update local state
       setGameSeats(updatedSeats);
@@ -1058,7 +1077,7 @@ export default function GameContent() {
         };
 
         setGameSeats(newSeats);
-        sendSeatChangeRef.current?.(newSeats);
+        sendSeatChangeRef.current?.(newSeats, seatIndex);
       }
     } else if (action === 'unset_dm') {
       setIsDM(false);
@@ -1542,7 +1561,7 @@ export default function GameContent() {
       characterData,
       isActive: false
     };
-    await sendSeatChange(newSeats);
+    await sendSeatChange(newSeats, emptyIdx);
   };
 
   // Show dice portal for player rolls
@@ -2129,6 +2148,21 @@ export default function GameContent() {
               <FontAwesomeIcon icon={isFullscreen ? faDownLeftAndUpRightToCenter : faUpRightAndDownLeftFromCenter} />
             </button>
 
+            {/* Host-only. Gated on host rather than DM because api-site
+                refuses anyone but the session's host, and the DM role can be
+                handed to another player mid-game. */}
+            {isHost && (
+              <button
+                onClick={() => { clearFinishSessionError(); setShowFinishSessionConfirm(true); }}
+                className="fullscreen-btn finish-session-btn"
+                title="End this session for everyone"
+                disabled={isFinishing}
+              >
+                Finish Session
+                <FontAwesomeIcon icon={faFlagCheckered} style={{ marginLeft: 'calc(6px * var(--ui-scale))' }} />
+              </button>
+            )}
+
             <button
               onClick={() => router.push('/dashboard')}
               className="fullscreen-btn"
@@ -2458,7 +2492,7 @@ export default function GameContent() {
               onMapImageChange={handleMapImageChange}
               liveGridOpacity={grid.gridOpacity}
               gridConfig={effectiveGridConfig}
-              isMapLocked={isMapLocked || (isDM && fogPaintMode)}
+              isMapLocked={mapSettings.mapLocked || (isDM && fogPaintMode)}
               gridInspect={gridInspect}
               offsetX={grid.offset.x}
               offsetY={grid.offset.y}
@@ -2481,7 +2515,9 @@ export default function GameContent() {
               thisUserId={thisUserId}
               thisUserIsDm={isDM === true}
               tokenImages={mapTokens.tokenImages}
-              showTokenNames={showTokenLabels}
+              showPartyNames={mapSettings.showPartyNames}
+              showEnemyNames={mapSettings.showEnemyNames}
+              showEnemyLockItems={mapSettings.showEnemyLockItems}
             />
           )}
 
@@ -2492,15 +2528,11 @@ export default function GameContent() {
             isMixerOpen={isMixerOpen}
           >
             {activeDisplay === 'map' && (
-              <MapOverlayPanel
-                isMapLocked={isMapLocked}
-                onToggleLock={() => setIsMapLocked(prev => !prev)}
-                showTokenLabels={showTokenLabels}
-                onToggleTokenLabels={() => setShowTokenLabels(prev => !prev)}
+              <MapSettingsPanel
                 activeMap={activeMap}
-                gridInspect={gridInspect}
-                gridInspectMode={gridInspectMode}
-                onToggleInspectMode={() => setGridInspectMode(prev => prev === 'hold' ? 'toggle' : 'hold')}
+                settings={mapSettings}
+                updateSetting={updateMapSetting}
+                forcedSettings={forcedMapSettings}
               />
             )}
             {tuningMode && (
@@ -2809,6 +2841,23 @@ export default function GameContent() {
           </div>
         );
       })()}
+
+      {/* Finish Session confirmation — same wording as the dashboard's, since
+          it is the same command and the same consequences. */}
+      <ConfirmDialog
+        show={showFinishSessionConfirm}
+        title="Finish Session"
+        message="This will finish the session for everyone, ending this game. This saves all data for all players."
+        description={finishSessionError || 'Everyone still in the game will be returned to their dashboard.'}
+        confirmText="Finish Session"
+        loadingText="Finishing..."
+        variant="danger"
+        icon={faFlagCheckered}
+        isLoading={isFinishing}
+        confirmDelaySeconds={3}
+        onConfirm={() => finishSession(roomId)}
+        onCancel={() => { setShowFinishSessionConfirm(false); clearFinishSessionError(); }}
+      />
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (

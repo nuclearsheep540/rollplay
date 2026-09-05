@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Dict, Any, Optional
+from uuid import UUID
 from modules.user.repositories.user_repository import UserRepository
 from modules.user.domain.user_aggregate import UserAggregate
 
@@ -36,6 +37,22 @@ class CheckUserEmailExists:
         Returns True if an active (non-deleted) user with this email exists, False otherwise.
         """
         return self.user_repo.get_by_email(email) is not None
+
+
+class CheckUserActive:
+    """Query to check whether a user id belongs to an active account (read-only, no side effects)"""
+
+    def __init__(self, user_repository: UserRepository):
+        self.user_repo = user_repository
+
+    def execute(self, user_id: UUID) -> bool:
+        """
+        Returns True if a user with this id exists and is not soft-deleted, False otherwise.
+
+        Serves api-auth's token refresh via /internal/check-active. get_by_id excludes
+        soft-deleted rows by default, so "found" is exactly "active".
+        """
+        return self.user_repo.get_by_id(user_id) is not None
 
 
 class GetUserDashboard:
