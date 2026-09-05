@@ -9,6 +9,9 @@ on:
     paths:
       - 'api-auth/**'
 
+permissions:
+  contents: read
+
 jobs:
   test-api-auth:
     name: Run api-auth tests
