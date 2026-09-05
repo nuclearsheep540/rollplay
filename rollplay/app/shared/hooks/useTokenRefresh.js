@@ -7,6 +7,8 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 
+import { refreshAccessToken } from '@/app/shared/utils/authFetch'
+
 const REFRESH_INTERVAL = 12 * 60 * 1000 // 12 minutes (80% of 15-min token lifetime)
 
 /**
@@ -21,18 +23,13 @@ export function useTokenRefresh(enabled = false) {
   const refreshTimeoutRef = useRef(null)
 
   const refreshToken = useCallback(async () => {
-    try {
-      const response = await fetch('/api/users/auth/refresh', {
-        method: 'POST',
-        credentials: 'include'
-      })
+    // Shares authFetch's refresh call, so the timer and a concurrent 401 retry
+    // collapse into one request. It resolves false rather than throwing.
+    const refreshed = await refreshAccessToken()
 
-      if (!response.ok) {
-        console.warn('Token refresh failed, user may need to re-authenticate')
-        // Don't redirect here - let the next API call handle 401
-      }
-    } catch (error) {
-      console.error('Token refresh error:', error)
+    if (!refreshed) {
+      console.warn('Token refresh failed, user may need to re-authenticate')
+      // Don't redirect here - let the next API call handle 401
     }
   }, [])
 

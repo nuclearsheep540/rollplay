@@ -36,7 +36,12 @@ class Settings(BaseSettings):
     # JWT Settings - required, no defaults for secrets
     JWT_SECRET_KEY: str
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    # Token lifetimes. JWTHandler reads these for the JWT `exp` claims and derives the
+    # matching cookie max-age from them, so this is the only place a lifetime is defined.
+    # Override with JWT_ACCESS_TOKEN_EXPIRE_MINUTES / JWT_REFRESH_TOKEN_EXPIRE_DAYS
+    # (pydantic-settings matches env var names case-insensitively).
+    jwt_access_token_expire_minutes: int = 15
+    jwt_refresh_token_expire_days: int = 7
 
     # Mailtrap Email Settings
     MAIL_TRAP_API_TOKEN: str

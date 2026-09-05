@@ -77,8 +77,8 @@ No logic changes, no refactoring — just swap the fetch function.
 
 | File | Call | Reason |
 |------|------|--------|
-| `shared/hooks/useTokenRefresh.js` | `POST /api/users/auth/refresh` | IS the refresh call — authFetch would infinitely recurse |
-| `shared/utils/authFetch.js` | `POST /api/users/auth/refresh` | Internal refresh mechanism |
+| `shared/hooks/useTokenRefresh.js` | `POST /api/auth/refresh` | IS the refresh call — authFetch would infinitely recurse. (Moved to api-auth 2026-09-04; the hook now calls authFetch's exported `refreshAccessToken`.) |
+| `shared/utils/authFetch.js` | `POST /api/auth/refresh` | Internal refresh mechanism |
 | `auth/magic/page.js` | All calls | User isn't authenticated yet |
 | `auth/verify/page.js` | `POST /api/auth/verify-otp` | User isn't authenticated yet |
 | `patch_notes/page.js` | `GET /api/patch-notes-versions` | Public endpoint |

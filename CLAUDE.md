@@ -353,7 +353,7 @@ const response = await fetch('/api/campaigns/', { method: 'GET', credentials: 'i
 ```
 
 **Exceptions** (plain `fetch` is correct here):
-- The token refresh endpoint itself (`/api/users/auth/refresh`) — using `authFetch` would cause infinite recursion
+- The token refresh endpoint itself (`/api/auth/refresh`) — using `authFetch` would cause infinite recursion
 - Auth/login pages (magic link, OTP) — user isn't authenticated yet
 - Public endpoints (patch notes) — no auth required
 - Direct S3 uploads (`PUT` to presigned URL) — not our backend
@@ -532,7 +532,7 @@ All API routes must be configured in NGINX. Config files: `docker/dev/nginx/ngin
 ### Service Map
 - **api-site** (8082): Users, campaigns, sessions, characters, assets, friendships, notifications
 - **api-game** (8081): Active game sessions, game WebSocket (`/ws/`)
-- **api-auth** (8083): Magic links, OTP, JWT generation
+- **api-auth** (8083): Magic links, OTP, JWT generation and refresh
 
 ### Current Routes
 ```nginx
@@ -559,13 +559,28 @@ location /api/auth { ... }
 ## Service Boundaries
 
 ### api-auth (Authentication)
-- **Does**: JWT generation, magic link emails, OTP verification
-- **Does NOT**: Create users, know about campaigns/games
+- **Does**: JWT generation and refresh, magic link emails, OTP verification. It owns every
+  token the system issues and every auth cookie the browser holds — token lifetimes are defined
+  once, in `config/settings.py`, and the cookie max-age is derived from them.
+- **Does NOT**: Create users, read PostgreSQL, know about campaigns/games. It asks api-site
+  through read-only internal endpoints (`resolve-user`, `check-email`, `check-active`).
 - **Tech**: Redis (OTP storage)
 
+**Refresh tokens rotate.** `POST /auth/refresh` re-issues *both* cookies, so the refresh window
+restarts on every use and an active user is never asked to log in again. Before this (fixed
+2026-09-04) only the access token was re-issued, so the refresh token expired a fixed 7 days
+after login and logged people out mid-session. There is deliberately no absolute ceiling and no
+server-side token store: a superseded refresh token stays valid until its own `exp`.
+
+The endpoint distinguishes two failures, and the distinction matters: **401** means the presented
+credential is unusable or the account is gone, and it clears both cookies so a client stops
+retrying a dead token. **503** means api-site could not confirm the account, and it deliberately
+leaves the cookies alone — reporting "unknown" as "inactive" would log every user out whenever
+api-site restarts.
+
 ### api-site (Main DDD Application)
-- **Does**: All business domain logic, CRUD for all aggregates, JWT validation (shared secret, no call to api-auth), game session lifecycle orchestration, S3 presigned URLs
-- **Does NOT**: Handle active game sessions, manage game WebSocket connections
+- **Does**: All business domain logic, CRUD for all aggregates, JWT validation (shared secret, no call to api-auth), game session lifecycle orchestration, S3 presigned URLs. Serves read-only internal user checks to api-auth under `/api/users/internal/` (404 at the NGINX edge, Docker network only)
+- **Does NOT**: Handle active game sessions, manage game WebSocket connections, **generate or refresh tokens** — api-auth owns that; `shared/jwt_helper.py` verifies only
 - **Tech**: PostgreSQL, SQLAlchemy, DDD aggregates
 
 ### api-game (Game Session Service)

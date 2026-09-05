@@ -15,12 +15,13 @@ from .schemas import (
     SetAccountNameRequest,
     AccountNameResponse,
     InternalUserResolveResponse,
+    InternalUserActiveResponse,
     UserColorUpdateRequest
 )
 from modules.user.dependencies.providers import user_repository
 from modules.user.repositories.user_repository import UserRepository
 from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, UpdateUserColor, SoftDeleteUser, HardDeleteUser, UserNotFoundError
-from modules.user.application.queries import GetUserDashboard, GetUserByEmail
+from modules.user.application.queries import GetUserDashboard, GetUserByEmail, CheckUserActive
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
@@ -34,9 +35,6 @@ class ScreenNameUpdateRequest(BaseModel):
 
 
 router = APIRouter()
-
-# Initialize JWT helper for refresh token operations
-jwt_helper = JWTHelper()
 
 
 def _to_user_response(user: UserAggregate) -> UserResponse:
@@ -168,82 +166,23 @@ async def check_email_exists(
     return {"screen_name": user.screen_name if user else None}
 
 
-@router.post("/auth/refresh")
-async def refresh_access_token(
-    request: Request,
-    response: Response,
+@router.get("/internal/check-active", response_model=InternalUserActiveResponse)
+async def check_user_active(
+    user_id: UUID,
     user_repo: UserRepository = Depends(user_repository)
 ):
     """
-    Exchange refresh token for new access token.
+    Internal endpoint for api-auth's token refresh: does this account still exist
+    and remain active (not soft-deleted)?
 
-    This is the ONLY endpoint that validates refresh tokens.
-    Performs DB check to ensure user still exists and is active (not soft-deleted).
+    Read-only - no side effects. Deliberately NOT resolve-user, which get-or-creates
+    and would resurrect a soft-deleted account on refresh.
 
-    Returns 401 if:
-    - No refresh token in cookies
-    - Refresh token is invalid or expired
-    - User not found or soft-deleted
+    NOT exposed via NGINX (/api/users/internal/ returns 404 at the edge).
+    Only accessible within Docker network (http://api-site:8082).
     """
-    refresh_token = request.cookies.get("refresh_token")
-    if not refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No refresh token"
-        )
-
-    # Validate refresh token
-    payload = jwt_helper.verify_refresh_token(refresh_token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token"
-        )
-
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token payload"
-        )
-
-    # Validate user_id is a valid UUID before querying DB
-    try:
-        user_id_uuid = UUID(user_id)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user ID in refresh token"
-        )
-
-    # DB CHECK: Verify user exists and is active (excludes soft-deleted by default)
-    user = user_repo.get_by_id(user_id_uuid)
-    if not user:
-        # Clear cookies - user is deleted or doesn't exist
-        response.delete_cookie("auth_token", path="/", httponly=True, secure=True, samesite="lax")
-        response.delete_cookie("refresh_token", path="/", httponly=True, secure=True, samesite="lax")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
-
-    # Issue new access token
-    new_access_token = jwt_helper.create_access_token(
-        user_id=str(user.id),
-        email=user.email
-    )
-
-    response.set_cookie(
-        key="auth_token",
-        value=new_access_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=900,  # 15 minutes
-        path="/"
-    )
-
-    return {"message": "Token refreshed", "access_token": new_access_token}
+    query = CheckUserActive(user_repo)
+    return InternalUserActiveResponse(active=query.execute(user_id))
 
 
 @router.get("/get_current_user", response_model=UserResponse)

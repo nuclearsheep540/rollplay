@@ -5,14 +5,21 @@
 
 'use client'
 
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { useRouter } from "next/navigation"
 import OTPInput from './components/OTPInput'
+
+// How long the OTP submit button stays disabled when the server says nothing at all.
+// A healthy response lands well under 100ms, so this is a safety net rather than a
+// pace-setter: it exists so a hung request releases the button instead of stranding
+// the user. A response of either kind cancels it (see handleOtpVerification).
+const OTP_SUBMIT_LOCK_MS = 3000
 
 export default function Magic() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const otpSubmitLockTimerRef = useRef(null)
   
   // Form state
   const [email, setEmail] = useState("")
@@ -27,6 +34,16 @@ export default function Magic() {
   const [emailSent, setEmailSent] = useState(false)
   const [retryCountdown, setRetryCountdown] = useState(0)
   const [canRetry, setCanRetry] = useState(false)
+
+  // A successful verify leaves the lock timer pending while the redirect resolves.
+  // Clearing it on unmount stops it firing setIsLoading on a component that is gone.
+  useEffect(() => {
+    return () => {
+      if (otpSubmitLockTimerRef.current) {
+        clearTimeout(otpSubmitLockTimerRef.current)
+      }
+    }
+  }, [])
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -177,9 +194,25 @@ export default function Magic() {
   
   CountdownTimer.displayName = 'CountdownTimer'
 
+  const clearOtpSubmitLock = () => {
+    if (otpSubmitLockTimerRef.current) {
+      clearTimeout(otpSubmitLockTimerRef.current)
+      otpSubmitLockTimerRef.current = null
+    }
+  }
+
   const handleOtpVerification = async (token) => {
     setIsLoading(true)
     clearErrors()
+
+    // Release the button if the server never answers. Cancelled below the moment a
+    // response of either kind arrives, so a slow-but-successful verify cannot have
+    // the button re-enabled underneath it.
+    clearOtpSubmitLock()
+    otpSubmitLockTimerRef.current = setTimeout(() => {
+      otpSubmitLockTimerRef.current = null
+      setIsLoading(false)
+    }, OTP_SUBMIT_LOCK_MS)
 
     try {
       const response = await fetch('/auth/verify-otp', {
@@ -193,22 +226,30 @@ export default function Magic() {
         }),
       })
 
+      // api-auth raises on every failure (400 for a bad or expired code, 500
+      // otherwise) and never reports one over a 200, so response.ok is the whole
+      // success test.
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'OTP verification failed')
       }
 
-      const data = await response.json()
-      
+      // Verified. Deliberately leave isLoading set: router.push resolves
+      // asynchronously, and re-enabling the button here would reopen it for the
+      // length of the redirect, which is the window that let the button be clicked
+      // several times over.
+      clearOtpSubmitLock()
+
       // No need to store in localStorage - httpOnly cookie is set by backend
       // Redirect to dashboard
       sessionStorage.setItem('just_logged_in', 'true')
       router.push('/dashboard')
-      
+
     } catch (error) {
+      // Only a failure re-enables the button, so the user can correct the code.
       console.error("OTP verification error:", error)
+      clearOtpSubmitLock()
       setOtpError("Invalid or expired OTP token. Please try again.")
-    } finally {
       setIsLoading(false)
     }
   }
