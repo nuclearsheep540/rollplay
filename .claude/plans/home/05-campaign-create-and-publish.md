@@ -74,6 +74,14 @@ campaign passes today — but the mechanism is exactly the hook this flow needs:
 publish takes over session creation, unpublished campaigns fall out of the hero (and out
 of "startable" surfaces) with no ranking rework.
 
+> **Superseded 2026-09-05 by [06-game-lifecycle.md](06-game-lifecycle.md).** Every campaign
+> now has exactly one session from birth, always — created with it, replaced by Reset game,
+> never zero — and Start/Schedule never create one. So "no session until publish" is no
+> longer an available hook: if this flow is ever extracted it carries an explicit
+> `published` flag on the campaign (open question 1 is thereby leaning explicit), and the
+> hero filter reads that flag rather than session presence. The session-name field this
+> section planned to delete is already gone in 06.
+
 ## Supersedes (when this lands, delete in the same change)
 
 - The `# Always create a session with the campaign` block in the create endpoint, and the

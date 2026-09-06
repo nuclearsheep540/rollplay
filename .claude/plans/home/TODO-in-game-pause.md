@@ -1,5 +1,12 @@
 # TODO — In-game pause button (HIGH PRIORITY)
 
+> **OVERTAKEN 2026-09-05.** #173 ("End session from game", 2026-09-03) shipped the in-game
+> button — calling the *finish* endpoint, which is what lost player tokens (a FINISHED
+> session forces a fresh row; PC tokens only live on the paused board). Plan
+> [06-game-lifecycle.md](06-game-lifecycle.md) PR 2 re-points that button at **End game**
+> (backend pause) and retires FINISHED. Nothing below remains open; the file stays only as
+> the record of the ask until Matt prunes it.
+
 > Captured 2026-08-30, mid-QA on `feature/home-page-shell`, out of the session-lifecycle
 > failure-handling conversation (retry/abort_stop work, shipped that day). Placed in
 > plans/home/ deliberately: not Home-epic scope, but Matt wants it shipped as high

@@ -83,7 +83,7 @@
 - Scheduling has **zero footprint**: no column, no entity, no RSVP, in any service,
   migration, or frontend (exhaustive greps; only prose comments call a Session "the
   scheduled/planned play instance"). Plan for it exists at
-  [03-scheduling-and-rsvp.md](03-scheduling-and-rsvp.md) (stage 3). Until then the
+  [03-scheduling.md](03-scheduling.md) (stage 3; rewritten 2026-09-05, RSVP dropped). Until then the
   not-live hero meta and the calm pulse pill both have **no data source**.
 
 ### Ranking inputs
