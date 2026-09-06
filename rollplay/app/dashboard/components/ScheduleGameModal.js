@@ -32,6 +32,10 @@ export default function ScheduleGameModal({ campaign, currentValue, onSave, onCa
   const [date, setDate] = useState(existing ? existing.format(DATE_FORMAT) : '')
   const [time, setTime] = useState(existing ? existing.format(TIME_FORMAT) : '')
 
+  // `toISOString()` throws a RangeError on an unparseable date, and neither
+  // field can hand us one: a native date input sanitises anything typed into
+  // it to `YYYY-MM-DD` or to empty, TimeField only ever reports `HH:mm` or
+  // empty, and Save is disabled while either is empty.
   const save = () => onSave(new Date(`${date}T${time}`).toISOString())
 
   return (

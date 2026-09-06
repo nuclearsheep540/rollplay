@@ -28,13 +28,15 @@ const MINUTES = Array.from({ length: 60 / MINUTE_STEP }, (_, index) => String(in
 
 function Column({ label, items, selected, onPick }) {
   return (
-    <div role="listbox" aria-label={label} className="max-h-56 overflow-y-auto py-1">
+    <div role="group" aria-label={label} className="max-h-56 overflow-y-auto py-1">
       {items.map((item) => (
+        // Plain buttons pressed/unpressed, NOT listbox options: `role="option"`
+        // tells a screen reader to expect arrow-key navigation between them,
+        // and there is none — focus never leaves the input (see below).
         <button
           key={item}
           type="button"
-          role="option"
-          aria-selected={item === selected}
+          aria-pressed={item === selected}
           onClick={() => onPick(item)}
           className={`block w-14 px-3 py-1.5 text-sm text-center text-content-on-dark hover:bg-interactive-hover ${
             item === selected ? 'bg-interactive-hover font-semibold' : ''
@@ -61,7 +63,7 @@ export default function TimeField({ value, onChange, className = '', ...inputPro
   // Open on the chosen entries, the way a native picker does.
   useEffect(() => {
     if (!open) return
-    for (const chosen of panelRef.current?.querySelectorAll('[aria-selected="true"]') || []) {
+    for (const chosen of panelRef.current?.querySelectorAll('[aria-pressed="true"]') || []) {
       chosen.scrollIntoView({ block: 'nearest' })
     }
   }, [open])
