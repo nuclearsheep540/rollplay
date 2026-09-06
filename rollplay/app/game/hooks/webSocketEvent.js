@@ -133,25 +133,6 @@ export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   setGameSeats(updatedSeats);
 };
 
-export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) => {
-  console.log("received seat count change:", data);
-  const { max_players, new_seats, updated_by, displaced_players = [] } = data;
-
-  // new_seats is a userId array
-  const updatedSeats = new_seats ? new_seats.map((userId, index) => {
-    const charData = userId !== "empty" ? getCharacterData(userId) : null;
-    return {
-      seatId: index,
-      userId: userId,
-      playerName: charData?.player_name || "",
-      characterData: charData,
-      isActive: false
-    };
-  }) : [];
-
-  setGameSeats(updatedSeats);
-};
-
 /**
  * Handle player character change during active session
  * Updates the seat with new character data — matched by user_id
@@ -635,19 +616,6 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     }
   };
 
-  const sendSeatCountChange = (newSeatCount, newSeats) => {
-    if (!webSocket || !isConnected) return;
-
-    webSocket.send(JSON.stringify({
-      "event_type": "seat_count_change",
-      "data": {
-        "max_players": newSeatCount,
-        "new_seats": newSeats.map(seat => seat.userId),
-        "updated_by": userId
-      }
-    }));
-  };
-
   const sendCombatStateChange = (newCombatState) => {
     if (!webSocket || !isConnected) return;
 
@@ -726,7 +694,6 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
 
   return {
     sendSeatChange,
-    sendSeatCountChange,
     sendCombatStateChange,
     sendPlayerKick,
     sendDiceRoll,

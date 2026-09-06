@@ -4,19 +4,27 @@
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator
 
 
-class CreateSessionRequest(BaseModel):
-    """Request to create a new session"""
-    name: Optional[str] = Field(None, max_length=100)
-    campaign_id: UUID
-    max_players: int = Field(default=8, ge=1, le=8, description="Number of player seats (1-8)")
+class ScheduleSessionRequest(BaseModel):
+    """Set (or clear, with null) when the campaign's next game is."""
+    scheduled_at: Optional[datetime] = None
 
+    @field_validator("scheduled_at")
+    @classmethod
+    def must_be_timezone_aware(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Refuse naive datetimes at the boundary.
 
-class UpdateSessionRequest(BaseModel):
-    """Request to update session details"""
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
+        The client sends an instant, not a wall-clock reading: everyone at the
+        table is meant to see the same moment rendered in their own zone. A
+        naive value would silently be read as server-local and show the wrong
+        time to everyone but the server. The aggregate guards this too — this
+        one exists to answer the client with a precise 422 rather than a 400.
+        """
+        if value is not None and value.tzinfo is None:
+            raise ValueError("scheduled_at must include a timezone offset")
+        return value
 
 
 class RosterPlayerResponse(BaseModel):
@@ -32,9 +40,12 @@ class RosterPlayerResponse(BaseModel):
 
 
 class SessionResponse(BaseModel):
-    """Session aggregate response"""
+    """Session aggregate response.
+
+    Unnamed and seatless: a campaign has exactly one session, and the seat count
+    is a campaign setting (CampaignResponse.max_players).
+    """
     id: UUID
-    name: Optional[str]
     campaign_id: UUID
     host_id: UUID
     host_name: str  # DM/Host screen name or email
@@ -42,10 +53,10 @@ class SessionResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime]
     stopped_at: Optional[datetime]
+    scheduled_at: Optional[datetime]  # The GM's declared next game; null when none
     joined_users: List[UUID]  # Users in session roster
     roster: List[RosterPlayerResponse]  # Enriched roster with character details
     player_count: int  # Count of joined_users
-    max_players: int
 
     class Config:
         from_attributes = True

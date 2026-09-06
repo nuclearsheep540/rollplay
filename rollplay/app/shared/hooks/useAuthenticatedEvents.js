@@ -128,15 +128,25 @@ export function useAuthenticatedEvents(userId, showToast, addPulseEvent) {
       invalidation.invalidateNotifications()
       toast('session_started', m)
     },
-    session_paused: (m) => {
+    // The SYSTEM take-down (expiry sweeper, admin CLI) — repaint only, never
+    // a toast: from a player's side nothing happened.
+    session_paused: () => {
       invalidation.invalidateCampaigns()
       invalidation.invalidateNotifications()
-      toast('session_paused', m)
     },
-    session_finished: (m) => {
+    // The host said when the next game is (or cleared it). Non-hosts only.
+    session_scheduled: (m) => {
       invalidation.invalidateCampaigns()
       invalidation.invalidateNotifications()
-      toast('session_finished', m)
+      // Same sentence in the toast and the feed — the date has to be rendered
+      // from the payload either way, so there is nothing to say twice.
+      toast('session_scheduled', m, (config, data) => config.panelMessage(data))
+    },
+    // The host pressed End game. Only non-hosts receive this.
+    session_ended: (m) => {
+      invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
+      toast('session_ended', m)
     },
     campaign_deleted: () => invalidation.invalidateCampaigns(),
 

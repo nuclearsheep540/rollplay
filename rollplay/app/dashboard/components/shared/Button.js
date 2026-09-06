@@ -47,6 +47,18 @@ export function Button({
     }
   }
 
+  // Hover used to be ONE rule for every variant — smoke border, silver text —
+  // which replaced a coloured edge with off-white and *darkened* the label,
+  // since silver is duller than the smoke these buttons rest at. A variant that
+  // carries a hue keeps it and brightens instead. Hex literals match the
+  // variants above rather than inventing tokens for one state.
+  const hovers = {
+    success: {
+      borderColor: '#4ade80',  // a lit step up from the resting #16a34a edge
+      color: '#FFFFFF'         // lighter than the resting smoke, never duller
+    }
+  }
+
   const disabledStyle = {
     backgroundColor: COLORS.graphite,
     color: COLORS.silver,
@@ -70,10 +82,10 @@ export function Button({
       className={`rounded-sm border font-medium transition-all disabled:cursor-not-allowed ${sizes[size]} ${className}`}
       style={{
         ...(disabled ? disabledStyle : variants[variant]),
-        ...(isHovered && !disabled && variant !== 'ghost' && {
+        ...(isHovered && !disabled && variant !== 'ghost' && (hovers[variant] || {
           borderColor: THEME.borderActive,
           color: THEME.textAccent
-        })
+        }))
       }}
       disabled={disabled}
       onMouseEnter={() => setIsHovered(true)}

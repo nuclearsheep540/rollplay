@@ -569,7 +569,7 @@ class TestSessionRoundTrip:
                 # Known-but-unseated player still round-trips (color sync coverage)
                 PlayerState(user_id="u2", player_name="Bob"),
             ],
-            session_stats=SessionStats(duration_minutes=120, total_logs=47, max_players=5),
+            session_stats=SessionStats(duration_minutes=120, total_logs=47),
             audio_state={"channel_0": AudioChannelState(volume=0.5, playback_state="paused")},
             spotify_state=SpotifyState(track_uri="spotify:track:abc", playback_state="paused", paused_elapsed=98.4, channel_level=0.3),
             map_state=MapConfig(asset_id="m1", filename="map.png", file_path="https://s3.example.com/map.png"),
@@ -709,6 +709,13 @@ class TestCharacterShapeConformance:
             "spotify_state", "map_state", "image_state", "active_display",
         }
         assert required_keys.issubset(set(SessionEndFinalState.model_fields.keys()))
+
+    def test_seat_count_travels_cold_to_hot_only(self):
+        """Seats are campaign settings: the start payload carries them, the end
+        report must not. A seat count coming back from a running game would
+        overwrite an edit made in campaign settings while it was live."""
+        assert "max_players" in SessionStartPayload.model_fields
+        assert "max_players" not in SessionStats.model_fields
 
 
 # --- Constraint validation tests: contracts reject invalid data ---

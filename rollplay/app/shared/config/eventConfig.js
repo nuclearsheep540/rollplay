@@ -11,6 +11,8 @@
  * - Navigation tab routing
  */
 
+import { formatScheduledTime } from '@/app/shared/utils/formatTime'
+
 export const EVENT_CONFIG = {
   'friend_request_received': {
     toastMessage: 'New friend request',
@@ -139,35 +141,54 @@ export const EVENT_CONFIG = {
 
   'session_created': {
     toastMessage: null,  // Silent - no toast notification
-    panelMessage: (data) => `${data.host_screen_name} created new session "${data.session_name}" in ${data.campaign_name}`,
+    panelMessage: (data) => `${data.host_screen_name} set up the game for ${data.campaign_name}`,
     toastType: 'info',
     navigationTab: 'campaigns'
   },
 
   'session_started': {
-    toastMessage: 'Session started',
+    toastMessage: 'The game has started',
     panelMessage: (data, currentUserId) => {
       // host_id/host_screen_name are canonical; dm_id/dm_screen_name kept for legacy notifications
       const hostId = data.host_id || data.dm_id
       const hostName = data.host_screen_name || data.dm_screen_name
       const actor = currentUserId && hostId === currentUserId ? 'You' : hostName
-      return `${actor} started the session for ${data.campaign_name}`
+      return `${actor} started the game for ${data.campaign_name}`
     },
     toastType: 'success',
     navigationTab: 'campaigns'
   },
 
+  // The system closed an abandoned game (expiry sweeper / admin). Silent by
+  // design — users are never shown "pause", and an idle game reads the same
+  // whether the GM ended it or the sweeper did.
   'session_paused': {
-    toastMessage: null,  // Silent - no toast notification
-    panelMessage: (data) => `Session "${data.session_name}" was paused by ${data.paused_by_screen_name}`,
+    toastMessage: null,
+    panelMessage: () => 'The game was closed after being left running',
     toastType: 'info',
     navigationTab: 'campaigns'
   },
 
-  'session_finished': {
-    toastMessage: null,  // Silent - no toast notification
-    panelMessage: (data) => `Campaign milestone: "${data.session_name}" completed!`,
-    toastType: 'success',
+  // The host said when the next game is, or cleared it. Never delivered to the
+  // host themselves. The date is formatted client-side so every player reads it
+  // in their own timezone — the payload carries an ISO instant, never a string
+  // the server has already rendered.
+  'session_scheduled': {
+    toastMessage: null,  // built from the payload; see panelMessage
+    panelMessage: (data) => (
+      data.scheduled_at
+        ? `${data.host_screen_name} set the next ${data.campaign_name} game for ${formatScheduledTime(data.scheduled_at)}`
+        : `${data.host_screen_name} cleared the next game for ${data.campaign_name}`
+    ),
+    toastType: 'info',
+    navigationTab: 'campaigns'
+  },
+
+  // The host pressed End game. Never delivered to the host themselves.
+  'session_ended': {
+    toastMessage: 'The game has ended',
+    panelMessage: (data) => `${data.host_screen_name} ended the game for ${data.campaign_name}`,
+    toastType: 'info',
     navigationTab: 'campaigns'
   },
 

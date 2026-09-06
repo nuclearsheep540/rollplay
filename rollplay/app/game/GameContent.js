@@ -43,7 +43,7 @@ import ConfirmDialog from '@/app/shared/components/ConfirmDialog';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useMapSettings } from './hooks/useMapSettings';
-import { useFinishSession } from './hooks/useFinishSession';
+import { useEndGame } from './hooks/useEndGame';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import { NotesPanel } from '../notes';
@@ -366,8 +366,8 @@ export default function GameContent() {
   // Finish Session — the host ending the game from inside it. On success the
   // server closes the room, so every client (this one included) arrives at
   // the Session Ended modal above through the normal broadcast.
-  const [showFinishSessionConfirm, setShowFinishSessionConfirm] = useState(false);
-  const { finishSession, isFinishing, error: finishSessionError, clearError: clearFinishSessionError } = useFinishSession();
+  const [showEndGameConfirm, setShowEndGameConfirm] = useState(false);
+  const { endGame, isEnding, error: endGameError, clearError: clearEndGameError } = useEndGame();
 
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
@@ -836,77 +836,6 @@ export default function GameContent() {
     return base;
   }, [gridEditMode, grid.effectiveGridConfig, grid.offset, gridConfig, activeMap, tuningMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // UPDATED: Seat count management with displaced player handling
-  const setSeatCount = async (newSeatCount) => {
-    try {
-      console.log(`Updating seat count to: ${newSeatCount}`);
-      
-      // Identify displaced players if reducing seat count
-      const displacedPlayers = [];
-      if (newSeatCount < gameSeats.length) {
-        for (let i = newSeatCount; i < gameSeats.length; i++) {
-          if (gameSeats[i] && gameSeats[i].userId !== "empty") {
-            displacedPlayers.push({
-              userId: gameSeats[i].userId,
-              playerName: gameSeats[i].playerName,
-              seatId: i,
-              characterData: gameSeats[i].characterData
-            });
-          }
-        }
-      }
-      
-      // Create new seat array
-      const newSeats = [];
-      
-      // Copy existing seats up to the new count
-      for (let i = 0; i < newSeatCount; i++) {
-        if (i < gameSeats.length) {
-          // Keep existing seat
-          newSeats.push(gameSeats[i]);
-        } else {
-          // Add new empty seat
-          newSeats.push({
-            seatId: i,
-            userId: "empty",
-            playerName: "empty",
-            characterData: null,
-            isActive: false
-          });
-        }
-      }
-
-      // Update MongoDB via API with displaced players info
-      const response = await fetch(`/api/game/${roomId}/seats`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          max_players: newSeatCount,
-          updated_by: thisUserId,
-          displaced_players: displacedPlayers
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update seat count in database');
-      }
-
-      // Send websocket update using hook method
-      sendSeatCountChange(newSeatCount, newSeats);
-
-      // Note: Do NOT update local state here - let WebSocket broadcast handle it
-      // This prevents double state updates that cause adventure log to jump
-      
-      console.log(`Seat count change requested. Displaced players:`, displacedPlayers);
-
-    } catch (error) {
-      console.error('Error updating seat count:', error);
-      alert('Failed to update seat count. Please try again.');
-    }
-  };
-
   const loadAdventureLogs = async (roomId) => {
     try {
       console.log("Loading adventure logs from database...");
@@ -1296,7 +1225,6 @@ export default function GameContent() {
     webSocket,
     isConnected,
     sendSeatChange,
-    sendSeatCountChange,
     sendCombatStateChange,
     sendPlayerKick,
     sendDiceRoll,
@@ -2153,12 +2081,12 @@ export default function GameContent() {
                 handed to another player mid-game. */}
             {isHost && (
               <button
-                onClick={() => { clearFinishSessionError(); setShowFinishSessionConfirm(true); }}
+                onClick={() => { clearEndGameError(); setShowEndGameConfirm(true); }}
                 className="fullscreen-btn finish-session-btn"
-                title="End this session for everyone"
-                disabled={isFinishing}
+                title="End the game for everyone"
+                disabled={isEnding}
               >
-                Finish Session
+                End Game
                 <FontAwesomeIcon icon={faFlagCheckered} style={{ marginLeft: 'calc(6px * var(--ui-scale))' }} />
               </button>
             )}
@@ -2366,7 +2294,6 @@ export default function GameContent() {
                   thisUserId={thisUserId}
                   currentUser={currentUser}
                   onRoleChange={handleRoleChange}
-                  setSeatCount={setSeatCount}
                   handleKickPlayer={handleKickPlayer}
                   handleClearSystemMessages={handleClearSystemMessages}
                   displayNameMap={displayNameMap}
@@ -2842,21 +2769,22 @@ export default function GameContent() {
         );
       })()}
 
-      {/* Finish Session confirmation — same wording as the dashboard's, since
-          it is the same command and the same consequences. */}
+      {/* End Game confirmation — same wording as the dashboard's, since it is
+          the same command and the same consequences. Nothing is lost: token
+          positions and the adventure log are written cold and come back on the
+          next start, so this carries no countdown and is not styled as danger. */}
       <ConfirmDialog
-        show={showFinishSessionConfirm}
-        title="Finish Session"
-        message="This will finish the session for everyone, ending this game. This saves all data for all players."
-        description={finishSessionError || 'Everyone still in the game will be returned to their dashboard.'}
-        confirmText="Finish Session"
-        loadingText="Finishing..."
-        variant="danger"
+        show={showEndGameConfirm}
+        title="End Game"
+        message="This ends the game for everyone at the table. Token positions and the adventure log are kept."
+        description={endGameError || 'Everyone still in the game will be returned to their dashboard.'}
+        confirmText="End Game"
+        loadingText="Ending..."
+        variant="primary"
         icon={faFlagCheckered}
-        isLoading={isFinishing}
-        confirmDelaySeconds={3}
-        onConfirm={() => finishSession(roomId)}
-        onCancel={() => { setShowFinishSessionConfirm(false); clearFinishSessionError(); }}
+        isLoading={isEnding}
+        onConfirm={() => endGame(roomId)}
+        onCancel={() => { setShowEndGameConfirm(false); clearEndGameError(); }}
       />
 
       {/* Session Ended Modal with Countdown */}

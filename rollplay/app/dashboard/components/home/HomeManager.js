@@ -86,7 +86,7 @@ export default function HomeManager({ user }) {
                 playerCharacter={playerCharacter}
               />
             ) : (
-              <HomeOnboardingHero hasCampaigns={campaigns.length > 0} />
+              <HomeOnboardingHero />
             )}
           </InviteDeck>
         )}

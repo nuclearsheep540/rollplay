@@ -302,15 +302,16 @@ def create_session(session_repo: SessionRepository):
     """
     Factory fixture to create test sessions.
 
+    Sessions are unnamed and seatless — a campaign has exactly one, and the seat
+    count is a campaign setting.
+
     Usage:
-        session = create_session(campaign_id=campaign.id, host_id=user.id, name="Test Session")
+        session = create_session(campaign_id=campaign.id, host_id=user.id)
     """
-    def _create_session(campaign_id: uuid.UUID, host_id: uuid.UUID, name: str = "Test Session", max_players: int = 6):
+    def _create_session(campaign_id: uuid.UUID, host_id: uuid.UUID):
         session = SessionEntity.create(
-            name=name,
             campaign_id=campaign_id,
-            host_id=host_id,
-            max_players=max_players
+            host_id=host_id
         )
         session_repo.save(session)
         return session

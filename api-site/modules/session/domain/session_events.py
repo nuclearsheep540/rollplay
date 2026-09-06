@@ -11,8 +11,9 @@ Ubiquitous Language:
 These events notify users about session lifecycle changes.
 """
 
+from datetime import datetime
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 from modules.events.domain.event_config import EventConfig
 
 
@@ -32,7 +33,6 @@ class SessionEvents:
     def session_created(
         non_dm_member_ids: List[UUID],
         session_id: UUID,
-        session_name: str,
         campaign_id: UUID,
         campaign_name: str,
         host_id: UUID,
@@ -48,7 +48,6 @@ class SessionEvents:
         Args:
             non_dm_member_ids: Campaign members other than the DM (who is the creator)
             session_id: Session ID
-            session_name: Session name
             campaign_id: Campaign ID
             campaign_name: Campaign name
             host_id: Host user ID
@@ -65,7 +64,6 @@ class SessionEvents:
                 event_type="session_created",
                 data={
                     "session_id": str(session_id),
-                    "session_name": session_name,
                     "campaign_id": str(campaign_id),
                     "campaign_name": campaign_name,
                     "host_id": str(host_id),
@@ -78,7 +76,7 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_started(campaign_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
+    def session_started(campaign_member_ids: List[UUID], session_id: UUID, campaign_id: UUID, campaign_name: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
         """
         Event: Host started a session (notifies every campaign member)
 
@@ -88,7 +86,6 @@ class SessionEvents:
         Args:
             campaign_member_ids: Every active campaign member, DM included
             session_id: Session ID
-            session_name: Session name
             campaign_id: Campaign ID
             campaign_name: Campaign name
             host_id: Session host user ID
@@ -104,7 +101,6 @@ class SessionEvents:
                 event_type="session_started",
                 data={
                     "session_id": str(session_id),
-                    "session_name": session_name,
                     "campaign_id": str(campaign_id),
                     "campaign_name": campaign_name,
                     "host_id": str(host_id),
@@ -116,21 +112,22 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_paused(campaign_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[EventConfig]:
+    def session_paused(campaign_member_ids: List[UUID], session_id: UUID, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[EventConfig]:
         """
-        Event: Session paused (silent state update to every campaign member)
+        Event: the SYSTEM took a game down (expiry sweeper or admin CLI).
 
-        Pure state update - no toast notification, no persistent notification.
-        Only triggers frontend state refresh (session list update).
+        Deliberately silent — no toast, no notification row. From a user's side
+        nothing happened: the game simply reads as not running, exactly as it
+        would after the host ended it. Only triggers a frontend state refresh.
+        The host's own End game is session_ended, which does speak.
 
         Args:
             campaign_member_ids: Every active campaign member, DM included —
                 NOT only those who were in the session
             session_id: Session ID
-            session_name: Session name
             campaign_id: Campaign ID
-            paused_by_id: User who paused the session (usually DM)
-            paused_by_screen_name: Display name of user who paused
+            paused_by_id: User the pause acted as (the session host)
+            paused_by_screen_name: Display name of that user
 
         Returns:
             List[EventConfig] (one per campaign member)
@@ -142,7 +139,6 @@ class SessionEvents:
                 event_type="session_paused",
                 data={
                     "session_id": str(session_id),
-                    "session_name": session_name,
                     "campaign_id": str(campaign_id),
                     "paused_by_id": str(paused_by_id),
                     "paused_by_screen_name": paused_by_screen_name
@@ -153,36 +149,105 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_finished(dm_id: UUID, non_dm_member_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID) -> List[EventConfig]:
+    def session_scheduled(
+        campaign_member_ids: List[UUID],
+        session_id: UUID,
+        campaign_id: UUID,
+        campaign_name: str,
+        host_id: UUID,
+        host_screen_name: str,
+        scheduled_at: Optional[datetime]
+    ) -> List[EventConfig]:
         """
-        Event: Session marked as finished/completed (silent state update to every campaign member)
+        Event: the host set, changed or cleared when the next game is.
 
-        Pure state update - no toast notification, no persistent notification.
-        Only triggers frontend state refresh (session list update).
+        Toasted AND persisted, to every member except the host. Persisted because
+        this is the one lifecycle event a player wants to find again later —
+        "when did he say we were playing?" — unlike a game starting or ending,
+        which only matter in the moment.
+
+        A cleared schedule fires the same event with scheduled_at=None: a
+        cancelled game is worth hearing about too.
 
         Args:
-            dm_id: Campaign DM user ID
-            non_dm_member_ids: Campaign members other than the DM
+            campaign_member_ids: Every active campaign member, host included —
+                the host is filtered out here, not by the caller
             session_id: Session ID
-            session_name: Session name
             campaign_id: Campaign ID
+            campaign_name: Campaign name
+            host_id: The host who set it
+            host_screen_name: Host display name
+            scheduled_at: The declared time, or None when cleared. Serialised to
+                ISO-8601 here (EventConfig.data must be JSON-safe) and rendered
+                in each viewer's own timezone client-side.
 
         Returns:
-            List[EventConfig] (DM + every other campaign member)
+            List[EventConfig] (one per campaign member other than the host)
         """
         events = []
-        all_recipients = [dm_id] + non_dm_member_ids
-
-        for recipient_id in all_recipients:
+        for member_id in campaign_member_ids:
+            if member_id == host_id:
+                continue
             events.append(EventConfig(
-                user_id=recipient_id,
-                event_type="session_finished",
+                user_id=member_id,
+                event_type="session_scheduled",
                 data={
                     "session_id": str(session_id),
-                    "session_name": session_name,
-                    "campaign_id": str(campaign_id)
+                    "campaign_id": str(campaign_id),
+                    "campaign_name": campaign_name,
+                    "host_id": str(host_id),
+                    "host_screen_name": host_screen_name,
+                    "scheduled_at": scheduled_at.isoformat() if scheduled_at else None
                 },
-                show_toast=False,         # No toast notification (silent state update)
-                save_notification=False   # No persistent notification (state only)
+                show_toast=True,
+                save_notification=True
+            ))
+        return events
+
+    @staticmethod
+    def session_ended(
+        campaign_member_ids: List[UUID],
+        session_id: UUID,
+        campaign_id: UUID,
+        campaign_name: str,
+        host_id: UUID,
+        host_screen_name: str
+    ) -> List[EventConfig]:
+        """
+        Event: the host ended the game (End game).
+
+        Toasts every campaign member EXCEPT the host: they pressed the button and
+        watched it happen, so telling them is noise. Not persisted — a game ending
+        is momentary news, not something worth finding in the feed a week later
+        (contrast session_started, which is worth catching up on).
+
+        Args:
+            campaign_member_ids: Every active campaign member, host included —
+                the host is filtered out here, not by the caller
+            session_id: Session ID
+            campaign_id: Campaign ID
+            campaign_name: Campaign name
+            host_id: The host who ended the game
+            host_screen_name: Host display name
+
+        Returns:
+            List[EventConfig] (one per campaign member other than the host)
+        """
+        events = []
+        for member_id in campaign_member_ids:
+            if member_id == host_id:
+                continue
+            events.append(EventConfig(
+                user_id=member_id,
+                event_type="session_ended",
+                data={
+                    "session_id": str(session_id),
+                    "campaign_id": str(campaign_id),
+                    "campaign_name": campaign_name,
+                    "host_id": str(host_id),
+                    "host_screen_name": host_screen_name
+                },
+                show_toast=True,
+                save_notification=False
             ))
         return events

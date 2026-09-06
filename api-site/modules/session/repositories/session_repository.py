@@ -65,7 +65,7 @@ class SessionRepository:
         """Sessions stranded mid-ETL (STOPPING) — the boot reconciler's work list.
 
         STOPPING is transient by design; a row still holding it when no ETL is
-        in flight means a process death interrupted a pause/finish.
+        in flight means a process death interrupted a take-down.
         """
         models = (
             self.db.query(SessionModel)
@@ -120,12 +120,11 @@ class SessionRepository:
                 raise ValueError(f"Session {aggregate.id} not found")
 
             # Update session fields
-            model.name = aggregate.name
             model.status = aggregate.status.value
             model.started_at = aggregate.started_at
             model.stopped_at = aggregate.stopped_at
             model.urls_expire_at = aggregate.urls_expire_at
-            model.max_players = aggregate.max_players
+            model.scheduled_at = aggregate.scheduled_at
             model.audio_config = aggregate.audio_config
             model.spotify_config = aggregate.spotify_config
             model.map_config = aggregate.map_config
@@ -142,7 +141,6 @@ class SessionRepository:
             # Create new
             model = SessionModel(
                 id=aggregate.id,
-                name=aggregate.name,
                 campaign_id=aggregate.campaign_id,
                 host_id=aggregate.host_id,
                 status=aggregate.status.value,
@@ -150,7 +148,7 @@ class SessionRepository:
                 started_at=aggregate.started_at,
                 stopped_at=aggregate.stopped_at,
                 urls_expire_at=aggregate.urls_expire_at,
-                max_players=aggregate.max_players,
+                scheduled_at=aggregate.scheduled_at,
                 audio_config=aggregate.audio_config,
                 spotify_config=aggregate.spotify_config,
                 map_config=aggregate.map_config,
@@ -189,7 +187,7 @@ class SessionRepository:
         # Business rule validation through aggregate
         session = self._model_to_aggregate(model)
         if not session.can_delete():
-            raise ValueError("Cannot delete session - it must be INACTIVE or FINISHED")
+            raise ValueError("Cannot delete session - the game must be ended first")
 
         # Explicitly delete child records using SQLAlchemy ORM to avoid relationship conflicts
         # Delete SessionJoinedUser records (prevents ORM trying to SET NULL on primary key)
@@ -242,7 +240,6 @@ class SessionRepository:
 
         return SessionEntity(
             id=model.id,
-            name=model.name,
             campaign_id=model.campaign_id,
             host_id=model.host_id,
             status=SessionStatus(model.status),
@@ -250,8 +247,8 @@ class SessionRepository:
             started_at=model.started_at,
             stopped_at=model.stopped_at,
             urls_expire_at=model.urls_expire_at,
+            scheduled_at=model.scheduled_at,
             joined_users=joined_user_ids,
-            max_players=model.max_players,
             audio_config=model.audio_config,
             spotify_config=model.spotify_config,
             map_config=model.map_config,

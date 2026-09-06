@@ -21,14 +21,15 @@ class CreateCampaign:
     def __init__(self, repository):
         self.repository = repository
 
-    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None, hero_image_asset_id: Optional[UUID] = None) -> CampaignAggregate:
+    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None, hero_image_asset_id: Optional[UUID] = None, max_players: int = 8) -> CampaignAggregate:
         """Create a new campaign. The creator becomes the DM."""
         campaign = CampaignAggregate.create(
             title=title,
             description=description,
             created_by=host_id,
             hero_image=hero_image,
-            hero_image_asset_id=hero_image_asset_id
+            hero_image_asset_id=hero_image_asset_id,
+            max_players=max_players
         )
 
         self.repository.save(campaign)
@@ -36,9 +37,8 @@ class CreateCampaign:
 
 
 class UpdateCampaign:
-    def __init__(self, repository, session_repository=None):
+    def __init__(self, repository):
         self.repository = repository
-        self.session_repository = session_repository
 
     def execute(
         self,
@@ -48,9 +48,14 @@ class UpdateCampaign:
         description: Optional[str] = None,
         hero_image: Optional[str] = "UNSET",
         hero_image_asset_id: Optional[str] = "UNSET",
-        session_name: Optional[str] = None
+        max_players: Optional[int] = None
     ) -> CampaignAggregate:
-        """Update campaign details and optionally current session name"""
+        """Update campaign details.
+
+        Deliberately unguarded against a live game: campaign data is cold, it
+        never crosses the ETL, and a campaign has exactly one editor. A seat
+        count changed mid-game simply applies at the next start.
+        """
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
@@ -59,21 +64,14 @@ class UpdateCampaign:
         if not campaign.is_dm(host_id):
             raise ValueError("Only the DM can update this campaign")
 
-        campaign.update_details(title=title, description=description, hero_image=hero_image, hero_image_asset_id=hero_image_asset_id)
+        campaign.update_details(
+            title=title,
+            description=description,
+            hero_image=hero_image,
+            hero_image_asset_id=hero_image_asset_id,
+            max_players=max_players
+        )
         self.repository.save(campaign)
-
-        # Update current session name if provided and session_repository available
-        if session_name is not None and self.session_repository:
-            from modules.session.domain.session_aggregate import SessionStatus
-            sessions = self.session_repository.get_by_campaign_id(campaign_id)
-            # Find current (non-finished) session
-            current_session = next(
-                (s for s in sessions if s.status != SessionStatus.FINISHED),
-                None
-            )
-            if current_session:
-                current_session.name = session_name
-                self.session_repository.save(current_session)
 
         return campaign
 
@@ -95,18 +93,14 @@ class DeleteCampaign:
         if not campaign.is_dm(host_id):
             raise ValueError("Only the DM can delete this campaign")
 
-        # Business rule: Cannot delete campaign with non-FINISHED sessions
+        # Business rule: a running game blocks deletion — its state is hot in
+        # api-game and players are in it. Otherwise the campaign's one session
+        # goes with it (the sessions relationship cascades on delete).
         if self.session_repository:
-            from modules.session.domain.session_aggregate import SessionStatus
-            non_finished_sessions = []
             for session_id in campaign.session_ids:
                 session = self.session_repository.get_by_id(session_id)
-                if session and session.status != SessionStatus.FINISHED:
-                    non_finished_sessions.append(session)
-
-            if non_finished_sessions:
-                count = len(non_finished_sessions)
-                raise ValueError(f"Cannot delete campaign with {count} unfinished session(s). Please finish or delete all sessions first.")
+                if session and session.is_locked:
+                    raise ValueError("End the game before deleting this campaign")
 
         # Release all character locks before deletion — characters stay on
         # the user's account but are no longer bound to this campaign.

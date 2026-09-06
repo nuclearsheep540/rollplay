@@ -8,22 +8,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 logger = logging.getLogger(__name__)
 
 from .schemas import (
-    CreateSessionRequest,
-    UpdateSessionRequest,
+    ScheduleSessionRequest,
     SessionResponse,
     SessionListResponse
 )
 from modules.session.application.commands import (
-    CreateSession,
     StartSession,
     PauseSession,
-    FinishSession,
+    ResetSession,
+    ScheduleSession,
     RemovePlayerFromSession,
-    UpdateSession,
-    DeleteSession,
     SelectCharacterForSession,
     DisconnectFromGame
 )
+from modules.session.domain.session_aggregate import PauseReason
 from modules.session.application.queries import (
     GetSessionById,
     GetSessionsByCampaign,
@@ -48,29 +46,10 @@ from modules.events.dependencies.providers import get_event_manager
 router = APIRouter(tags=["sessions"])
 
 
-# === Session CRUD ===
-
-@router.post("/", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(
-    request: CreateSessionRequest,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    campaign_repo: CampaignRepository = Depends(campaign_repository),
-    event_manager: EventManager = Depends(get_event_manager)
-):
-    """Create a new session within a campaign"""
-    try:
-        command = CreateSession(session_repo, campaign_repo, event_manager)
-        session = await command.execute(
-            name=request.name,
-            campaign_id=request.campaign_id,
-            host_id=user_id,
-            max_players=request.max_players
-        )
-        return GetSessionById(session_repo).execute(session.id)  # type: ignore[arg-type]
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
+# === Session reads ===
+#
+# There is no create route: a campaign is born with its session (the campaign
+# create endpoint) and only ever gets another through reset, below.
 
 @router.get("/my-sessions", response_model=SessionListResponse)
 async def get_my_sessions(
@@ -113,36 +92,6 @@ async def get_campaign_sessions(
     query = GetSessionsByCampaign(session_repo)
     sessions = query.execute(campaign_id)
     return SessionListResponse(sessions=sessions, total=len(sessions))
-
-
-@router.put("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def update_session(
-    session_id: UUID,
-    request: UpdateSessionRequest,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository)
-):
-    """Update session details (host only)"""
-    try:
-        command = UpdateSession(session_repo)
-        command.execute(session_id=session_id, host_id=user_id, name=request.name)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_session(
-    session_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Delete a session (host only)"""
-    try:
-        command = DeleteSession(session_repo, campaign_repo)
-        command.execute(session_id=session_id, host_id=user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/{session_id}/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -202,8 +151,8 @@ async def start_session(
         )
 
 
-@router.post("/{session_id}/pause", status_code=status.HTTP_204_NO_CONTENT)
-async def pause_session(
+@router.post("/{session_id}/end", status_code=status.HTTP_204_NO_CONTENT)
+async def end_game(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
@@ -214,7 +163,11 @@ async def pause_session(
     asset_repo: MediaAssetRepository = Depends(get_asset_repository)
 ):
     """
-    Pause a session (ACTIVE → INACTIVE) using fail-safe three-phase pattern.
+    End the running game (ACTIVE → INACTIVE) using the fail-safe three-phase pattern.
+
+    The session itself survives — this is what the GM calls "End game", and the
+    same session starts again next time carrying its token boards and log. Only
+    a reset throws that away.
 
     This endpoint:
     1. Validates session ownership
@@ -222,14 +175,13 @@ async def pause_session(
     3. PHASE 1: Fetches final state from MongoDB (non-destructive)
     4. PHASE 2: Writes to PostgreSQL (fail-safe - MongoDB preserved on error)
     5. PHASE 3: Background cleanup of MongoDB session
-    6. Unlocks all characters that were locked to this session
-    7. Broadcasts session_paused event (silent state update) to all campaign members
+    6. Broadcasts session_ended to every campaign member except the host
 
     If PostgreSQL write fails, MongoDB session is preserved and error returned.
     """
     try:
         command = PauseSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
-        await command.execute(session_id, user_id)
+        await command.execute(session_id, user_id, reason=PauseReason.HOST_ENDED)
 
     except ValueError as e:
         raise HTTPException(
@@ -237,48 +189,67 @@ async def pause_session(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Unexpected error pausing session {session_id}: {e}")
+        logger.error(f"Unexpected error ending game for session {session_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to pause session"
+            detail="Failed to end the game"
         )
 
 
-@router.post("/{session_id}/finish", status_code=status.HTTP_204_NO_CONTENT)
-async def finish_session(
+@router.patch("/{session_id}/schedule", status_code=status.HTTP_204_NO_CONTENT)
+async def schedule_game(
+    session_id: UUID,
+    request: ScheduleSessionRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
+):
+    """
+    Say when the next game is — or clear it by sending null (host only, idle only).
+
+    Purely communicative: nothing starts on this date and nobody is reminded. It
+    tells the table what the GM intends so they can align. Stored as an instant
+    and rendered in each viewer's own timezone.
+    """
+    try:
+        command = ScheduleSession(session_repo, campaign_repo, user_repo, event_manager)
+        await command.execute(
+            session_id=session_id,
+            host_id=user_id,
+            scheduled_at=request.scheduled_at
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{session_id}/reset", response_model=SessionResponse)
+async def reset_game(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    character_repo = Depends(get_character_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    event_manager: EventManager = Depends(get_event_manager),
-    asset_repo: MediaAssetRepository = Depends(get_asset_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """
-    Finish a session permanently (ACTIVE/INACTIVE → FINISHED).
+    Reset the campaign's game (host only, no game running) — a fresh run.
 
-    This endpoint:
-    1. If ACTIVE: Performs full ETL (like pause_session) then sets FINISHED
-    2. If INACTIVE: Sets FINISHED directly
-    3. Unlocks all characters that were locked to this session
-    4. FINISHED sessions cannot be resumed and are preserved in campaign history
+    Clears the table: every non-DM member is removed and told, their characters
+    released, pending invites cancelled. Wipes play state — tokens, the adventure
+    log, the schedule, what was on screen, audio and Spotify config — by
+    replacing the session row. Assets, notes and the authored npc baselines stay.
+
+    Returns the NEW session: its id differs from the one in the path.
     """
     try:
-        command = FinishSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
-        await command.execute(session_id, user_id)
-
+        command = ResetSession(session_repo, campaign_repo, user_repo, character_repo, event_manager)
+        replacement = await command.execute(session_id=session_id, host_id=user_id)
+        return GetSessionById(session_repo).execute(replacement.id)  # type: ignore[arg-type]
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error finishing session {session_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to finish session"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 # === Character Actions ===
 

@@ -13,7 +13,7 @@ the existing PauseSession command, acting as the session host.
 
 The first pass also reconciles sessions stranded at STOPPING: that state is
 transient by design (an ETL in flight), so a row still holding it at boot means
-a process death interrupted a pause/finish. The game is still hot in MongoDB —
+a process death interrupted a take-down. The game is still hot in MongoDB —
 phase-3 cleanup only runs after a successful cold write — so rolling the session
 back to ACTIVE is true, and the lease sweep can then pause it properly. Safe at
 boot only: a single-instance service has no in-flight ETLs at startup.
@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from config.settings import Settings
 from shared.dependencies.db import SessionLocal
 from modules.session.application.commands import PauseSession
+from modules.session.domain.session_aggregate import PauseReason
 from modules.session.repositories.session_repository import SessionRepository
 from modules.user.repositories.user_repository import UserRepository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
@@ -64,7 +65,9 @@ async def _run_cleanup_pass() -> None:
             # ACTIVE (e.g. the host paused it between our query and this call); that's a benign
             # race, so log it quietly and reserve the traceback for genuinely unexpected faults.
             try:
-                await pause.execute(session.id, host_id=session.host_id)
+                # SYSTEM, not HOST_ENDED: nobody chose this, so players are told
+                # nothing — the game simply reads as not running.
+                await pause.execute(session.id, host_id=session.host_id, reason=PauseReason.SYSTEM)
                 logger.info(f"Expired-session cleanup: session {session.id} paused")
             except ValueError as race:
                 logger.info(f"Expired-session cleanup: skipped session {session.id} ({race})")
@@ -86,7 +89,7 @@ def _reconcile_stuck_stopping_sessions() -> None:
                 session_repo.save(session)
                 logger.warning(
                     f"Boot reconciliation: session {session.id} was stranded at STOPPING "
-                    f"(interrupted pause/finish) — rolled back to ACTIVE"
+                    f"(interrupted take-down) — rolled back to ACTIVE"
                 )
             except Exception:
                 logger.exception(f"Boot reconciliation: failed to roll back session {session.id}")

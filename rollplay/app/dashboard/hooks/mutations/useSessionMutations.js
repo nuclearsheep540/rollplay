@@ -5,45 +5,19 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
- * Mutation hook for creating a game session.
- * Replaces: createGame() in CampaignManager
+ * The campaign's game, as the dashboard drives it.
+ *
+ * Two verbs the GM sees — start and end — plus reset, the deliberate wipe.
+ * There is no create: a campaign is born with its session and keeps it for
+ * life, which is what carries token positions and the adventure log from one
+ * game to the next. "Pause" survives only inside api-site, for the expiry
+ * sweeper; nothing here should ever say it.
  */
-export function useCreateSession() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ campaignId, name, maxPlayers }) => {
-      const sessionData = {
-        name: name?.trim() || 'Session 1',
-        max_players: maxPlayers,
-        campaign_id: `${campaignId}`,
-      }
-
-      const response = await authFetch('/api/sessions/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(sessionData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to create session')
-      }
-
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-    },
-  })
-}
 
 /**
- * Mutation hook for starting a game session.
- * Replaces: startGame() in CampaignManager
+ * Start the campaign's game.
  */
-export function useStartSession() {
+export function useStartGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -55,7 +29,7 @@ export function useStartSession() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to start game')
+        throw new Error(errorData.detail || 'Failed to start the game')
       }
     },
     onSuccess: () => {
@@ -65,22 +39,22 @@ export function useStartSession() {
 }
 
 /**
- * Mutation hook for pausing a game session.
- * Replaces: confirmPauseSession() in CampaignManager
+ * End the running game. The session survives — everything on the board and in
+ * the log comes back the next time it starts.
  */
-export function usePauseSession() {
+export function useEndGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/pause`, {
+      const response = await authFetch(`/api/sessions/${sessionId}/end`, {
         method: 'POST',
         credentials: 'include',
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to pause session')
+        throw new Error(errorData.detail || 'Failed to end the game')
       }
     },
     onSuccess: () => {
@@ -90,50 +64,57 @@ export function usePauseSession() {
 }
 
 /**
- * Mutation hook for finishing a game session permanently.
- * Replaces: confirmFinishSession() in CampaignManager
+ * Say when the next game is, or clear it by passing null.
+ *
+ * Purely communicative — nothing starts on the date and nobody is reminded. The
+ * value is sent as an ISO instant so every player reads it in their own zone.
  */
-export function useFinishSession() {
+export function useScheduleGame() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ sessionId, scheduledAt }) => {
+      const response = await authFetch(`/api/sessions/${sessionId}/schedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ scheduled_at: scheduledAt }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to save the schedule')
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    },
+  })
+}
+
+/**
+ * Reset the campaign's game — wipes play state by replacing the session.
+ *
+ * The response carries a NEW session with a new id, so the campaigns query is
+ * invalidated rather than patched: every surface re-reads the campaign and
+ * picks the replacement up.
+ */
+export function useResetGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/finish`, {
+      const response = await authFetch(`/api/sessions/${sessionId}/reset`, {
         method: 'POST',
         credentials: 'include',
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to finish session')
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-    },
-  })
-}
-
-/**
- * Mutation hook for deleting a game session.
- * Replaces: deleteGame() in CampaignManager
- */
-export function useDeleteSession() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to delete game')
+        throw new Error(errorData.detail || 'Failed to reset the game')
       }
 
-      return sessionId
+      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })

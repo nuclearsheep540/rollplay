@@ -43,9 +43,16 @@ class LogEntry(ContractModel):
 
 
 class SessionStats(ContractModel):
+    """What the finished game reports about itself.
+
+    Deliberately carries NO seat count: seats are a campaign setting, pushed hot
+    at start (SessionStartPayload.max_players) and never read back. Returning it
+    here once let a running game overwrite an edit made in campaign settings
+    while it was live.
+    """
+
     duration_minutes: int
     total_logs: int
-    max_players: int
 
 
 class SessionStartPayload(ContractModel):

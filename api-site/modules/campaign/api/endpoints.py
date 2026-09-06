@@ -132,6 +132,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         last_played_at=campaign.last_played_at,
+        max_players=campaign.max_players,
         sessions=[],  # Sessions fetched separately via session module
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
@@ -165,6 +166,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: Option
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         last_played_at=campaign.last_played_at,
+        max_players=campaign.max_players,
         total_sessions=campaign.get_total_sessions(),
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
@@ -182,7 +184,7 @@ async def create_campaign(
     event_manager: EventManager = Depends(get_event_manager),
     s3_service: S3Service = Depends(get_s3_service)
 ):
-    """Create a new campaign, optionally with an initial session"""
+    """Create a new campaign, together with the session it plays through"""
     try:
         command = CreateCampaign(campaign_repo)
         campaign = command.execute(
@@ -190,17 +192,17 @@ async def create_campaign(
             title=request.title,
             description=request.description or "",
             hero_image=request.hero_image,
-            hero_image_asset_id=UUID(request.hero_image_asset_id) if request.hero_image_asset_id else None
+            hero_image_asset_id=UUID(request.hero_image_asset_id) if request.hero_image_asset_id else None,
+            max_players=request.max_players
         )
 
-        # Always create a session with the campaign
-        session_name = request.session_name.strip() if request.session_name else None
+        # A campaign is born with its session and keeps that one for life — this
+        # is the only place one is created (reset aside). Without it the campaign
+        # would have nothing to start, and every read surface assumes it exists.
         session_command = CreateSession(session_repo, campaign_repo, event_manager)
         await session_command.execute(
-            name=session_name,
             campaign_id=campaign.id,
-            host_id=user_id,
-            max_players=8
+            host_id=user_id
         )
 
         # Re-fetch to populate hero_image_asset_meta from eager-loaded relationship
@@ -299,12 +301,11 @@ async def update_campaign(
     request: CampaignUpdateRequest,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ):
-    """Update campaign details and optionally current session name"""
+    """Update campaign details"""
     try:
-        command = UpdateCampaign(campaign_repo, session_repo)
+        command = UpdateCampaign(campaign_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
             host_id=user_id,
@@ -312,7 +313,7 @@ async def update_campaign(
             description=request.description,
             hero_image=request.hero_image,
             hero_image_asset_id=request.hero_image_asset_id if request.hero_image_asset_id is not None else "UNSET",
-            session_name=request.session_name
+            max_players=request.max_players
         )
 
         # Re-fetch to populate hero_image_asset_meta if asset changed
@@ -340,8 +341,8 @@ async def delete_campaign(
     """
     Delete campaign.
 
-    Only allows deletion if there are no ACTIVE sessions.
-    Releases all character locks and cascade-deletes sessions/members.
+    Refused while a game is running. Releases all character locks and
+    cascade-deletes the campaign's session and members.
     """
     try:
         command = DeleteCampaign(campaign_repo, session_repo, character_repo, event_manager)

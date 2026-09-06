@@ -13,7 +13,7 @@ class CampaignCreateRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     hero_image: Optional[str] = Field(None, max_length=255)
     hero_image_asset_id: Optional[str] = Field(None)
-    session_name: Optional[str] = Field(None, max_length=100)
+    max_players: int = Field(8, ge=1, le=8, description="Seats at the table (1-8)")
 
 
 class CampaignUpdateRequest(BaseModel):
@@ -21,7 +21,7 @@ class CampaignUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     hero_image: Optional[str] = Field(None, max_length=255)
     hero_image_asset_id: Optional[str] = Field(None)
-    session_name: Optional[str] = Field(None, max_length=100)
+    max_players: Optional[int] = Field(None, ge=1, le=8, description="Seats at the table (1-8); applies at the next start")
 
 
 class CharacterSelectRequest(BaseModel):
@@ -79,6 +79,7 @@ class CampaignResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_played_at: Optional[datetime] = None
+    max_players: int = 8  # Seats at the table; applied at the next game start
     sessions: List = []  # Sessions fetched separately via session module
     invited_player_ids: List[str] = []
     player_ids: List[str] = []
@@ -104,6 +105,7 @@ class CampaignSummaryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_played_at: Optional[datetime] = None
+    max_players: int = 8  # Seats at the table; applied at the next game start
     total_sessions: int = 0
     invited_player_ids: List[str] = []
     player_ids: List[str] = []

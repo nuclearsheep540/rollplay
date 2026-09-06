@@ -11,6 +11,8 @@ import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import { getEventConfig } from '@/app/shared/config/eventConfig'
 import { MAX_PULSE_EVENTS } from '@/app/shared/hooks/usePulse'
 import { findCurrentSession } from '@/app/dashboard/utils/homeRanking'
+import { nextScheduledGame } from '@/app/dashboard/utils/gameStatusLine'
+import { formatScheduledTime } from '@/app/shared/utils/formatTime'
 import { COLORS } from '@/app/styles/colorTheme'
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 
@@ -70,6 +72,9 @@ export default function PulseLine({ campaigns = [], onOpenSocial }) {
     }
     return null
   }, [campaigns])
+
+  // The soonest declared game across every campaign, for the calm state.
+  const nextGame = useMemo(() => nextScheduledGame(campaigns), [campaigns])
 
   // Events arrive from the server, flagged by whichever factory raised them —
   // the pulse renders what it is told rather than inferring activity from
@@ -182,11 +187,14 @@ export default function PulseLine({ campaigns = [], onOpenSocial }) {
       ))}
 
       {/* Calm is championed: the line always says something, and what it says
-          at rest is serene rather than empty. */}
+          at rest is serene rather than empty — naming the next heartbeat when
+          there is one, rather than admitting there is nothing to report. */}
       {!liveCampaign && events.length === 0 && (
         <span className="pulse-pill" style={{ transform: SKEW_BOX }}>
           <span className="inline-block" style={{ transform: SKEW_LABEL }}>
-            All is quiet in the tavern...
+            {nextGame
+              ? `All is quiet · next game ${formatScheduledTime(nextGame.scheduled_at)}`
+              : 'All is quiet in the tavern...'}
           </span>
         </span>
       )}

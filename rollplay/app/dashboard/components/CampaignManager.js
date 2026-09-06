@@ -11,10 +11,10 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
-import PauseSessionModal from './PauseSessionModal'
-import FinishSessionModal from './FinishSessionModal'
+import EndGameModal from './EndGameModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
-import DeleteSessionModal from './DeleteSessionModal'
+import ResetGameModal from './ResetGameModal'
+import ScheduleGameModal from './ScheduleGameModal'
 import CampaignInviteModal from './CampaignInviteModal'
 import CharacterSelectionModal from './CharacterSelectionModal'
 import HeroBackground from './HeroBackground'
@@ -27,7 +27,9 @@ import {
   faXmark,
   faPlus,
   faPlay,
-  faPause,
+  faStop,
+  faRotateLeft,
+  faCalendarDays,
   faRightToBracket,
   faUserPlus,
   faUserMinus,
@@ -44,7 +46,9 @@ import { useCampaigns } from '../hooks/useCampaigns'
 import { useInvitedCampaignMembers } from '../hooks/useInvitedCampaignMembers'
 import { useCharacters } from '../hooks/useCharacters'
 import { useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
-import { useCreateSession, useStartSession, usePauseSession, useFinishSession, useDeleteSession } from '../hooks/mutations/useSessionMutations'
+import { useStartGame, useEndGame, useResetGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
+import { findCurrentSession } from '../utils/homeRanking'
+import { gameStatusLine } from '../utils/gameStatusLine'
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
 import { useAssets } from '@/app/asset_library/hooks/useAssets'
 import { useCampaignAssetsMetadata } from '@/app/asset_library/hooks/useCampaignAssetsMetadata'
@@ -281,11 +285,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const declineInviteMutation = useDeclineInvite()
   const leaveCampaignMutation = useLeaveCampaign()
   const removePlayerMutation = useRemovePlayer()
-  const createSessionMutation = useCreateSession()
-  const startSessionMutation = useStartSession()
-  const pauseSessionMutation = usePauseSession()
-  const finishSessionMutation = useFinishSession()
-  const deleteSessionMutation = useDeleteSession()
+  const startGameMutation = useStartGame()
+  const endGameMutation = useEndGame()
+  const resetGameMutation = useResetGame()
+  const scheduleGameMutation = useScheduleGame()
   const releaseCharacterMutation = useReleaseCharacter()
 
   // ── UI-only state ──
@@ -306,9 +309,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const [deleteCampaignTarget, setDeleteCampaignTarget] = useState(null)
   const [leaveCampaignTarget, setLeaveCampaignTarget] = useState(null)
   const [removePlayerTarget, setRemovePlayerTarget] = useState(null)
-  const [deleteSessionTarget, setDeleteSessionTarget] = useState(null)
-  const [pauseSessionTarget, setPauseSessionTarget] = useState(null)
-  const [finishSessionTarget, setFinishSessionTarget] = useState(null)
+  const [endGameTarget, setEndGameTarget] = useState(null)
+  const [resetGameTarget, setResetGameTarget] = useState(null)
+  const [scheduleGameTarget, setScheduleGameTarget] = useState(null)
 
   // Invite modal — ID-only, campaign derived from query cache (no sync effect needed)
   const [inviteModalCampaignId, setInviteModalCampaignId] = useState(null)
@@ -320,19 +323,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   // Campaign form modal
   const [campaignFormOpen, setCampaignFormOpen] = useState(false)
   const [campaignForm, setCampaignForm] = useState({
-    title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, sessionName: '', editingCampaign: null
+    title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, maxPlayers: 8, editingCampaign: null
   })
   const closeCampaignForm = () => {
     setCampaignFormOpen(false)
-    setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, sessionName: '', editingCampaign: null })
-  }
-
-  // Session creation modal
-  const [createSessionCampaignId, setCreateSessionCampaignId] = useState(null)
-  const [sessionForm, setSessionForm] = useState({ name: 'Session 1', maxPlayers: 8 })
-  const openCreateGameModal = (campaignId) => {
-    setSessionForm({ name: 'Session 1', maxPlayers: 8 })
-    setCreateSessionCampaignId(campaignId)
+    setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, maxPlayers: 8, editingCampaign: null })
   }
 
   // Accept campaign invite
@@ -383,81 +378,39 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }
 
-  // Create game (without starting it)
-  const createGame = async () => {
-    if (!createSessionCampaignId) return
-
+  // Start the campaign's game
+  const startGame = async (sessionId) => {
     setError(null)
 
     try {
-      await createSessionMutation.mutateAsync({
-        campaignId: createSessionCampaignId,
-        name: sessionForm.name,
-        maxPlayers: sessionForm.maxPlayers,
-      })
-      setCreateSessionCampaignId(null)
-    } catch (err) {
-      setError('Failed to create game: ' + err.message)
-    }
-  }
-
-  // Start game session
-  const startGame = async (gameId) => {
-    setError(null)
-
-    try {
-      await startSessionMutation.mutateAsync(gameId)
+      await startGameMutation.mutateAsync(sessionId)
     } catch (err) {
       setError(err.message)
     }
   }
 
-  // Show pause session confirmation modal
-  const promptPauseSession = (game) => {
-    setPauseSessionTarget(game)
+  // Show end game confirmation modal
+  const promptEndGame = (campaign) => {
+    setEndGameTarget(campaign)
   }
 
-  // Pause session (after confirmation)
-  const confirmPauseSession = async () => {
-    if (!pauseSessionTarget) return
+  // End the game (after confirmation)
+  const confirmEndGame = async () => {
+    if (!endGameTarget) return
 
     setError(null)
 
     try {
-      await pauseSessionMutation.mutateAsync(pauseSessionTarget.id)
-      setPauseSessionTarget(null)
+      await endGameMutation.mutateAsync(findCurrentSession(endGameTarget)?.id)
+      setEndGameTarget(null)
     } catch (err) {
       setError(err.message)
     }
   }
 
-  // Cancel pause session
-  const cancelPauseSession = () => {
-    setPauseSessionTarget(null)
-  }
-
-  // Show finish session confirmation modal
-  const promptFinishSession = (game) => {
-    setFinishSessionTarget(game)
-  }
-
-  // Finish session permanently (after confirmation)
-  const confirmFinishSession = async () => {
-    if (!finishSessionTarget) return
-
-    setError(null)
-
-    try {
-      await finishSessionMutation.mutateAsync(finishSessionTarget.id)
-      setFinishSessionTarget(null)
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
-  // Cancel finish session
-  const cancelFinishSession = () => {
-    setFinishSessionTarget(null)
+  // Cancel end game
+  const cancelEndGame = () => {
+    setEndGameTarget(null)
   }
 
   // Handle successful campaign invite/cancel — invalidate cache so campaign prop refreshes
@@ -465,25 +418,42 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     queryClient.invalidateQueries({ queryKey: ['campaigns'] })
   }
 
-  // Open delete session modal
-  const openDeleteSessionModal = (game) => {
-    setDeleteSessionTarget(game)
-  }
-
-  // Close delete session modal
-  const closeDeleteSessionModal = () => {
-    setDeleteSessionTarget(null)
-  }
-
-  // Delete game (called from modal)
-  const deleteGame = async () => {
-    if (!deleteSessionTarget) return
+  // Say when the next game is (or clear it)
+  const saveSchedule = async (scheduledAt) => {
+    if (!scheduleGameTarget) return
 
     setError(null)
 
     try {
-      await deleteSessionMutation.mutateAsync(deleteSessionTarget.id)
-      setDeleteSessionTarget(null)
+      await scheduleGameMutation.mutateAsync({
+        sessionId: findCurrentSession(scheduleGameTarget)?.id,
+        scheduledAt,
+      })
+      setScheduleGameTarget(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  // Open reset game modal
+  const openResetGameModal = (campaign) => {
+    setResetGameTarget(campaign)
+  }
+
+  // Close reset game modal
+  const closeResetGameModal = () => {
+    setResetGameTarget(null)
+  }
+
+  // Reset the game — wipes play state, keeps the party (called from modal)
+  const resetGame = async () => {
+    if (!resetGameTarget) return
+
+    setError(null)
+
+    try {
+      await resetGameMutation.mutateAsync(findCurrentSession(resetGameTarget)?.id)
+      setResetGameTarget(null)
     } catch (err) {
       setError(err.message)
     }
@@ -502,7 +472,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       description: '',
       heroImage: '/campaign-tile-bg.png',
       heroImageAssetId: null,
-      sessionName: '',
+      maxPlayers: 8,
       editingCampaign: null,
     })
     setCampaignFormOpen(true)
@@ -520,7 +490,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         description: campaignForm.description,
         heroImage: campaignForm.heroImage,
         heroImageAssetId: campaignForm.heroImageAssetId,
-        sessionName: campaignForm.sessionName,
+        maxPlayers: campaignForm.maxPlayers,
       })
 
       closeCampaignForm()
@@ -542,7 +512,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         description: campaignForm.description,
         heroImage: campaignForm.heroImage,
         heroImageAssetId: campaignForm.heroImageAssetId,
-        sessionName: campaignForm.sessionName,
+        maxPlayers: campaignForm.maxPlayers,
       })
 
       closeCampaignForm()
@@ -632,9 +602,14 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }
 
-  // Check if campaign has an active session (used to disable release button)
+  // Is a game running for this campaign? (used to disable the release button)
+  // 'paused' was never a status the backend emits — the resting state is
+  // 'inactive'. STOPPING counts as running: the ETL is still in flight.
   const hasActiveSession = (campaignId) => {
-    return allSessions.some(s => s.campaign_id === campaignId && (s.status === 'active' || s.status === 'starting' || s.status === 'paused'))
+    return allSessions.some(s =>
+      s.campaign_id === campaignId &&
+      (s.status === 'active' || s.status === 'starting' || s.status === 'stopping')
+    )
   }
 
   // Handle invite_campaign_id from URL (notification click)
@@ -804,14 +779,27 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       ? parseFloat(window.getComputedStyle(mainEl).paddingTop) || 0
       : 0
 
+    // Everything tagged with this attribute except the selected id. With
+    // nothing selected it is simply everything.
+    const othersOnly = (attribute) => scope.querySelectorAll(
+      id ? `[${attribute}]:not([${attribute}="${id}"])` : `[${attribute}]`
+    )
+
     // Collapse every card / drawer / content back to their collapsed
-    // defaults first. (No-op for ones already collapsed.) `onComplete`
-    // flips the drawer's visibility / pointer-events *after* the tween
-    // so the element stays rendered throughout the collapse animation —
-    // previously these were flipped synchronously by React on state
-    // change, which made the collapse appear instant because the DOM
-    // hid itself before GSAP could animate it.
-    gsap.to(scope.querySelectorAll('[data-campaign-card]'), {
+    // defaults — EXCEPT the one being expanded. `onComplete` flips the
+    // drawer's visibility / pointer-events *after* the tween so the element
+    // stays rendered throughout the collapse animation — previously these
+    // were flipped synchronously by React on state change, which made the
+    // collapse appear instant because the DOM hid itself before GSAP could
+    // animate it.
+    //
+    // The selected element is excluded so the expand does not have to fight
+    // a collapse created in the same run. That is not what keeps the drawer
+    // on screen when arriving with ?expand_campaign_id: the collapse is then
+    // created on mount, before there is a selection to exclude, and its
+    // `onComplete` fires after the expand. The guard inside `onComplete`
+    // handles that case.
+    gsap.to(othersOnly('data-campaign-card'), {
       left: 0,
       width: '100%',
       height: 350,
@@ -823,12 +811,12 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     // Content returns to filling the card (top: 0) on collapse. When
     // expanded it gets offset by `bleedUp` so the card's upward-bleed
     // zone shows hero only, not repositioned text.
-    gsap.to(scope.querySelectorAll('[data-campaign-content]'), {
+    gsap.to(othersOnly('data-campaign-content'), {
       top: 0,
       duration,
       ease,
     })
-    gsap.to(scope.querySelectorAll('[data-campaign-sessions-drawer]'), {
+    gsap.to(othersOnly('data-campaign-sessions-drawer'), {
       left: '0%',
       width: '100%',
       minHeight: 0,
@@ -844,7 +832,16 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       borderLeftWidth: 0,
       duration,
       ease,
-      onComplete() { gsap.set(this.targets(), { visibility: 'hidden', pointerEvents: 'none' }) },
+      onComplete() {
+        // Hide only what is still collapsed. This tween has many targets. If
+        // one was expanded while it ran, `overwrite` killed that element's
+        // property tweens but the tween lives on for the others, and
+        // `this.targets()` still lists the drawer that just opened.
+        const stillCollapsed = this.targets().filter(
+          (drawer) => parseFloat(gsap.getProperty(drawer, 'maxHeight')) === 0
+        )
+        gsap.set(stillCollapsed, { visibility: 'hidden', pointerEvents: 'none' })
+      },
     })
 
     if (id) {
@@ -969,7 +966,14 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       ? parseFloat(window.getComputedStyle(mainEl).paddingTop) || 0
       : 0
 
-    gsap.to(scope.querySelectorAll('[data-invited-card]'), {
+    // Same exclusion as the main block above, for the same reason — invited
+    // drawers are reached by ?invite_campaign_id from the social panel and the
+    // notification feed, which is the same mount-then-expand sequence.
+    const othersOnly = (attribute) => scope.querySelectorAll(
+      id ? `[${attribute}]:not([${attribute}="${id}"])` : `[${attribute}]`
+    )
+
+    gsap.to(othersOnly('data-invited-card'), {
       left: 0,
       width: '100%',
       height: 350,
@@ -978,12 +982,12 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       duration,
       ease,
     })
-    gsap.to(scope.querySelectorAll('[data-invited-content]'), {
+    gsap.to(othersOnly('data-invited-content'), {
       top: 0,
       duration,
       ease,
     })
-    gsap.to(scope.querySelectorAll('[data-invited-drawer]'), {
+    gsap.to(othersOnly('data-invited-drawer'), {
       left: '0%',
       width: '100%',
       minHeight: 0,
@@ -991,7 +995,14 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       borderWidth: 0,
       duration,
       ease,
-      onComplete() { gsap.set(this.targets(), { visibility: 'hidden', pointerEvents: 'none' }) },
+      onComplete() {
+        // Same guard as the main block: never hide a drawer that was expanded
+        // while this collapse was in flight.
+        const stillCollapsed = this.targets().filter(
+          (drawer) => parseFloat(gsap.getProperty(drawer, 'maxHeight')) === 0
+        )
+        gsap.set(stillCollapsed, { visibility: 'hidden', pointerEvents: 'none' })
+      },
     })
 
     if (id) {
@@ -1402,18 +1413,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
           {campaigns
             .filter((campaign) => !selectedCampaign || selectedCampaign.id === campaign.id)
             .map((campaign) => {
-              const campaignSessions = allSessions.filter(session => session.campaign_id === campaign.id)
-              // Active sessions are STARTING, ACTIVE, or STOPPING (excludes INACTIVE and FINISHED)
-              const activeSessions = campaignSessions.filter(session =>
-                session.status === 'active' || session.status === 'starting' || session.status === 'stopping'
-              )
-              // Domain enforces at most one non-finished session per campaign —
-              // display this single "current" session in the hero's right column
-              // with inline controls. If none exists, show a Create Session CTA
-              // (host only) instead.
-              const currentSession = campaignSessions.find(session =>
-                ['inactive', 'active', 'starting', 'stopping', 'paused'].includes(session.status?.toLowerCase())
-              )
+              // A campaign has exactly one session, for life — created with it,
+              // replaced only by a reset. An empty list means the data is wrong,
+              // not that the GM has a game to create.
+              const currentSession = allSessions.find(session => session.campaign_id === campaign.id)
+              const isGameLive = currentSession?.status === 'active'
 
               const isSelected = selectedCampaign?.id === campaign.id
 
@@ -1534,8 +1538,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                       }}
                     >
                       {/* Title row — title stays centred (stable
-                          position across collapsed + expanded), "Game
-                          In Session" badge sits flush-right. The
+                          position across collapsed + expanded), the
+                          "Game Live" badge sits flush-right. The
                           left-side spacer balances the badge's width
                           so the title remains optically centred. */}
                       <div className="flex items-center gap-3 mb-4 flex-shrink-0">
@@ -1543,9 +1547,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] drop-shadow-lg text-center" style={{color: THEME.textOnDark}}>
                           {campaign.title || 'Unnamed Campaign'}
                         </h4>
-                        <div className="flex-1 flex justify-end" style={{ visibility: activeSessions.length > 0 ? 'visible' : 'hidden' }}>
-                          <Badge variant="success" size="md" pulse={activeSessions.length > 0}>
-                            Game In Session
+                        <div className="flex-1 flex justify-end" style={{ visibility: isGameLive ? 'visible' : 'hidden' }}>
+                          <Badge variant="success" size="md" pulse={isGameLive}>
+                            Game Live
                           </Badge>
                         </div>
                       </div>
@@ -1603,7 +1607,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                           {/* Current Session */}
                           <div className="flex-shrink-0">
                             <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-2 drop-shadow" style={{color: THEME.textOnDark}}>
-                              Current Session
+                              Game
                             </h3>
                             {currentSession ? (
                               <div
@@ -1618,7 +1622,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     and horizontally masked so the stripes
                                     fade toward the right edge, leaving the
                                     action buttons unobscured. */}
-                                {(currentSession.status === 'starting' || (startSessionMutation.isPending && startSessionMutation.variables === currentSession.id)) && (
+                                {(currentSession.status === 'starting' || (startGameMutation.isPending && startGameMutation.variables === currentSession.id)) && (
                                   <div
                                     className="absolute inset-0 pointer-events-none"
                                     style={{
@@ -1650,39 +1654,33 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     }}
                                   />
                                 )}
+                                {/* One line, not two. A "Status: Idle" row under
+                                    "No game running" said the same thing twice —
+                                    and did in every other state too (Starting…/
+                                    Starting, Ending…/Ending). Liveness still has
+                                    the pulsing Game Live badge on the card header,
+                                    and starting has the stripe overlay behind. */}
                                 <div className="min-w-0 flex-1 relative">
                                   <p className="font-medium truncate" style={{color: THEME.textOnDark}}>
-                                    {currentSession.name || 'Game Session'}
-                                  </p>
-                                  <p className="text-sm" style={{color: THEME.textSecondary}}>
-                                    Status: <span className="font-medium" style={{
-                                      color: currentSession.status === 'active' ? '#16a34a' :
-                                             (currentSession.status === 'starting' || (startSessionMutation.isPending && startSessionMutation.variables === currentSession.id)) ? '#3b82f6' :
-                                             currentSession.status === 'inactive' ? THEME.textSecondary :
-                                             '#fbbf24'
-                                    }}>
-                                      {(currentSession.status === 'starting' || (startSessionMutation.isPending && startSessionMutation.variables === currentSession.id))
-                                        ? 'Starting'
-                                        : currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
-                                    </span>
+                                    {gameStatusLine(campaign)}
                                   </p>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0 self-stretch">
-                                  {currentSession.status === 'active' ? (
+                                  {isGameLive ? (
                                     <>
                                       <Button variant="success" size="md" className="flex items-center justify-center min-w-[7rem] !text-lg" onClick={() => enterGame(currentSession)}>
                                         <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />Enter
                                       </Button>
                                       {campaign.host_id === user.id && (
                                         <button
-                                          onClick={() => promptPauseSession(currentSession)}
-                                          disabled={pauseSessionMutation.isPending && pauseSessionMutation.variables === currentSession.id}
+                                          onClick={() => promptEndGame(campaign)}
+                                          disabled={endGameMutation.isPending}
                                           className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                           style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
-                                          title="Pause Session"
-                                          aria-label="Pause Session"
+                                          title="End Game"
+                                          aria-label="End Game"
                                         >
-                                          <FontAwesomeIcon icon={faPause} />
+                                          <FontAwesomeIcon icon={faStop} />
                                         </button>
                                       )}
                                     </>
@@ -1693,37 +1691,41 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                         size="md"
                                         className="flex items-center justify-center min-w-[7rem] !text-lg"
                                         onClick={() => startGame(currentSession.id)}
-                                        disabled={(startSessionMutation.isPending && startSessionMutation.variables === currentSession.id) || activeSessions.length > 0 || currentSession.status === 'starting'}
+                                        disabled={(startGameMutation.isPending && startGameMutation.variables === currentSession.id) || currentSession.status === 'starting'}
                                       >
                                         <FontAwesomeIcon icon={faPlay} className="mr-2" />Start
                                       </Button>
                                       <button
-                                        onClick={() => promptFinishSession(currentSession)}
-                                        disabled={(finishSessionMutation.isPending && finishSessionMutation.variables === currentSession.id) || currentSession.status === 'starting'}
+                                        onClick={() => setScheduleGameTarget(campaign)}
+                                        disabled={scheduleGameMutation.isPending || currentSession.status === 'starting'}
                                         className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
-                                        title="Finish Session"
-                                        aria-label="Finish Session"
+                                        style={{backgroundColor: 'transparent', color: THEME.textSecondary, borderColor: THEME.borderSubtle}}
+                                        title="Set when the next game is"
+                                        aria-label="Schedule the next game"
                                       >
-                                        <FontAwesomeIcon icon={faXmark} />
+                                        <FontAwesomeIcon icon={faCalendarDays} />
+                                      </button>
+                                      {/* Reset is a fresh run — players removed — and
+                                          rarely wanted; kept visually subordinate to Start. */}
+                                      <button
+                                        onClick={() => openResetGameModal(campaign)}
+                                        disabled={resetGameMutation.isPending || currentSession.status === 'starting'}
+                                        className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        style={{backgroundColor: 'transparent', color: THEME.textSecondary, borderColor: THEME.borderSubtle}}
+                                        title="Reset the game: back to baseline, players removed"
+                                        aria-label="Reset the game: back to baseline, players removed"
+                                      >
+                                        <FontAwesomeIcon icon={faRotateLeft} />
                                       </button>
                                     </>
                                   ) : null}
                                 </div>
                               </div>
-                            ) : campaign.host_id === user.id ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openCreateGameModal(campaign.id) }}
-                                className="w-full flex items-center gap-3 p-3 rounded-sm border-2 border-dashed transition-all hover:border-opacity-100"
-                                style={{backgroundColor: `${THEME.bgSecondary}80`, borderColor: `${THEME.borderActive}60`}}
-                              >
-                                <FontAwesomeIcon icon={faPlus} className="text-xl" style={{color: THEME.textAccent}} />
-                                <span className="font-medium text-sm" style={{color: THEME.textOnDark}}>Create new session</span>
-                              </button>
                             ) : (
-                              <p className="text-sm italic p-3" style={{color: THEME.textSecondary}}>
-                                No active session
-                              </p>
+                              /* Unreachable by design — every campaign carries a
+                                 session. Rendering nothing beats offering a create
+                                 door that no longer exists. */
+                              null
                             )}
                           </div>
 
@@ -1881,15 +1883,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                               {/* Configure */}
                               <button
                                 onClick={() => {
-                                  const campaignSessionsLocal = allSessions.filter(s => s.campaign_id === selectedCampaign.id)
-                                  const curr = campaignSessionsLocal.find(s => s.status !== 'finished')
                                   setCampaignForm({
                                     editingCampaign: selectedCampaign,
                                     title: selectedCampaign.title,
                                     description: selectedCampaign.description || '',
                                     heroImage: selectedCampaign.hero_image_asset ? null : (selectedCampaign.hero_image || '/campaign-tile-bg.png'),
                                     heroImageAssetId: selectedCampaign.hero_image_asset?.asset_id || null,
-                                    sessionName: curr?.name || ''
+                                    maxPlayers: selectedCampaign.max_players ?? 8
                                   })
                                   setCampaignFormOpen(true)
                                 }}
@@ -2023,66 +2023,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       </div>
       )}
 
-      {/* Game Creation Modal */}
-      <Modal open={!!createSessionCampaignId} onClose={() => setCreateSessionCampaignId(null)} size="md">
-        <div className="p-6">
-          <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4 text-content-on-dark">Create New Game</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-content-on-dark">
-                Game Name
-              </label>
-              <input
-                type="text"
-                value={sessionForm.name}
-                onChange={(e) => setSessionForm(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
-                placeholder="Enter game name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-content-on-dark">
-                Number of Seats (1-8)
-              </label>
-              <select
-                value={sessionForm.maxPlayers}
-                onChange={(e) => setSessionForm(prev => ({ ...prev, maxPlayers: parseInt(e.target.value) }))}
-                className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                  <option key={num} value={num}>{num} seats</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button
-              variant="ghost"
-              onClick={() => setCreateSessionCampaignId(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="success"
-              onClick={createGame}
-              disabled={!sessionForm.name.trim() || createSessionMutation.isPending}
-            >
-              {createSessionMutation.isPending ? (
-                <>
-                  <Spinner size="sm" className="border-white mr-2" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faPlus} className="mr-2" />
-                  Create Game
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       {/* Create/Edit Campaign Modal */}
       <Modal open={campaignFormOpen} onClose={closeCampaignForm} size="2xl">
         {/* Header */}
@@ -2134,21 +2074,22 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
               {(campaignForm.description || '').length}/1000 characters
             </div>
           </div>
-          {/* Session Name - shown in both create and edit modes */}
+          {/* Seats — a campaign setting, read into the game at every start */}
           <div>
             <label className="block text-sm font-medium mb-2 text-content-on-dark">
-              Session Name (Optional)
+              Seats at the table (1-8)
             </label>
-            <input
-              type="text"
-              value={campaignForm.sessionName}
-              onChange={(e) => setCampaignForm(prev => ({ ...prev, sessionName: e.target.value }))}
+            <select
+              value={campaignForm.maxPlayers}
+              onChange={(e) => setCampaignForm(prev => ({ ...prev, maxPlayers: parseInt(e.target.value) }))}
               className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
-              placeholder="e.g. Session 1"
-              maxLength={100}
-            />
-            <div className="text-right text-sm mt-1 text-content-secondary">
-              {(campaignForm.sessionName || '').length}/100 characters
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(seats => (
+                <option key={seats} value={seats}>{seats} seats</option>
+              ))}
+            </select>
+            <div className="text-sm mt-1 text-content-secondary">
+              Applies the next time the game starts.
             </div>
           </div>
           <div>
@@ -2256,23 +2197,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         </div>
       </Modal>
 
-      {/* Pause Session Confirmation Modal */}
-      {pauseSessionTarget && (
-        <PauseSessionModal
-          game={pauseSessionTarget}
-          onConfirm={confirmPauseSession}
-          onCancel={cancelPauseSession}
-          isPausing={pauseSessionMutation.isPending}
-        />
-      )}
-
-      {/* Finish Session Confirmation Modal */}
-      {finishSessionTarget && (
-        <FinishSessionModal
-          game={finishSessionTarget}
-          onConfirm={confirmFinishSession}
-          onCancel={cancelFinishSession}
-          isFinishing={finishSessionMutation.isPending}
+      {/* End Game Confirmation Modal */}
+      {endGameTarget && (
+        <EndGameModal
+          campaign={endGameTarget}
+          onConfirm={confirmEndGame}
+          onCancel={cancelEndGame}
+          isEnding={endGameMutation.isPending}
         />
       )}
 
@@ -2286,13 +2217,24 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         />
       )}
 
-      {/* Delete Session Confirmation Modal */}
-      {deleteSessionTarget && (
-        <DeleteSessionModal
-          session={deleteSessionTarget}
-          onConfirm={deleteGame}
-          onCancel={closeDeleteSessionModal}
-          isDeleting={deleteSessionMutation.isPending}
+      {/* Next Game scheduling modal */}
+      {scheduleGameTarget && (
+        <ScheduleGameModal
+          campaign={scheduleGameTarget}
+          currentValue={findCurrentSession(scheduleGameTarget)?.scheduled_at}
+          onSave={saveSchedule}
+          onCancel={() => setScheduleGameTarget(null)}
+          isSaving={scheduleGameMutation.isPending}
+        />
+      )}
+
+      {/* Reset Game Confirmation Modal */}
+      {resetGameTarget && (
+        <ResetGameModal
+          campaign={resetGameTarget}
+          onConfirm={resetGame}
+          onCancel={closeResetGameModal}
+          isResetting={resetGameMutation.isPending}
         />
       )}
 
