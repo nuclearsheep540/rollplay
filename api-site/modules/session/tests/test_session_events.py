@@ -38,6 +38,8 @@ class TestSessionStarted:
         events = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
             host_id=campaign["dm_id"],
@@ -54,6 +56,8 @@ class TestSessionStarted:
         events = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=campaign_id,
             campaign_name="Curse of Strahd",
             host_id=campaign["dm_id"],
@@ -73,6 +77,8 @@ class TestSessionPaused:
         events = SessionEvents.session_paused(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=uuid4(),
             paused_by_id=campaign["dm_id"],
             paused_by_screen_name="Matt",
@@ -86,6 +92,8 @@ class TestSessionPaused:
         """Start and pause must cover the same people, or /notes locks without unlocking."""
         common = {
             "session_id": uuid4(),
+            "game_id": uuid4(),
+            "game_name": None,
             "campaign_id": uuid4(),
         }
         started = SessionEvents.session_started(
@@ -112,6 +120,8 @@ class TestSessionEnded:
         events = SessionEvents.session_ended(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
             host_id=campaign["dm_id"],
@@ -130,7 +140,7 @@ class TestSessionEnded:
     def test_unlock_reaches_every_non_host_the_lock_reached(self, campaign):
         """/notes unlocks off this event, so everyone the lock reached must be
         told — except the host, whose own client already knows it ended."""
-        common = {"session_id": uuid4(), "campaign_id": uuid4()}
+        common = {"session_id": uuid4(), "game_id": uuid4(), "game_name": None, "campaign_id": uuid4()}
         started = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             campaign_name="Curse of Strahd",
@@ -155,6 +165,8 @@ class TestSessionEnded:
         events = SessionEvents.session_ended(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
             host_id=campaign["dm_id"],
@@ -169,6 +181,8 @@ class TestSessionEnded:
         events = SessionEvents.session_paused(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=uuid4(),
             paused_by_id=campaign["dm_id"],
             paused_by_screen_name="Matt",
@@ -200,6 +214,8 @@ class TestPayloadShape:
         events = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name="The Siege of Kraghammer",  # a named game exercises the string path
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
             host_id=campaign["dm_id"],
@@ -208,7 +224,10 @@ class TestPayloadShape:
 
         for event in events:
             for key, value in event.data.items():
-                assert isinstance(value, str), f"{key} is {type(value).__name__}, not str"
+                assert value is None or isinstance(value, str), (
+                    f"{key} is {type(value).__name__} — payloads carry strings or null, "
+                    f"never objects the WS layer cannot serialise"
+                )
 
 
 class TestSessionStartedPersistence:
@@ -223,6 +242,8 @@ class TestSessionStartedPersistence:
         events = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
             host_id=campaign["dm_id"],
@@ -237,6 +258,8 @@ class TestSessionStartedPersistence:
         events = SessionEvents.session_started(
             campaign_member_ids=campaign["all"],
             session_id=uuid4(),
+            game_id=uuid4(),
+            game_name=None,
             campaign_id=uuid4(),
             campaign_name="Curse of Strahd",
             host_id=campaign["dm_id"],

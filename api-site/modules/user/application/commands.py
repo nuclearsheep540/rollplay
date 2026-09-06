@@ -103,10 +103,10 @@ class SetMaxSlots:
     a character out of a running game would corrupt the table mid-play.
     """
 
-    def __init__(self, user_repository: UserRepository, character_repository, session_repository):
+    def __init__(self, user_repository: UserRepository, character_repository, game_repository):
         self.user_repo = user_repository
         self.character_repo = character_repository
-        self.session_repo = session_repository
+        self.game_repo = game_repository
 
     def execute(self, *, user_id: UUID, max_slots: int) -> UserAggregate:
         user = self.user_repo.get_by_id(user_id)
@@ -120,10 +120,10 @@ class SetMaxSlots:
 
         # All-or-nothing: check every affected campaign before ejecting any.
         for character in locked:
-            if self.session_repo.get_active_session_for_campaign(character.active_campaign):
+            if self.game_repo.get_open_game_for_campaign(character.active_campaign):
                 raise ValueError(
                     f"Cannot reduce slots: character '{character.character_name}' is in a "
-                    f"campaign with a live session. Try again when the table is quiet."
+                    f"campaign with a game running. Try again when the table is quiet."
                 )
 
         for character in locked:

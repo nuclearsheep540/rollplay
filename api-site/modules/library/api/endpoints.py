@@ -25,8 +25,8 @@ from modules.library.repositories.preset_repository import PresetRepository
 from modules.library.repositories.collection_repository import AssetCollectionRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
-from modules.session.dependencies.providers import get_session_repository
-from modules.session.repositories.session_repository import SessionRepository
+from modules.game.dependencies.providers import get_game_repository
+from modules.game.repositories.game_repository import GameRepository
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import (
     ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, DisassociateFromCampaign, RenameMediaAsset,
@@ -657,14 +657,14 @@ async def associate_media_asset(
     request: AssociateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Associate a media asset with a campaign.
     """
     try:
-        command = AssociateWithCampaign(repo, session_repo)
+        command = AssociateWithCampaign(repo, game_repo)
         asset = command.execute(
             asset_id=asset_id,
             campaign_id=request.campaign_id,
@@ -694,14 +694,14 @@ async def disassociate_media_asset(
     request: AssociateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Remove a media asset's association with a campaign.
     """
     try:
-        command = DisassociateFromCampaign(repo, session_repo)
+        command = DisassociateFromCampaign(repo, game_repo)
         asset = command.execute(
             asset_id=asset_id,
             campaign_id=request.campaign_id,
@@ -731,14 +731,14 @@ async def rename_media_asset(
     request: RenameRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Rename a media asset's display filename.
     """
     try:
-        command = RenameMediaAsset(repo, session_repo)
+        command = RenameMediaAsset(repo, game_repo)
         asset = command.execute(asset_id, current_user.id, request.filename)
 
         logger.info(f"Renamed media asset {asset_id} to '{request.filename}'")
@@ -825,14 +825,14 @@ async def change_asset_type(
     request: ChangeTypeRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Change a media asset's type tag (e.g. map <-> image).
     """
     try:
-        command = ChangeAssetType(repo, session_repo)
+        command = ChangeAssetType(repo, game_repo)
         asset = command.execute(asset_id, current_user.id, request.asset_type)
 
         logger.info(f"Changed media asset {asset_id} type to '{request.asset_type.value}'")
@@ -858,7 +858,7 @@ async def update_grid_config(
     request: UpdateGridConfigRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
@@ -868,7 +868,7 @@ async def update_grid_config(
     across all campaigns/sessions that use this map.
     """
     try:
-        command = UpdateGridConfig(repo, session_repo)
+        command = UpdateGridConfig(repo, game_repo)
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
@@ -904,7 +904,7 @@ async def update_fog_config(
     request: UpdateFogConfigRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
@@ -923,7 +923,7 @@ async def update_fog_config(
             if request.regions is not None
             else None
         )
-        command = UpdateFogConfig(repo, session_repo)
+        command = UpdateFogConfig(repo, game_repo)
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
@@ -959,7 +959,7 @@ async def update_token_config(
     request: UpdateTokenConfigRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
@@ -970,7 +970,7 @@ async def update_token_config(
     the workshop retries with force=True after its warning dialog.
     """
     try:
-        command = UpdateTokenConfig(repo, session_repo)
+        command = UpdateTokenConfig(repo, game_repo)
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
@@ -1043,7 +1043,7 @@ async def update_audio_config(
     request: UpdateAudioConfigRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
@@ -1053,7 +1053,7 @@ async def update_audio_config(
     across all campaigns/sessions that use this audio track.
     """
     try:
-        command = UpdateAudioConfig(repo, session_repo)
+        command = UpdateAudioConfig(repo, game_repo)
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
@@ -1098,7 +1098,7 @@ async def update_image_config(
     request: UpdateImageConfigRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
@@ -1108,7 +1108,7 @@ async def update_image_config(
     across all campaigns/sessions that use this image.
     """
     try:
-        command = UpdateImageConfig(repo, session_repo)
+        command = UpdateImageConfig(repo, game_repo)
 
         # Use model_fields_set sentinel pattern for fields that can be explicitly cleared
         overlays_arg = request.visual_overlays if "visual_overlays" in request.model_fields_set else "UNSET"
@@ -1177,7 +1177,7 @@ async def delete_media_asset(
     asset_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     collection_repo: AssetCollectionRepository = Depends(get_collection_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> None:
@@ -1185,7 +1185,7 @@ async def delete_media_asset(
     Delete a media asset from S3 and the database.
     """
     try:
-        command = DeleteMediaAsset(repo, s3_service, session_repo, collection_repo)
+        command = DeleteMediaAsset(repo, s3_service, game_repo, collection_repo)
         deleted = command.execute(asset_id, current_user.id)
 
         if not deleted:

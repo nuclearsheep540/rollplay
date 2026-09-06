@@ -9,7 +9,7 @@
  * user belongs to can hero. The ranking decides which one, not whether.
  */
 
-const SESSION_ACTIVE = 'active'
+const GAME_ACTIVE = 'active'
 
 /**
  * The campaign's session — it has exactly one, created with the campaign and
@@ -20,8 +20,25 @@ export function findCurrentSession(campaign) {
   return campaign?.sessions?.[0] ?? null
 }
 
+/**
+ * The game running at this campaign's table, or null when nothing is.
+ *
+ * Liveness is the presence of an open game, never a field on the session — the
+ * backend answers it the same way, so the two cannot disagree.
+ */
+export function findOpenGame(campaign) {
+  return findCurrentSession(campaign)?.game ?? null
+}
+
+/**
+ * Games played here, newest first. Empty until a game has actually ended.
+ */
+export function findPlayedGames(campaign) {
+  return findCurrentSession(campaign)?.games ?? []
+}
+
 export function isCampaignLive(campaign) {
-  return findCurrentSession(campaign)?.status === SESSION_ACTIVE
+  return findOpenGame(campaign)?.status === GAME_ACTIVE
 }
 
 // Never played sorts last rather than being excluded — the campaign is still

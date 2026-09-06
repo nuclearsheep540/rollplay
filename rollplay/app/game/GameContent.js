@@ -44,6 +44,7 @@ import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useMapSettings } from './hooks/useMapSettings';
 import { useEndGame } from './hooks/useEndGame';
+import GameRecordFields from '@/app/dashboard/components/GameRecordFields';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import { NotesPanel } from '../notes';
@@ -367,6 +368,9 @@ export default function GameContent() {
   // server closes the room, so every client (this one included) arrives at
   // the Session Ended modal above through the normal broadcast.
   const [showEndGameConfirm, setShowEndGameConfirm] = useState(false);
+  // What the GM calls tonight and what happened — offered as the game ends,
+  // which is the moment they know. Both optional; neither blocks ending.
+  const [endGameRecord, setEndGameRecord] = useState({ name: '', summary: '' });
   const { endGame, isEnding, error: endGameError, clearError: clearEndGameError } = useEndGame();
 
   // Campaign ID for direct api-site calls (asset library)
@@ -2769,10 +2773,11 @@ export default function GameContent() {
         );
       })()}
 
-      {/* End Game confirmation — same wording as the dashboard's, since it is
-          the same command and the same consequences. Nothing is lost: token
-          positions and the adventure log are written cold and come back on the
-          next start, so this carries no countdown and is not styled as danger. */}
+      {/* End Game confirmation — same wording and same fields as the
+          dashboard's, since it is the same command and the same consequences.
+          Nothing is lost: token positions and the adventure log are written
+          cold onto this game and the next one seeds from them, so this carries
+          no countdown and is not styled as danger. */}
       <ConfirmDialog
         show={showEndGameConfirm}
         title="End Game"
@@ -2783,9 +2788,16 @@ export default function GameContent() {
         variant="primary"
         icon={faFlagCheckered}
         isLoading={isEnding}
-        onConfirm={() => endGame(roomId)}
+        onConfirm={() => endGame(roomId, endGameRecord)}
         onCancel={() => { setShowEndGameConfirm(false); clearEndGameError(); }}
-      />
+      >
+        <GameRecordFields
+          name={endGameRecord.name}
+          summary={endGameRecord.summary}
+          onChange={setEndGameRecord}
+          disabled={isEnding}
+        />
+      </ConfirmDialog>
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (

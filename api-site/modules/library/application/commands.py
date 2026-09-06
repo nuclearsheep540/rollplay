@@ -21,27 +21,29 @@ from modules.library.repositories.collection_repository import AssetCollectionRe
 from modules.library.domain.preset_aggregate import PresetAggregate, PresetSlot
 from modules.library.domain.collection_aggregate import AssetCollectionAggregate
 from modules.library.domain.collection_kind import CollectionKind
-from modules.session.repositories.session_repository import SessionRepository
-from modules.session.domain.session_aggregate import SessionStatus
+from modules.game.repositories.game_repository import GameRepository
 from modules.session.domain.token_merge import board_in_play
 from shared.services.s3_service import S3Service
 
 
 class AssetInUseError(Exception):
-    """Raised when an asset cannot be modified because it is in use by an active session."""
+    """Raised when an asset cannot be modified because a game is using it."""
     pass
 
 
-def check_asset_in_active_session(campaign_ids, session_repository):
-    """Raise AssetInUseError if asset belongs to a campaign with an in-flight session."""
+def check_asset_in_running_game(campaign_ids, game_repository):
+    """Raise AssetInUseError if the asset belongs to a campaign with a game in flight.
+
+    "In flight" is any open game — starting, running or ending — because the
+    room exists (or is being built or torn down) for all three, and the asset's
+    signed URL and config are already inside it.
+    """
     for campaign_id in (campaign_ids or []):
-        sessions = session_repository.get_by_campaign_id(campaign_id)
-        for session in sessions:
-            if session.status in (SessionStatus.ACTIVE, SessionStatus.STARTING, SessionStatus.STOPPING):
-                raise AssetInUseError(
-                    "Cannot modify asset while a session is active in campaign. "
-                    "Please pause or finish the session first."
-                )
+        if game_repository.get_open_game_for_campaign(campaign_id):
+            raise AssetInUseError(
+                "Cannot modify asset while a game is running in a campaign. "
+                "End the game first."
+            )
 
 
 def get_owned_asset(repository, asset_id, user_id):
@@ -173,12 +175,12 @@ class DeleteMediaAsset:
         self,
         repository: MediaAssetRepository,
         s3_service: S3Service,
-        session_repository: SessionRepository,
+        game_repository: GameRepository,
         collection_repository: AssetCollectionRepository = None,
     ):
         self.repository = repository
         self.s3_service = s3_service
-        self.session_repository = session_repository
+        self.game_repository = game_repository
         self.collection_repository = collection_repository
 
     def execute(self, asset_id: UUID, user_id: UUID) -> bool:
@@ -203,16 +205,17 @@ class DeleteMediaAsset:
         if not asset.is_owned_by(user_id):
             raise ValueError("Cannot delete media asset owned by another user")
 
-        # Guard: block deletion if any campaign session is in-flight
-        check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+        # Guard: block deletion while any campaign's game is in flight
+        check_asset_in_running_game(asset.campaign_ids, self.game_repository)
 
-        # Cleanup: scrub stale references from inactive/finished session configs
+        # Cleanup: scrub stale references from the last game each campaign
+        # played — the only one a future start reads. Older games keep their
+        # record: the map they played on did exist that night.
         asset_id_str = str(asset_id)
         for campaign_id in (asset.campaign_ids or []):
-            sessions = self.session_repository.get_by_campaign_id(campaign_id)
-            for session in sessions:
-                if session.remove_asset_references(asset_id_str):
-                    self.session_repository.save(session)
+            latest = self.game_repository.get_newest_ended_game_for_campaign(campaign_id)
+            if latest and latest.remove_asset_references(asset_id_str):
+                self.game_repository.save(latest)
 
         # Prune from the owner's manual collections so member lists
         # never hold dangling ids
@@ -231,9 +234,9 @@ class RenameMediaAsset:
     Rename a media asset's display filename.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(self, asset_id: UUID, user_id: UUID, new_filename: str) -> MediaAssetAggregate:
         """
@@ -258,8 +261,8 @@ class RenameMediaAsset:
         if not asset.is_owned_by(user_id):
             raise ValueError("Cannot rename media asset owned by another user")
 
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game(asset.campaign_ids, self.game_repository)
 
         asset.rename(new_filename)
         self.repository.save(asset)
@@ -361,9 +364,9 @@ class ChangeAssetType:
     of asset now. Callers should not assume those fields survive.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(self, asset_id: UUID, user_id: UUID, new_type: Union[MediaAssetType, str]) -> MediaAssetAggregate:
         """
@@ -391,8 +394,8 @@ class ChangeAssetType:
         if not asset.is_owned_by(user_id):
             raise ValueError("Cannot modify media asset owned by another user")
 
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game(asset.campaign_ids, self.game_repository)
 
         # Coerce + content-type validation. change_type() also mutates
         # the in-memory aggregate, but we discard that aggregate and
@@ -422,9 +425,9 @@ class AssociateWithCampaign:
     Associate a media asset with a campaign.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(
         self,
@@ -451,8 +454,8 @@ class AssociateWithCampaign:
 
         # Only the target campaign gates this operation — an active session
         # in another campaign the asset belongs to is unaffected by it
-        if self.session_repository:
-            check_asset_in_active_session([campaign_id], self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game([campaign_id], self.game_repository)
 
         asset.associate_with_campaign(campaign_id)
 
@@ -466,9 +469,9 @@ class DisassociateFromCampaign:
     Remove a media asset's association with a campaign.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(
         self,
@@ -495,8 +498,8 @@ class DisassociateFromCampaign:
 
         # Only the target campaign gates this operation — an active session
         # in another campaign the asset belongs to is unaffected by it
-        if self.session_repository:
-            check_asset_in_active_session([campaign_id], self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game([campaign_id], self.game_repository)
 
         asset.disassociate_from_campaign(campaign_id)
 
@@ -513,9 +516,9 @@ class UpdateGridConfig:
     across all campaigns/sessions that use this map.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(
         self,
@@ -560,8 +563,8 @@ class UpdateGridConfig:
         if not isinstance(asset, MapAsset):
             raise ValueError("Grid configuration only applies to map assets")
 
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game(asset.campaign_ids, self.game_repository)
 
         asset.update_grid_config(
             grid_width=grid_width,
@@ -588,9 +591,9 @@ class UpdateFogConfig:
     region endpoints' job (commands TBD in a later step).
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(
         self,
@@ -608,8 +611,8 @@ class UpdateFogConfig:
         if not isinstance(asset, MapAsset):
             raise ValueError("Fog configuration only applies to map assets")
 
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game(asset.campaign_ids, self.game_repository)
 
         asset.update_fog_config(regions=regions)
         self.repository.save(asset)
@@ -624,7 +627,7 @@ class BoardInPlayError(Exception):
     pass
 
 
-def check_map_boards_in_play(asset_id, campaign_ids, session_repository, force=False):
+def check_map_boards_in_play(asset_id, campaign_ids, game_repository, force=False):
     """Raise BoardInPlayError when a campaign's board for this map is in play,
     unless the caller forces past the warning.
 
@@ -633,20 +636,27 @@ def check_map_boards_in_play(asset_id, campaign_ids, session_repository, force=F
     that only ever watched play — a pc token placed then removed — equals
     its seed again and stops counting. A pre-seed row's non-empty board
     reads as in-play (preserve, never destroy).
+
+    Only the campaign's NEWEST ended game is consulted: it is the one the next
+    game will seed from, so it is the only board an edit here could conflict
+    with. Older games are the record of nights already played.
     """
     if force:
         return
     asset_key = str(asset_id)
     for campaign_id in (campaign_ids or []):
-        sessions = session_repository.get_by_campaign_id(campaign_id)
-        for session in sessions:
-            stored_board = (session.map_token_state or {}).get(asset_key) or []
-            seed_board = (session.map_token_seed or {}).get(asset_key) or []
-            if board_in_play(seed_board, stored_board):
-                raise BoardInPlayError(
-                    "This map's board is in play in a paused session. Changes "
-                    "might conflict with live token positions."
-                )
+        open_game = game_repository.get_open_game_for_campaign(campaign_id)
+        latest = open_game or game_repository.get_newest_ended_game_for_campaign(campaign_id)
+        if not latest:
+            continue
+        stored_board = (latest.map_token_state or {}).get(asset_key) or []
+        seed_board = (latest.map_token_seed or {}).get(asset_key) or []
+        if board_in_play(seed_board, stored_board):
+            raise BoardInPlayError(
+                "This map's board is in play in the last game. Changes "
+                "might conflict with live token positions."
+            )
+
 
 
 class UpdateTokenConfig:
@@ -661,9 +671,9 @@ class UpdateTokenConfig:
     dialog, decision 26).
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(
         self,
@@ -677,9 +687,9 @@ class UpdateTokenConfig:
         if not isinstance(asset, MapAsset):
             raise ValueError("Token baselines only apply to map assets")
 
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
-            check_map_boards_in_play(asset.id, asset.campaign_ids, self.session_repository, force=force)
+        if self.game_repository:
+            check_asset_in_running_game(asset.campaign_ids, self.game_repository)
+            check_map_boards_in_play(asset.id, asset.campaign_ids, self.game_repository, force=force)
 
         # Attribution is server-stamped, never trusted from the wire (the
         # same rule the WS place handler applies to created_by).
@@ -729,9 +739,9 @@ class UpdateAudioConfig:
     across all campaigns/sessions that use this track.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(
         self,
@@ -782,8 +792,8 @@ class UpdateAudioConfig:
         if not isinstance(asset, (MusicAsset, SfxAsset)):
             raise ValueError("Audio configuration only applies to music and SFX assets")
 
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game(asset.campaign_ids, self.game_repository)
 
         # Build kwargs - effects only apply to MusicAsset
         config_kwargs = dict(
@@ -822,9 +832,9 @@ class UpdateImageConfig:
     across all campaigns/sessions that use this image.
     """
 
-    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+    def __init__(self, repository: MediaAssetRepository, game_repository: GameRepository = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
 
     def execute(
         self,
@@ -858,8 +868,8 @@ class UpdateImageConfig:
         if not isinstance(asset, ImageAsset):
             raise ValueError("Image configuration only applies to image assets")
 
-        if self.session_repository:
-            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+        if self.game_repository:
+            check_asset_in_running_game(asset.campaign_ids, self.game_repository)
 
         asset.update_image_config(
             image_fit=image_fit,

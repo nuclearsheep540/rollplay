@@ -3,11 +3,12 @@
 
 """The one-session invariant: a campaign has exactly one session, for life.
 
-Created with the campaign, never replaced, never absent and never doubled. Everything downstream leans on it — the Home hero reads
-`campaign.sessions[0]`, the drawer offers Start against it, and the start ETL
-restores token boards and the adventure log from that single row. A second row
-would give a campaign two boards and two logs with no rule for which one a game
-begins from; zero rows would leave surfaces rendering a game that cannot exist.
+Created with the campaign, never replaced, never absent and never doubled.
+Everything downstream leans on it — the Home hero reads `campaign.sessions[0]`,
+the drawer offers Start against it, and a game is opened against it. A second
+row would give a campaign two parties and two histories with no rule for which
+one a game belongs to; zero rows would leave surfaces rendering a game that
+cannot exist.
 
 This file used to test a `session_name` conditional on campaign creation — a
 session was made only when the create form supplied a name. Names are gone (one
@@ -22,7 +23,7 @@ from uuid import uuid4
 import pytest
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
-from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
+from modules.session.domain.session_aggregate import SessionEntity
 
 
 def make_campaign(created_by=None):
@@ -61,7 +62,6 @@ class TestSessionIsUnnamedAndSeatless:
 
         assert session.campaign_id == campaign_id
         assert session.host_id == host_id
-        assert session.status == SessionStatus.INACTIVE
         assert not hasattr(session, "name")
         assert not hasattr(session, "max_players")
 

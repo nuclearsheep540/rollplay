@@ -5,10 +5,12 @@
 Session Events - Domain Events for Session Lifecycle
 
 Ubiquitous Language:
-- Session = The scheduled/planned play instance (managed by api-site)
-- Game = The live multiplayer experience (managed by api-game)
+- Session = the campaign's table: who plays and when (api-site)
+- Game = one play; hot in api-game while it runs (api-site owns the record)
 
-These events notify users about session lifecycle changes.
+These events notify users about the campaign's table and its games. The wire
+names still say "session" because persisted notification rows carry them and the
+frontend copy keys on them; the payloads carry the game they are about.
 """
 
 from datetime import datetime
@@ -76,7 +78,16 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_started(campaign_member_ids: List[UUID], session_id: UUID, campaign_id: UUID, campaign_name: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
+    def session_started(
+        campaign_member_ids: List[UUID],
+        session_id: UUID,
+        game_id: UUID,
+        game_name: Optional[str],
+        campaign_id: UUID,
+        campaign_name: str,
+        host_id: UUID,
+        host_screen_name: str
+    ) -> List[EventConfig]:
         """
         Event: Host started a session (notifies every campaign member)
 
@@ -86,6 +97,8 @@ class SessionEvents:
         Args:
             campaign_member_ids: Every active campaign member, DM included
             session_id: Session ID
+            game_id: The game that just started — also the room id players enter
+            game_name: What the GM called it, or None
             campaign_id: Campaign ID
             campaign_name: Campaign name
             host_id: Session host user ID
@@ -101,6 +114,8 @@ class SessionEvents:
                 event_type="session_started",
                 data={
                     "session_id": str(session_id),
+                    "game_id": str(game_id),
+                    "game_name": game_name,
                     "campaign_id": str(campaign_id),
                     "campaign_name": campaign_name,
                     "host_id": str(host_id),
@@ -112,7 +127,15 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_paused(campaign_member_ids: List[UUID], session_id: UUID, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[EventConfig]:
+    def session_paused(
+        campaign_member_ids: List[UUID],
+        session_id: UUID,
+        game_id: UUID,
+        game_name: Optional[str],
+        campaign_id: UUID,
+        paused_by_id: UUID,
+        paused_by_screen_name: str
+    ) -> List[EventConfig]:
         """
         Event: the SYSTEM took a game down (expiry sweeper or admin CLI).
 
@@ -125,8 +148,10 @@ class SessionEvents:
             campaign_member_ids: Every active campaign member, DM included —
                 NOT only those who were in the session
             session_id: Session ID
+            game_id: The game that was closed
+            game_name: What the GM called it, or None
             campaign_id: Campaign ID
-            paused_by_id: User the pause acted as (the session host)
+            paused_by_id: User the take-down acted as (the session host)
             paused_by_screen_name: Display name of that user
 
         Returns:
@@ -139,6 +164,8 @@ class SessionEvents:
                 event_type="session_paused",
                 data={
                     "session_id": str(session_id),
+                    "game_id": str(game_id),
+                    "game_name": game_name,
                     "campaign_id": str(campaign_id),
                     "paused_by_id": str(paused_by_id),
                     "paused_by_screen_name": paused_by_screen_name
@@ -156,7 +183,8 @@ class SessionEvents:
         campaign_name: str,
         host_id: UUID,
         host_screen_name: str,
-        scheduled_at: Optional[datetime]
+        scheduled_at: Optional[datetime],
+        next_game_name: Optional[str] = None
     ) -> List[EventConfig]:
         """
         Event: the host set, changed or cleared when the next game is.
@@ -180,6 +208,7 @@ class SessionEvents:
             scheduled_at: The declared time, or None when cleared. Serialised to
                 ISO-8601 here (EventConfig.data must be JSON-safe) and rendered
                 in each viewer's own timezone client-side.
+            next_game_name: What the GM is calling the next game, or None.
 
         Returns:
             List[EventConfig] (one per campaign member other than the host)
@@ -197,7 +226,8 @@ class SessionEvents:
                     "campaign_name": campaign_name,
                     "host_id": str(host_id),
                     "host_screen_name": host_screen_name,
-                    "scheduled_at": scheduled_at.isoformat() if scheduled_at else None
+                    "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+                    "next_game_name": next_game_name
                 },
                 show_toast=True,
                 save_notification=True
@@ -208,6 +238,8 @@ class SessionEvents:
     def session_ended(
         campaign_member_ids: List[UUID],
         session_id: UUID,
+        game_id: UUID,
+        game_name: Optional[str],
         campaign_id: UUID,
         campaign_name: str,
         host_id: UUID,
@@ -225,6 +257,8 @@ class SessionEvents:
             campaign_member_ids: Every active campaign member, host included —
                 the host is filtered out here, not by the caller
             session_id: Session ID
+            game_id: The game that ended
+            game_name: What the GM called it, or None
             campaign_id: Campaign ID
             campaign_name: Campaign name
             host_id: The host who ended the game
@@ -242,6 +276,8 @@ class SessionEvents:
                 event_type="session_ended",
                 data={
                     "session_id": str(session_id),
+                    "game_id": str(game_id),
+                    "game_name": game_name,
                     "campaign_id": str(campaign_id),
                     "campaign_name": campaign_name,
                     "host_id": str(host_id),

@@ -93,6 +93,40 @@ const TYPED_TIME_FORMATS = ['HH:mm', 'H:mm', 'H:m', 'HH.mm', 'H.mm', 'H.m', 'HH 
  * Anything that is not a real time on a 24-hour clock is rejected rather than
  * guessed at; the caller decides what to fall back to.
  */
+/**
+ * How long a game ran, as a person would say it.
+ *
+ * Whole minutes only — nobody cares that the evening was 3h 42m 17s, and a
+ * seconds field would imply a precision the timestamps do not have. Under a
+ * minute is named rather than rounded to "0m", which reads like a bug.
+ *
+ * Returns '' when either end is missing: a game with no start or no end has no
+ * duration to state, and an em-dash placeholder is the caller's choice, not ours.
+ */
+export function formatDuration(startIso, endIso) {
+  if (!startIso || !endIso) {
+    return ''
+  }
+
+  const milliseconds = new Date(endIso) - new Date(startIso)
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) {
+    return ''
+  }
+
+  const totalMinutes = Math.floor(milliseconds / 60000)
+  if (totalMinutes < 1) {
+    return 'under a minute'
+  }
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`
+  }
+
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`
+}
+
+
 export function parseClockTime(text) {
   const parsed = dayjs(String(text ?? '').trim(), TYPED_TIME_FORMATS, true)
   return parsed.isValid() ? parsed.format('HH:mm') : null

@@ -492,7 +492,7 @@ class TestSpotifyConstraints:
 class TestSessionRoundTrip:
     def test_session_start_payload_round_trip(self):
         payload = SessionStartPayload(
-            session_id="s1",
+            game_id="s1",
             campaign_id="c1",
             dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
             max_players=6,
@@ -535,7 +535,7 @@ class TestSessionRoundTrip:
     def test_session_start_payload_coerces_spotify_dict(self):
         """api-site passes session.spotify_config (a raw JSONB dict) — the contract coerces + defaults it."""
         payload = SessionStartPayload(
-            session_id="s1",
+            game_id="s1",
             campaign_id="c1",
             dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
             spotify_state={"track_uri": "spotify:track:abc", "channel_level": 0.9},
@@ -547,7 +547,7 @@ class TestSessionRoundTrip:
     def test_session_start_payload_defaults_spotify_state(self):
         """A session with no persisted Spotify config starts at the contract defaults (-12 dB)."""
         payload = SessionStartPayload(
-            session_id="s1",
+            game_id="s1",
             campaign_id="c1",
             dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
         )
@@ -555,7 +555,7 @@ class TestSessionRoundTrip:
 
     def test_session_start_payload_minimal_round_trip(self):
         payload = SessionStartPayload(
-            session_id="s1",
+            game_id="s1",
             campaign_id="c1",
             dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
         )
@@ -613,8 +613,26 @@ class TestSessionRoundTrip:
         assert SessionEndResponse.model_validate(response.model_dump()) == response
 
     def test_session_start_response_round_trip(self):
-        response = SessionStartResponse(success=True, session_id="s1", message="Started")
+        response = SessionStartResponse(success=True, game_id="s1", message="Started")
         assert SessionStartResponse.model_validate(response.model_dump()) == response
+
+    def test_start_addresses_the_room_by_game_id_on_both_legs(self):
+        """The id api-site sends is the id api-game must key by and echo back.
+
+        Both legs name it `game_id` so the room's identity cannot drift from the
+        game's: they are the same thing, and a second name is how they diverge.
+        """
+        game_id = "0f3d6e6a-6f5e-4a1e-9c7a-2a1b3c4d5e6f"
+        payload = SessionStartPayload(
+            game_id=game_id,
+            campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="dm", player_name="Matt"),
+        )
+        response = SessionStartResponse(success=True, game_id=payload.game_id)
+
+        assert response.game_id == payload.game_id
+        assert "session_id" not in SessionStartPayload.model_fields
+        assert "session_id" not in SessionStartResponse.model_fields
 
 
 # --- Shape conformance tests: catch schema drift ---
@@ -664,7 +682,7 @@ class TestMapShapeConformance:
 class TestSessionShapeConformance:
     def test_session_start_payload_has_required_fields(self):
         required_keys = {
-            "session_id", "campaign_id", "dungeon_master", "max_players",
+            "game_id", "campaign_id", "dungeon_master", "max_players",
             "joined_user_ids", "session_users", "assets", "audio_config", "audio_track_config",
             "spotify_state", "map_config", "image_config", "active_display",
         }
@@ -873,7 +891,7 @@ class TestMapTokenSessionEtl:
 
     def test_start_payload_round_trips_token_boards(self):
         payload = SessionStartPayload(
-            session_id="s1", campaign_id="c1",
+            game_id="s1", campaign_id="c1",
             dungeon_master=DungeonMaster(user_id="dm-1", player_name="Matt"),
             map_token_state=self._board(),
         )
@@ -1006,7 +1024,7 @@ class TestTokenImageRefRoundTrip:
 class TestSessionTokenImages:
     def test_start_payload_round_trips_token_images(self):
         payload = SessionStartPayload(
-            session_id="s1", campaign_id="c1",
+            game_id="s1", campaign_id="c1",
             dungeon_master=DungeonMaster(user_id="dm-1", player_name="Matt"),
             token_images={
                 "img-1": {"url": "https://cdn.example.com/a.png", "token_area": {"x": 1.0, "y": 2.0, "size": 3.0}},
@@ -1019,7 +1037,7 @@ class TestSessionTokenImages:
 
     def test_token_images_default_empty(self):
         payload = SessionStartPayload(
-            session_id="s1", campaign_id="c1",
+            game_id="s1", campaign_id="c1",
             dungeon_master=DungeonMaster(user_id="dm-1", player_name="Matt"),
         )
         assert payload.token_images == {}

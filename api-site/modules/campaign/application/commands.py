@@ -77,9 +77,9 @@ class UpdateCampaign:
 
 
 class DeleteCampaign:
-    def __init__(self, repository, session_repository=None, character_repository: CharacterRepository = None, event_manager: EventManager = None):
+    def __init__(self, repository, game_repository=None, character_repository: CharacterRepository = None, event_manager: EventManager = None):
         self.repository = repository
-        self.session_repository = session_repository
+        self.game_repository = game_repository
         self.character_repository = character_repository
         self.event_manager = event_manager
 
@@ -94,13 +94,10 @@ class DeleteCampaign:
             raise ValueError("Only the DM can delete this campaign")
 
         # Business rule: a running game blocks deletion — its state is hot in
-        # api-game and players are in it. Otherwise the campaign's one session
-        # goes with it (the sessions relationship cascades on delete).
-        if self.session_repository:
-            for session_id in campaign.session_ids:
-                session = self.session_repository.get_by_id(session_id)
-                if session and session.is_locked:
-                    raise ValueError("End the game before deleting this campaign")
+        # api-game and players are in it. Otherwise the campaign's session and
+        # every game played at it go with the campaign (both cascade on delete).
+        if self.game_repository and self.game_repository.get_open_game_for_campaign(campaign_id):
+            raise ValueError("End the game before deleting this campaign")
 
         # Release all character locks before deletion — characters stay on
         # the user's account but are no longer bound to this campaign.
@@ -246,11 +243,12 @@ class RemovePlayerFromCampaign:
 
 
 class AcceptCampaignInvite:
-    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, session_repository=None):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, session_repository=None, game_repository=None):
         self.repository = repository
         self.user_repo = user_repo
         self.event_manager = event_manager
         self.session_repository = session_repository
+        self.game_repository = game_repository
 
     async def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """
@@ -273,22 +271,29 @@ class AcceptCampaignInvite:
         player = self.user_repo.get_by_id(player_id)
         player_name = player.screen_name if player else ""
 
-        # Auto-add the late-joining player to the campaign's live session, if any.
-        session = self.session_repository.get_active_session_for_campaign(campaign_id) if self.session_repository else None
+        # Add the late-joining player to the campaign's table, and to the room
+        # if a game is running. The roster is the party, so they join it whether
+        # or not anything is live; the hot sync only happens for a live game.
+        session = None
+        for session_id in campaign.session_ids:
+            session = self.session_repository.get_by_id(session_id) if self.session_repository else None
+            break
         if session:
             if player_id not in session.joined_users:
                 session.joined_users.append(player_id)
                 self.session_repository.save(session)
                 auto_added_to_session_ids.append(session.id)
-                logger.info(f"✅ Auto-added late-joining player {player_id} to active session {session.id}")
+                logger.info(f"Auto-added late-joining player {player_id} to the party of session {session.id}")
 
-            # Sync player_name + campaign_role to api-game. The role is always SPECTATOR right
-            # after accept_invite (character not yet selected) — passing it explicitly so
+            # Sync player_name + campaign_role to api-game, addressed by the GAME's
+            # id (which is the room id). The role is always SPECTATOR right after
+            # accept_invite (character not yet selected) — passing it explicitly so
             # MongoDB's player_metadata carries it for runtime checks.
-            if session.is_active():
+            open_game = self.game_repository.get_open_game_for_campaign(campaign_id) if self.game_repository else None
+            if open_game and open_game.status.value == "active":
                 role = campaign.get_role(player_id)
                 await self._sync_player_to_game(
-                    str(session.id),
+                    str(open_game.id),
                     player_id,
                     player_name,
                     role.value if role else "spectator",
@@ -547,12 +552,12 @@ class SelectCharacterForCampaign:
     Domain Rule: A character can only be active in one campaign at a time.
     """
 
-    def __init__(self, campaign_repo, character_repo: CharacterRepository, user_repo: UserRepository = None, event_manager: EventManager = None, session_repo=None):
+    def __init__(self, campaign_repo, character_repo: CharacterRepository, user_repo: UserRepository = None, event_manager: EventManager = None, game_repo=None):
         self.campaign_repo = campaign_repo
         self.character_repo = character_repo
         self.user_repo = user_repo
         self.event_manager = event_manager
-        self.session_repo = session_repo
+        self.game_repo = game_repo
 
     async def execute(self, campaign_id: UUID, user_id: UUID, character_id: UUID):
         """
@@ -603,8 +608,8 @@ class SelectCharacterForCampaign:
             c.user_id == user_id and c.id != character.id
             for c in self.character_repo.get_by_active_campaign(campaign_id)
         )
-        if user_has_other_character and self.session_repo and self.session_repo.get_active_session_for_campaign(campaign_id):
-            raise ValueError("You can't change your character while a session is active")
+        if user_has_other_character and self.game_repo and self.game_repo.get_open_game_for_campaign(campaign_id):
+            raise ValueError("You can't change your character while a game is running")
 
         # Invariant: one active character per (user, campaign). Release any
         # character this user already has locked to this campaign before
@@ -641,18 +646,16 @@ class SelectCharacterForCampaign:
             for event_config in events:
                 await self.event_manager.broadcast(event_config)
 
-        # Hot update: if campaign has an ACTIVE session, notify api-game
-        if self.session_repo:
-            await self._notify_active_session(campaign_id, user_id, character)
+        # Hot update: if a game is running, notify api-game
+        if self.game_repo:
+            await self._notify_running_game(campaign_id, user_id, character)
 
         return character
 
-    async def _notify_active_session(self, campaign_id: UUID, user_id: UUID, character):
-        """If the campaign has a live session, push character change to api-game."""
-        # The query already filters to ACTIVE, which is itself the record that
-        # hot state exists in api-game.
-        active_session = self.session_repo.get_active_session_for_campaign(campaign_id)
-        if not active_session:
+    async def _notify_running_game(self, campaign_id: UUID, user_id: UUID, character):
+        """If the campaign has a running game, push the character change to api-game."""
+        open_game = self.game_repo.get_open_game_for_campaign(campaign_id)
+        if not open_game or open_game.status.value != "active":
             return
 
         player_name = ""
@@ -680,12 +683,12 @@ class SelectCharacterForCampaign:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.put(
-                    f"http://api-game:8081/game/{active_session.id}/player/character",
+                    f"http://api-game:8081/game/{open_game.id}/player/character",
                     json=character_data,
                     timeout=5.0
                 )
                 if response.status_code == 200:
-                    logger.info(f"Hot update: character {character.id} synced to active session {active_session.id}")
+                    logger.info(f"Hot update: character {character.id} synced to running game {open_game.id}")
                 else:
                     logger.warning(f"Hot update failed ({response.status_code}): {response.text}")
         except Exception as e:
@@ -700,10 +703,10 @@ class ReleaseCharacterFromCampaign:
     Player stays as campaign member but can now use their character elsewhere.
     """
 
-    def __init__(self, campaign_repo, character_repo: CharacterRepository, session_repo=None, user_repo: UserRepository = None, event_manager: EventManager = None):
+    def __init__(self, campaign_repo, character_repo: CharacterRepository, game_repo=None, user_repo: UserRepository = None, event_manager: EventManager = None):
         self.campaign_repo = campaign_repo
         self.character_repo = character_repo
-        self.session_repo = session_repo
+        self.game_repo = game_repo
         self.user_repo = user_repo
         self.event_manager = event_manager
 
@@ -714,7 +717,7 @@ class ReleaseCharacterFromCampaign:
         Validates:
         - User is a member of the campaign
         - User has a character selected for this campaign
-        - No active session exists in the campaign
+        - No game is running in the campaign
 
         On success, unlocks the character from this campaign.
         """
@@ -727,9 +730,9 @@ class ReleaseCharacterFromCampaign:
         if not campaign.is_member(user_id):
             raise ValueError("You are not a member of this campaign")
 
-        # Business rule: No active sessions
-        if self.session_repo and self.session_repo.get_active_session_for_campaign(campaign_id):
-            raise ValueError("Cannot release character while a session is active")
+        # Business rule: no game may be running
+        if self.game_repo and self.game_repo.get_open_game_for_campaign(campaign_id):
+            raise ValueError("Cannot release your character while a game is running")
 
         # Get user's character for this campaign
         character = self.character_repo.get_user_character_for_campaign(user_id, campaign_id)

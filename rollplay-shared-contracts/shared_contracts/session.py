@@ -58,7 +58,9 @@ class SessionStats(ContractModel):
 class SessionStartPayload(ContractModel):
     """Complete payload for POST /game/session/start."""
 
-    session_id: str
+    # The game id, which IS the room id: api-game keys its document by this and
+    # the browser's /game?room_id= carries it. One identifier, one meaning.
+    game_id: str
     campaign_id: str
     dungeon_master: DungeonMaster
     max_players: int = 8
@@ -72,9 +74,9 @@ class SessionStartPayload(ContractModel):
     image_config: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
     adventure_log: List[LogEntry] = []
-    # Token boards, keyed per map asset_id — every map in the session keeps
-    # its own pieces across pause/resume. Orphan boards (deleted maps) are
-    # pruned by StartSession before this payload is built.
+    # Token boards, keyed per map asset_id — every map keeps its own pieces
+    # from one game to the next. Orphan boards (deleted maps) are pruned by
+    # StartGame before this payload is built.
     map_token_state: Dict[str, List[MapToken]] = {}
     # Token image delivery (decision 27): image_asset_id -> signed URL +
     # "token" focal area, for every image referenced by the merged boards
@@ -94,7 +96,7 @@ class SessionEndFinalState(ContractModel):
     audio_state: Dict[str, AudioChannelState] = {}
     audio_track_config: Dict[str, AudioTrackConfig] = {}
     broadcast_master_volume: Optional[float] = None
-    spotify_state: SpotifyState = SpotifyState()  # DM's Spotify BGM block — cold-stored for cross-session restore
+    spotify_state: SpotifyState = SpotifyState()  # DM's Spotify BGM block — cold-stored on the game for the next one to restore
     map_state: Optional[MapConfig] = None
     image_state: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
@@ -104,7 +106,9 @@ class SessionEndFinalState(ContractModel):
 
 class SessionStartResponse(ContractModel):
     success: bool
-    session_id: str
+    # Echoed back so api-site can assert the room was keyed by the id it sent —
+    # a mismatch would silently break player sync and cleanup.
+    game_id: str
     message: str = ""
 
 

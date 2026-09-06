@@ -533,7 +533,7 @@ async def create_session(request: SessionStartPayload):
 
     Request:
     {
-        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "game_id": "550e8400-e29b-41d4-a716-446655440000",
         "dm_user_id": "uuid-of-dm",
         "max_players": 8
     }
@@ -541,13 +541,13 @@ async def create_session(request: SessionStartPayload):
     Response:
     {
         "success": true,
-        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "game_id": "550e8400-e29b-41d4-a716-446655440000",
         "message": "Game created successfully for session"
     }
     """
     try:
         # Check if game already exists for this session
-        existing = await GameService.get_room(request.session_id)
+        existing = await GameService.get_room(request.game_id)
         if existing:
             raise HTTPException(
                 status_code=409,
@@ -607,22 +607,22 @@ async def create_session(request: SessionStartPayload):
             urls_expire_at=request.urls_expire_at or ""
         )
 
-        # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
-        game_id = await GameService.create_room(settings, room_id=request.session_id)
+        # The game id IS the MongoDB _id — one identifier for the game and its room
+        game_id = await GameService.create_room(settings, room_id=request.game_id)
 
-        logger.info(f"Created game {game_id} for session {request.session_id} with {len(request.joined_user_ids)} joined players")
+        logger.info(f"Created room for game {game_id} with {len(request.joined_user_ids)} joined players")
 
         # Restore map from previous session if available
         if request.map_config and request.map_config.filename:
             try:
                 map_config = request.map_config
                 restored_map = MapSettings(
-                    room_id=request.session_id,
+                    room_id=request.game_id,
                     uploaded_by="system",
                     map_config=map_config,
                 )
-                await map_service.set_active_map(request.session_id, restored_map)
-                logger.info(f"Restored map '{map_config.filename}' for session {request.session_id}")
+                await map_service.set_active_map(request.game_id, restored_map)
+                logger.info(f"Restored map '{map_config.filename}' for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"Map restoration failed (non-fatal): {e}")
 
@@ -631,20 +631,20 @@ async def create_session(request: SessionStartPayload):
             try:
                 image_config = request.image_config
                 restored_image = ImageSettings(
-                    room_id=request.session_id,
+                    room_id=request.game_id,
                     loaded_by="system",
                     image_config=image_config,
                 )
-                await image_service.set_active_image(request.session_id, restored_image)
-                logger.info(f"Restored image '{image_config.filename}' for session {request.session_id}")
+                await image_service.set_active_image(request.game_id, restored_image)
+                logger.info(f"Restored image '{image_config.filename}' for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"Image restoration failed (non-fatal): {e}")
 
         # Restore active_display from previous session
         if request.active_display:
             try:
-                await GameService.set_active_display(request.session_id, request.active_display)
-                logger.info(f"Restored active_display '{request.active_display}' for session {request.session_id}")
+                await GameService.set_active_display(request.game_id, request.active_display)
+                logger.info(f"Restored active_display '{request.active_display}' for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"active_display restoration failed (non-fatal): {e}")
 
@@ -652,16 +652,16 @@ async def create_session(request: SessionStartPayload):
         if request.adventure_log:
             try:
                 restored_count = await adventure_log.restore_room_logs(
-                    request.session_id,
+                    request.game_id,
                     [entry.model_dump() for entry in request.adventure_log],
                 )
-                logger.info(f"Restored {restored_count} adventure log entries for session {request.session_id}")
+                logger.info(f"Restored {restored_count} adventure log entries for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"Adventure log restoration failed (non-fatal): {e}")
 
         return SessionStartResponse(
             success=True,
-            session_id=game_id,  # Return MongoDB document ID as session_id for api-site
+            game_id=game_id,  # The MongoDB document id, echoed so api-site can assert it matches
             message="Game created successfully for session"
         )
     except HTTPException:
@@ -677,9 +677,9 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
     Return final game state from MongoDB.
 
     If validate_only=True: Fetch state but DO NOT delete game (Phase 1 of fail-safe pattern)
-    If validate_only=False: Deprecated - use DELETE /game/session/{session_id} instead
+    If validate_only=False: Deprecated - use DELETE /game/session/{game_id} instead
 
-    This endpoint is called by api-site when pausing/finishing a session.
+    This endpoint is called by api-site when ending a game.
     The validate_only parameter allows for fail-safe two-phase commit:
     1. Fetch state (this endpoint with validate_only=True)
     2. Write to PostgreSQL
@@ -687,7 +687,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
     Request:
     {
-        "session_id": "550e8400-e29b-41d4-a716-446655440000"
+        "game_id": "550e8400-e29b-41d4-a716-446655440000"
     }
 
     Response:
@@ -700,8 +700,8 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
     }
     """
     try:
-        # Get game room from MongoDB using session_id (which maps to MongoDB _id)
-        room = await GameService.get_room(request.session_id)
+        # Get the room from MongoDB by the game id (which is the document _id)
+        room = await GameService.get_room(request.game_id)
         if not room:
             raise HTTPException(status_code=404, detail="Game not found for session")
 
@@ -734,12 +734,12 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 duration_minutes = int(duration.total_seconds() / 60)
 
         # Get adventure log count
-        log_count = await adventure_log.get_room_log_count(request.session_id)
+        log_count = await adventure_log.get_room_log_count(request.game_id)
 
         # Full adventure log for cold storage, chronological (oldest first).
         # Bounded by the service's 200-per-room cap; timestamps go out as
         # ISO-8601 with explicit UTC offset (stored naive-UTC in Mongo).
-        raw_logs = await adventure_log.get_room_logs(request.session_id, limit=200)
+        raw_logs = await adventure_log.get_room_logs(request.game_id, limit=200)
         log_entries = []
         for log_doc in sorted(raw_logs, key=lambda log_doc: log_doc.get("log_id") or 0):
             log_timestamp = log_doc.get("timestamp")
@@ -777,19 +777,19 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                     token_boards[board_asset_id] = salvaged_tokens
 
         # Get active map state for ETL — contract data is nested under map_config
-        active_map = await map_service.get_active_map(request.session_id)
+        active_map = await map_service.get_active_map(request.game_id)
         map_state = None
         if active_map and active_map.get("map_config", {}).get("filename"):
             map_state = MapConfig(**active_map["map_config"])
 
         # Get active image state for ETL — contract data is nested under image_config
-        active_image = await image_service.get_active_image(request.session_id)
+        active_image = await image_service.get_active_image(request.game_id)
         image_state = None
         if active_image and active_image.get("image_config", {}).get("filename"):
             image_state = ImageConfig(**active_image["image_config"])
 
         # Get active_display from game session
-        active_display = await image_service.get_active_display(request.session_id)
+        active_display = await image_service.get_active_display(request.game_id)
 
         # Build final state — extract __master_volume from audio_state (it's a float,
         # not an AudioChannelState) before passing to the typed contract
@@ -832,10 +832,10 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
         # If not validate_only, delete the game (deprecated flow)
         if not validate_only:
-            logger.warning(f"Using deprecated delete flow for session {request.session_id}")
-            await GameService.delete_room(request.session_id)
+            logger.warning(f"Using deprecated delete flow for game {request.game_id}")
+            await GameService.delete_room(request.game_id)
 
-        logger.info(f"Returned final state for session {request.session_id} (validate_only={validate_only})")
+        logger.info(f"Returned final state for game {request.game_id} (validate_only={validate_only})")
 
         return SessionEndResponse(
             success=True,

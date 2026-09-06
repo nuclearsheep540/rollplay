@@ -1,35 +1,38 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Scheduling: the GM's declared next game.
+"""Scheduling: the GM's plan for the next game — when it is and what it is called.
 
-`sessions.scheduled_at` is cosmetic and communicative — nothing starts on it,
-nobody is reminded by it, no rule is enforced by it. It exists so the table can
-align, which is facilitate-don't-enforce applied to coordination rather than to
-rules. These tests pin the three things that make it trustworthy:
+`sessions.scheduled_at` and `sessions.next_game_name` are cosmetic and
+communicative. Nothing starts on them, nobody is reminded by them, no rule is
+enforced by them. They exist so the table can align, which is
+facilitate-don't-enforce applied to coordination rather than to rules. These
+tests pin what makes them trustworthy:
 
-- it is editable only while no game is running (a "next game" cannot describe
-  the one in progress);
-- the host ending a game clears it, and the system closing an abandoned one does
-  NOT — the sweeper knows nothing about what the GM told the table;
-- it stores an instant, refusing naive datetimes, so every player reads the same
-  moment in their own timezone.
+- they are editable only while no game is running (a "next game" cannot describe
+  the one in progress), and that is a question about GAMES, so the command asks
+  the game repository rather than the aggregate guessing;
+- a date stores an instant, refusing naive datetimes, so every player reads the
+  same moment in their own timezone;
+- the name is handed to the game that starts and forgotten here, so it describes
+  the night that happened rather than staying attached to the plan.
 
-The take-down tests drive the real PauseSession with api-game's HTTP stubbed, so
-the reason split is exercised end to end rather than asserted about the source.
+The rule that the host ending a game clears the date — and that the system
+closing an abandoned one does not — is exercised end to end against the real
+take-down in modules/game/tests/test_game_lifecycle.py.
 """
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from modules.campaign.domain.campaign_role import CampaignRole
-from modules.session.application.commands import CreateSession, PauseSession, ScheduleSession
-from modules.session.domain.session_aggregate import PauseReason, SessionEntity, SessionStatus
+from modules.game.domain.game_aggregate import GameStatus
+from modules.session.application.commands import CreateSession, ScheduleSession
+from modules.session.domain.session_aggregate import SessionEntity
 from modules.session.domain.session_events import SessionEvents
 
 
@@ -95,21 +98,13 @@ class TestScheduleRules:
         entity = SessionEntity.create(campaign_id=uuid4(), host_id=uuid4())
         when = a_future_time()
 
-        entity.schedule(when)
+        entity.schedule(when, "The Siege of Kraghammer")
         assert entity.scheduled_at == when
+        assert entity.next_game_name == "The Siege of Kraghammer"
 
-        entity.schedule(None)
+        entity.schedule(None, None)
         assert entity.scheduled_at is None
-
-    @pytest.mark.parametrize(
-        "status", [SessionStatus.ACTIVE, SessionStatus.STARTING, SessionStatus.STOPPING]
-    )
-    def test_refused_while_a_game_is_running(self, status):
-        entity = SessionEntity.create(campaign_id=uuid4(), host_id=uuid4())
-        entity.status = status
-
-        with pytest.raises(ValueError, match="End the game before"):
-            entity.schedule(a_future_time())
+        assert entity.next_game_name is None
 
     def test_naive_datetimes_are_refused(self):
         """A wall-clock reading with no zone would be read as server-local and
@@ -129,21 +124,93 @@ class TestScheduleRules:
 
         assert entity.scheduled_at == yesterday
 
+    def test_a_name_without_a_date_is_allowed(self):
+        """A GM who knows what the next game is but not when can say so."""
+        entity = SessionEntity.create(campaign_id=uuid4(), host_id=uuid4())
+
+        entity.schedule(None, "The Siege of Kraghammer")
+
+        assert entity.scheduled_at is None
+        assert entity.next_game_name == "The Siege of Kraghammer"
+
+    def test_a_blank_name_clears_rather_than_stores(self):
+        entity = SessionEntity.create(campaign_id=uuid4(), host_id=uuid4())
+        entity.schedule(None, "  ")
+        assert entity.next_game_name is None
+
+    def test_an_overlong_name_is_refused(self):
+        entity = SessionEntity.create(campaign_id=uuid4(), host_id=uuid4())
+
+        with pytest.raises(ValueError, match="100 characters"):
+            entity.schedule(None, "x" * 101)
+
+    def test_the_name_is_consumed_once(self):
+        """Start takes it; the plan forgets it. Leaving it would re-apply the
+        same name to the following game, and a GM editing it afterwards would
+        be editing the plan rather than the night that happened."""
+        entity = SessionEntity.create(campaign_id=uuid4(), host_id=uuid4())
+        entity.schedule(None, "The Siege of Kraghammer")
+
+        assert entity.consume_next_game_name() == "The Siege of Kraghammer"
+        assert entity.next_game_name is None
+        assert entity.consume_next_game_name() is None
+
+    def test_clearing_the_schedule_leaves_the_name_alone(self):
+        """clear_schedule runs inside the take-down, by which point the name has
+        already left with the game. Only the date is "next" any more."""
+        entity = SessionEntity.create(campaign_id=uuid4(), host_id=uuid4())
+        entity.schedule(a_future_time(), "The Siege of Kraghammer")
+
+        entity.clear_schedule()
+
+        assert entity.scheduled_at is None
+        assert entity.next_game_name == "The Siege of Kraghammer"
+
+
+class FakeGameRepositoryWithOpenGame:
+    """A game repository that always reports something running."""
+
+    def __init__(self, status=GameStatus.ACTIVE):
+        self.status = status
+
+    def get_open_game_for_session(self, session_id):
+        return object()
+
 
 class TestScheduleSessionCommand:
-    def test_host_can_set_it(self, session, campaign_repo, session_repo, user_repo, mock_event_manager, host):
+    def test_host_can_set_both(self, session, campaign_repo, session_repo, user_repo, mock_event_manager, host):
         when = a_future_time()
 
         run(ScheduleSession(session_repo, campaign_repo, user_repo, mock_event_manager).execute(
-            session_id=session.id, host_id=host.id, scheduled_at=when
+            session_id=session.id, host_id=host.id, scheduled_at=when,
+            next_game_name="The Siege of Kraghammer"
         ))
 
-        assert same_instant(session_repo.get_by_id(session.id).scheduled_at, when)
+        stored = session_repo.get_by_id(session.id)
+        assert same_instant(stored.scheduled_at, when)
+        assert stored.next_game_name == "The Siege of Kraghammer"
 
     def test_a_player_cannot(self, session, campaign_repo, session_repo, user_repo, mock_event_manager, player):
         with pytest.raises(ValueError, match="Only the host"):
             run(ScheduleSession(session_repo, campaign_repo, user_repo, mock_event_manager).execute(
                 session_id=session.id, host_id=player.id, scheduled_at=a_future_time()
+            ))
+
+        assert session_repo.get_by_id(session.id).scheduled_at is None
+
+    def test_refused_while_a_game_is_running(
+        self, session, campaign_repo, session_repo, user_repo, mock_event_manager, host
+    ):
+        """A "next game" cannot describe the one in progress. The command asks
+        the game repository, because liveness is not the session's to know."""
+        schedule = ScheduleSession(
+            session_repo, campaign_repo, user_repo, mock_event_manager,
+            FakeGameRepositoryWithOpenGame(),
+        )
+
+        with pytest.raises(ValueError, match="End the game before"):
+            run(schedule.execute(
+                session_id=session.id, host_id=host.id, scheduled_at=a_future_time()
             ))
 
         assert session_repo.get_by_id(session.id).scheduled_at is None
@@ -196,6 +263,21 @@ class TestScheduledEventRecipients:
         assert all(event.show_toast for event in events)
         assert all(event.save_notification for event in events)
 
+    def test_carries_the_planned_name(self):
+        dm_id = uuid4()
+        events = SessionEvents.session_scheduled(
+            campaign_member_ids=[dm_id, uuid4()],
+            session_id=uuid4(),
+            campaign_id=uuid4(),
+            campaign_name="Curse of Strahd",
+            host_id=dm_id,
+            host_screen_name="Matt",
+            scheduled_at=a_future_time(),
+            next_game_name="The Siege of Kraghammer",
+        )
+
+        assert all(event.data["next_game_name"] == "The Siege of Kraghammer" for event in events)
+
     def test_payload_is_json_safe(self):
         dm_id = uuid4()
         events = SessionEvents.session_scheduled(
@@ -206,94 +288,9 @@ class TestScheduledEventRecipients:
             host_id=dm_id,
             host_screen_name="Matt",
             scheduled_at=a_future_time(),
+            next_game_name="The Siege of Kraghammer",
         )
 
         for event in events:
             for key, value in event.data.items():
                 assert value is None or isinstance(value, str), f"{key} is {type(value).__name__}"
-
-
-def _stub_api_game():
-    """Stand in for api-game's end-of-game HTTP call.
-
-    Every field of SessionEndFinalState has a default, so an empty object is a
-    valid "nothing was going on" final state — enough to drive the real ETL.
-    """
-    response = MagicMock()
-    response.status_code = 200
-    response.json.return_value = {"success": True, "final_state": {}, "message": ""}
-
-    client = AsyncMock()
-    client.post.return_value = response
-    client.delete.return_value = response
-    context = MagicMock()
-    context.__aenter__ = AsyncMock(return_value=client)
-    context.__aexit__ = AsyncMock(return_value=False)
-    return context
-
-
-class TestTakeDownClearsTheSchedule:
-    """The rule that gives the date its meaning: it names the NEXT game, so the
-    host ending one forgets it — and the system closing an abandoned one does not.
-    """
-
-    def _live_session_with_a_schedule(self, session, session_repo):
-        session.schedule(a_future_time())
-        session.start()
-        session.activate()
-        session_repo.save(session)
-        return session
-
-    def _take_down(self, session, repos, reason):
-        session_repo, campaign_repo, user_repo, event_manager = repos
-        command = PauseSession(
-            session_repository=session_repo,
-            user_repository=user_repo,
-            character_repository=None,
-            campaign_repository=campaign_repo,
-            event_manager=event_manager,
-            asset_repository=None,
-        )
-        with patch("modules.session.application.commands.httpx.AsyncClient", return_value=_stub_api_game()):
-            run(command.execute(session.id, session.host_id, reason=reason))
-
-    def test_the_host_ending_it_clears_the_date(
-        self, session, session_repo, campaign_repo, user_repo, mock_event_manager
-    ):
-        self._live_session_with_a_schedule(session, session_repo)
-
-        self._take_down(session, (session_repo, campaign_repo, user_repo, mock_event_manager),
-                        PauseReason.HOST_ENDED)
-
-        stored = session_repo.get_by_id(session.id)
-        assert stored.status == SessionStatus.INACTIVE
-        assert stored.scheduled_at is None
-
-    def test_the_system_closing_it_leaves_the_date(
-        self, session, session_repo, campaign_repo, user_repo, mock_event_manager
-    ):
-        """The sweeper closing a forgotten game says nothing about what the GM
-        told the table, so the next game stays on the board."""
-        self._live_session_with_a_schedule(session, session_repo)
-        declared = session.scheduled_at
-
-        self._take_down(session, (session_repo, campaign_repo, user_repo, mock_event_manager),
-                        PauseReason.SYSTEM)
-
-        stored = session_repo.get_by_id(session.id)
-        assert stored.status == SessionStatus.INACTIVE
-        assert same_instant(stored.scheduled_at, declared)
-
-    def test_the_two_reasons_speak_differently(
-        self, session, session_repo, campaign_repo, user_repo, mock_event_manager
-    ):
-        """Host: players are told. System: silence."""
-        self._live_session_with_a_schedule(session, session_repo)
-        repos = (session_repo, campaign_repo, user_repo, mock_event_manager)
-
-        mock_event_manager.broadcast.reset_mock()
-        self._take_down(session, repos, PauseReason.HOST_ENDED)
-        host_events = [call.args[0] for call in mock_event_manager.broadcast.call_args_list]
-
-        assert {event.event_type for event in host_events} == {"session_ended"}
-        assert all(event.show_toast for event in host_events)

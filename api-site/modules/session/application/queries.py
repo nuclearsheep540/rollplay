@@ -6,6 +6,8 @@ from uuid import UUID
 from sqlalchemy import or_
 from sqlalchemy.orm import Session as DbSession, selectinload
 
+from modules.game.api.schemas import GameResponse
+from modules.game.repositories.game_repository import GameRepository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.session.api.schemas import SessionResponse, RosterPlayerResponse
 from modules.session.model.session_model import Session as SessionModel, SessionJoinedUser
@@ -18,9 +20,13 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
     """
     Build an enriched SessionResponse from a session ORM model.
 
-    Performs cross-aggregate reads to resolve host display name and
-    roster details (user names, character info) for frontend display.
+    Performs cross-aggregate reads to resolve host display name, roster details
+    (user names, character info), and the session's games — the open one, which
+    is what "live" means, and the ended ones, which are its history.
     """
+    game_repo = GameRepository(db)
+    open_game = game_repo.get_open_game_for_session(model.id)
+    played_games = game_repo.get_ended_games_for_session(model.id)
     # Resolve host display name
     host_user = db.query(User).filter(User.id == model.host_id).first()
     host_name = host_user.screen_name or host_user.email if host_user else "Unknown"
@@ -66,11 +72,11 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
         campaign_id=model.campaign_id,
         host_id=model.host_id,
         host_name=host_name,
-        status=model.status,
         created_at=model.created_at,
-        started_at=model.started_at,
-        stopped_at=model.stopped_at,
         scheduled_at=model.scheduled_at,
+        next_game_name=model.next_game_name,
+        game=GameResponse.model_validate(open_game) if open_game else None,
+        games=[GameResponse.model_validate(game) for game in played_games],
         joined_users=joined_user_ids,
         roster=roster,
         player_count=len(joined_user_ids)

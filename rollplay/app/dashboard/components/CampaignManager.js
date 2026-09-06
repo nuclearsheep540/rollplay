@@ -12,6 +12,7 @@ import { useGSAP } from '@gsap/react'
 import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
 import EndGameModal from './EndGameModal'
+import EditGameModal from './EditGameModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
 import ScheduleGameModal from './ScheduleGameModal'
 import CampaignInviteModal from './CampaignInviteModal'
@@ -28,6 +29,7 @@ import {
   faPlay,
   faStop,
   faCalendarDays,
+  faPen,
   faRightToBracket,
   faUserPlus,
   faUserMinus,
@@ -44,9 +46,10 @@ import { useCampaigns } from '../hooks/useCampaigns'
 import { useInvitedCampaignMembers } from '../hooks/useInvitedCampaignMembers'
 import { useCharacters } from '../hooks/useCharacters'
 import { useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
-import { useStartGame, useEndGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
-import { findCurrentSession } from '../utils/homeRanking'
+import { useStartGame, useEndGame, useUpdateGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
+import { findCurrentSession, findOpenGame, findPlayedGames } from '../utils/homeRanking'
 import { gameStatusLine } from '../utils/gameStatusLine'
+import { formatDuration, formatScheduledTime } from '@/app/shared/utils/formatTime'
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
 import { useAssets } from '@/app/asset_library/hooks/useAssets'
 import { useCampaignAssetsMetadata } from '@/app/asset_library/hooks/useCampaignAssetsMetadata'
@@ -286,6 +289,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const startGameMutation = useStartGame()
   const endGameMutation = useEndGame()
   const scheduleGameMutation = useScheduleGame()
+  const updateGameMutation = useUpdateGame()
   const releaseCharacterMutation = useReleaseCharacter()
 
   // ── UI-only state ──
@@ -308,6 +312,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const [removePlayerTarget, setRemovePlayerTarget] = useState(null)
   const [endGameTarget, setEndGameTarget] = useState(null)
   const [scheduleGameTarget, setScheduleGameTarget] = useState(null)
+  const [editGameTarget, setEditGameTarget] = useState(null)
 
   // Invite modal — ID-only, campaign derived from query cache (no sync effect needed)
   const [inviteModalCampaignId, setInviteModalCampaignId] = useState(null)
@@ -390,14 +395,19 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     setEndGameTarget(campaign)
   }
 
-  // End the game (after confirmation)
-  const confirmEndGame = async () => {
+  // End the game (after confirmation), recording what it was called and what
+  // happened if the GM filled either in. Both are optional and never block.
+  const confirmEndGame = async ({ name, summary }) => {
     if (!endGameTarget) return
 
     setError(null)
 
     try {
-      await endGameMutation.mutateAsync(findCurrentSession(endGameTarget)?.id)
+      await endGameMutation.mutateAsync({
+        gameId: findOpenGame(endGameTarget)?.id,
+        name,
+        summary,
+      })
       setEndGameTarget(null)
     } catch (err) {
       setError(err.message)
@@ -414,8 +424,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     queryClient.invalidateQueries({ queryKey: ['campaigns'] })
   }
 
-  // Say when the next game is (or clear it)
-  const saveSchedule = async (scheduledAt) => {
+  // Say when the next game is and what it is called (or clear both)
+  const saveSchedule = async ({ scheduledAt, nextGameName }) => {
     if (!scheduleGameTarget) return
 
     setError(null)
@@ -424,6 +434,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       await scheduleGameMutation.mutateAsync({
         sessionId: findCurrentSession(scheduleGameTarget)?.id,
         scheduledAt,
+        nextGameName,
       })
       setScheduleGameTarget(null)
     } catch (err) {
@@ -431,10 +442,24 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }
 
+  // Correct a past game's record (host only)
+  const saveGameRecord = async ({ name, summary }) => {
+    if (!editGameTarget) return
 
-  // Enter game
+    setError(null)
+
+    try {
+      await updateGameMutation.mutateAsync({ gameId: editGameTarget.id, name, summary })
+      setEditGameTarget(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+
+  // Enter game — the room id IS the game's id
   const enterGame = (game) => {
-    router.push(`/game?room_id=${game.session_id || game.id}`)
+    router.push(`/game?room_id=${game.id}`)
   }
 
   // Open the campaign form on a blank campaign. Shared by the create tile and
@@ -576,13 +601,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   }
 
   // Is a game running for this campaign? (used to disable the release button)
-  // 'paused' was never a status the backend emits — the resting state is
-  // 'inactive'. STOPPING counts as running: the ETL is still in flight.
-  const hasActiveSession = (campaignId) => {
-    return allSessions.some(s =>
-      s.campaign_id === campaignId &&
-      (s.status === 'active' || s.status === 'starting' || s.status === 'stopping')
-    )
+  // Any OPEN game counts, including the ETL either side of play: the room
+  // exists for starting, active and ending alike. The session itself carries
+  // no status — its game does, and only while there is one.
+  const hasRunningGame = (campaignId) => {
+    return allSessions.some(session => session.campaign_id === campaignId && Boolean(session.game))
   }
 
   // Handle invite_campaign_id from URL (notification click)
@@ -1390,7 +1413,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
               // never replaced. An empty list means the data is wrong, not that
               // the GM has a game to create.
               const currentSession = allSessions.find(session => session.campaign_id === campaign.id)
-              const isGameLive = currentSession?.status === 'active'
+              const currentGame = currentSession?.game ?? null
+              const playedGames = currentSession?.games ?? []
+              const isGameLive = currentGame?.status === 'active'
 
               const isSelected = selectedCampaign?.id === campaign.id
 
@@ -1595,7 +1620,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     and horizontally masked so the stripes
                                     fade toward the right edge, leaving the
                                     action buttons unobscured. */}
-                                {(currentSession.status === 'starting' || (startGameMutation.isPending && startGameMutation.variables === currentSession.id)) && (
+                                {(currentGame?.status === 'starting' || (startGameMutation.isPending && startGameMutation.variables === currentSession.id)) && (
                                   <div
                                     className="absolute inset-0 pointer-events-none"
                                     style={{
@@ -1641,7 +1666,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                 <div className="flex gap-2 flex-shrink-0 self-stretch">
                                   {isGameLive ? (
                                     <>
-                                      <Button variant="success" size="md" className="flex items-center justify-center min-w-[7rem] !text-lg" onClick={() => enterGame(currentSession)}>
+                                      <Button variant="success" size="md" className="flex items-center justify-center min-w-[7rem] !text-lg" onClick={() => enterGame(currentGame)}>
                                         <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />Enter
                                       </Button>
                                       {campaign.host_id === user.id && (
@@ -1657,20 +1682,20 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                         </button>
                                       )}
                                     </>
-                                  ) : (currentSession.status === 'starting' || currentSession.status === 'inactive') && campaign.host_id === user.id ? (
+                                  ) : (!currentGame || currentGame.status === 'starting') && campaign.host_id === user.id ? (
                                     <>
                                       <Button
                                         variant="success"
                                         size="md"
                                         className="flex items-center justify-center min-w-[7rem] !text-lg"
                                         onClick={() => startGame(currentSession.id)}
-                                        disabled={(startGameMutation.isPending && startGameMutation.variables === currentSession.id) || currentSession.status === 'starting'}
+                                        disabled={(startGameMutation.isPending && startGameMutation.variables === currentSession.id) || Boolean(currentGame)}
                                       >
                                         <FontAwesomeIcon icon={faPlay} className="mr-2" />Start
                                       </Button>
                                       <button
                                         onClick={() => setScheduleGameTarget(campaign)}
-                                        disabled={scheduleGameMutation.isPending || currentSession.status === 'starting'}
+                                        disabled={scheduleGameMutation.isPending || Boolean(currentGame)}
                                         className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{backgroundColor: 'transparent', color: THEME.textSecondary, borderColor: THEME.borderSubtle}}
                                         title="Set when the next game is"
@@ -1687,6 +1712,57 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                  session. Rendering nothing beats offering a create
                                  door that no longer exists. */
                               null
+                            )}
+
+                            {playedGames.length > 0 && (
+                              <div className="mt-4" onClick={(e) => e.stopPropagation()}>
+                                <h4
+                                  className="text-xs font-semibold tracking-widest mb-2 drop-shadow"
+                                  style={{color: THEME.textSecondary}}
+                                >
+                                  GAMES PLAYED
+                                </h4>
+                                <div className="space-y-1.5">
+                                  {playedGames.map((game, index) => {
+                                    // Newest first, so the oldest game is number 1.
+                                    const gameNumber = playedGames.length - index
+                                    const duration = formatDuration(game.started_at, game.ended_at)
+                                    return (
+                                      <div
+                                        key={game.id}
+                                        className="py-2 px-3 rounded-sm border"
+                                        style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+                                      >
+                                        <div className="flex items-baseline justify-between gap-3">
+                                          <span className="font-medium truncate" style={{color: THEME.textOnDark}}>
+                                            {game.name || `Game ${gameNumber}`}
+                                          </span>
+                                          <span className="text-xs flex-shrink-0 flex items-center gap-2" style={{color: THEME.textSecondary}}>
+                                            {game.started_at && formatScheduledTime(game.started_at)}
+                                            {duration && <span>· {duration}</span>}
+                                            <span>· {game.attendance?.length || 0} at the table</span>
+                                            {campaign.host_id === user.id && (
+                                              <button
+                                                onClick={() => setEditGameTarget({ ...game, number: gameNumber })}
+                                                className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
+                                                title="Edit this game"
+                                                aria-label={`Edit ${game.name || `Game ${gameNumber}`}`}
+                                              >
+                                                <FontAwesomeIcon icon={faPen} />
+                                              </button>
+                                            )}
+                                          </span>
+                                        </div>
+                                        {game.summary && (
+                                          <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
+                                            {game.summary}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
                             )}
                           </div>
 
@@ -1784,7 +1860,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     onRemove={() => setRemovePlayerTarget({ campaign, member })}
                                     canRelease={isCurrentUser && !member.is_host && member.campaign_role !== 'mod' && !!member.character_id}
                                     onRelease={() => handleReleaseCharacter(campaign)}
-                                    releaseDisabled={hasActiveSession(campaign.id)}
+                                    releaseDisabled={hasRunningGame(campaign.id)}
                                   />
                                 )
                               })}
@@ -2162,9 +2238,22 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       {endGameTarget && (
         <EndGameModal
           campaign={endGameTarget}
+          game={findOpenGame(endGameTarget)}
+          gameNumber={findPlayedGames(endGameTarget).length + 1}
           onConfirm={confirmEndGame}
           onCancel={cancelEndGame}
           isEnding={endGameMutation.isPending}
+        />
+      )}
+
+      {/* Edit a past game's record */}
+      {editGameTarget && (
+        <EditGameModal
+          game={editGameTarget}
+          gameNumber={editGameTarget.number}
+          onSave={saveGameRecord}
+          onCancel={() => setEditGameTarget(null)}
+          isSaving={updateGameMutation.isPending}
         />
       )}
 
@@ -2183,6 +2272,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         <ScheduleGameModal
           campaign={scheduleGameTarget}
           currentValue={findCurrentSession(scheduleGameTarget)?.scheduled_at}
+          currentName={findCurrentSession(scheduleGameTarget)?.next_game_name}
           onSave={saveSchedule}
           onCancel={() => setScheduleGameTarget(null)}
           isSaving={scheduleGameMutation.isPending}
@@ -2204,7 +2294,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
           campaign={characterModalCampaign}
           characters={characters}
           currentCharacterId={characterModalCampaign.members?.find(m => m.user_id === user.id)?.character_id ?? null}
-          sessionActive={hasActiveSession(characterModalCampaign.id)}
+          sessionActive={hasRunningGame(characterModalCampaign.id)}
           onClose={() => {
             setShowCharacterModal(false)
             setCharacterModalCampaign(null)

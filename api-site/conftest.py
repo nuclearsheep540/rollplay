@@ -61,11 +61,13 @@ from modules.events.model.notification_model import Notification as _Notificatio
 from modules.notes.model.note_model import Note as _Note  # noqa: F401
 from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
+from modules.game.repositories.game_repository import GameRepository
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.user.domain.user_aggregate import UserAggregate
-from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
+from modules.session.domain.session_aggregate import SessionEntity
+from modules.game.domain.game_aggregate import GameAggregate, GameStatus
 from modules.characters.domain.character_aggregate import (
     AbilityScores,
     CharacterAggregate,
@@ -228,6 +230,12 @@ def session_repo(db_session: Session):
 
 
 @pytest.fixture
+def game_repo(db_session: Session):
+    """Game repository with test database"""
+    return GameRepository(db_session)
+
+
+@pytest.fixture
 def character_repo(db_session: Session):
     """Character repository with test database"""
     return CharacterRepository(db_session)
@@ -317,6 +325,46 @@ def create_session(session_repo: SessionRepository):
         return session
 
     return _create_session
+
+
+@pytest.fixture
+def create_game(game_repo: GameRepository):
+    """
+    Factory fixture to create test games.
+
+    A game is minted STARTING, exactly as StartGame does. Pass ``status`` to
+    place it further along its lifecycle, and the state fields to stand in for
+    a night that has already been played.
+
+    Usage:
+        game = create_game(session_id=session.id, campaign_id=campaign.id, host_id=user.id)
+        ended = create_game(..., status=GameStatus.ENDED, map_token_state={...})
+    """
+    def _create_game(
+        session_id: uuid.UUID,
+        campaign_id: uuid.UUID,
+        host_id: uuid.UUID,
+        status: GameStatus = GameStatus.STARTING,
+        name=None,
+        **state_fields,
+    ):
+        game = GameAggregate.create(
+            session_id=session_id,
+            campaign_id=campaign_id,
+            host_id=host_id,
+            name=name,
+        )
+        game.status = status
+        if status is not GameStatus.STARTING:
+            game.started_at = datetime.utcnow()
+        if status is GameStatus.ENDED:
+            game.ended_at = datetime.utcnow()
+        for field_name, value in state_fields.items():
+            setattr(game, field_name, value)
+        game_repo.save(game)
+        return game
+
+    return _create_game
 
 
 @pytest.fixture

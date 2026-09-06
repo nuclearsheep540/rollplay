@@ -5,32 +5,38 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
- * The campaign's game, as the dashboard drives it.
+ * The campaign's games, as the dashboard drives them.
  *
- * Two verbs the GM sees — start and end — plus scheduling the next one.
- * There is no create: a campaign is born with its session and keeps it for
- * life, which is what carries token positions and the adventure log from one
- * game to the next. "Pause" survives only inside api-site, for the expiry
- * sweeper; nothing here should ever say it.
+ * Two verbs the GM sees — start and end — plus naming the night afterwards and
+ * planning the next one. There is no create and no reset: a campaign is born
+ * with its session and keeps it for life. Each game is its own thing, and
+ * starting one seeds it from the last one, which is what carries token
+ * positions and the adventure log from one evening to the next.
  */
 
 /**
- * Start the campaign's game.
+ * Start a game for the campaign's session.
+ *
+ * Returns the new game, whose id is the room id the client enters with.
  */
 export function useStartGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/start`, {
+      const response = await authFetch('/api/games/', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ session_id: sessionId }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to start the game')
       }
+
+      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })
@@ -39,17 +45,22 @@ export function useStartGame() {
 }
 
 /**
- * End the running game. The session survives — everything on the board and in
- * the log comes back the next time it starts.
+ * End the running game, optionally recording what it was called and what
+ * happened. Nothing is lost — the next game starts from where this one ends.
+ *
+ * Name and summary are always optional: a GM who just wants the game to stop
+ * sends neither.
  */
 export function useEndGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/end`, {
+    mutationFn: async ({ gameId, name = null, summary = null }) => {
+      const response = await authFetch(`/api/games/${gameId}/end`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ name, summary }),
       })
 
       if (!response.ok) {
@@ -64,21 +75,52 @@ export function useEndGame() {
 }
 
 /**
- * Say when the next game is, or clear it by passing null.
+ * Rename a past game or rewrite its summary (host only).
+ *
+ * A field left out is unchanged; an empty string clears it.
+ */
+export function useUpdateGame() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ gameId, name = null, summary = null }) => {
+      const response = await authFetch(`/api/games/${gameId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, summary }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to save the game')
+      }
+
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    },
+  })
+}
+
+/**
+ * Say when the next game is and what it is called, or clear both with nulls.
  *
  * Purely communicative — nothing starts on the date and nobody is reminded. The
- * value is sent as an ISO instant so every player reads it in their own zone.
+ * date is sent as an ISO instant so every player reads it in their own zone;
+ * the name is taken by the next Start and belongs to that game from then on.
  */
 export function useScheduleGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ sessionId, scheduledAt }) => {
+    mutationFn: async ({ sessionId, scheduledAt, nextGameName = null }) => {
       const response = await authFetch(`/api/sessions/${sessionId}/schedule`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ scheduled_at: scheduledAt }),
+        body: JSON.stringify({ scheduled_at: scheduledAt, next_game_name: nextGameName }),
       })
 
       if (!response.ok) {

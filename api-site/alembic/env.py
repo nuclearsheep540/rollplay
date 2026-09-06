@@ -37,6 +37,7 @@ try:
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.campaign_member_model import CampaignMember
     from modules.session.model.session_model import Session, SessionJoinedUser
+    from modules.game.model.game_model import Game
     from modules.friendship.model.friend_request_model import FriendRequestModel
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.events.model.notification_model import Notification

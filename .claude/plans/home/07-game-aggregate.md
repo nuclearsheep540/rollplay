@@ -20,6 +20,28 @@
 > here** — where this document is silent, stop and ask rather than guess. Read the whole
 > thing before touching code.
 >
+> **BUILT 2026-09-06 on `feature/home-page-game-lifecycle`.** All five phases are done and
+> the three suites are green (api-site 1218, api-game 105, contracts 121); the migration ran
+> on the dev database and round-tripped through downgrade. Deviations from this plan, all
+> deliberate:
+> - **The disconnect route is `/api/games/internal/{id}/disconnect`**, unauthenticated but
+>   404'd at the nginx edge, following the existing `/api/users/internal/` pattern. This plan
+>   said the old route was unauthenticated; it was not, which is part of why api-game could
+>   never have called it.
+> - **The partial unique index is declared for SQLite as well as PostgreSQL** (`sqlite_where`
+>   beside `postgresql_where`). Without it the test harness silently applies a TOTAL unique
+>   index and refuses a session its second game — the opposite of the invariant.
+> - **`_ExtractedGameState` carries `attendance`**, built by `_build_attendance` and passed to
+>   `game.end()`. `record_end_state` still copies exactly the seven state fields.
+> - **`GameRepository.get_newest_ended_game_for_campaign`** exists so the library's asset
+>   guards can ask without a session lookup; the plan had that query inline in the library.
+> - **`ConfirmDialog` gained a `children` slot** so the in-game End dialog can carry the same
+>   two fields as the drawer's, rather than a second dialog being written.
+> - **`eventConfig.toastMessage` may now be a function**, resolved in the toast helper — the
+>   minimal extension this plan anticipated for date- and name-dependent copy.
+> - The migration binds JSONB explicitly (psycopg2 cannot adapt a bare dict) and refuses to
+>   run while any session is not `inactive`.
+>
 > Scope boundary: this is the first extraction of
 > [05](05-campaign-create-and-publish.md)'s long-term model. The second — Party as the
 > session's roster *in code*, roles moving off the campaign — is described in 05 and is
@@ -573,6 +595,50 @@ URL at `:322`) — today it is handed `session.id`; it must be handed the **open
 `_notify_active_session` (`:650`, URL at `:683`) builds its room from `active_session.id`
 and must do the same.
 
+### Player disconnect — character state to cold storage
+
+**Added 2026-09-06 after a gap was found in this plan's first draft.** `DisconnectFromGame`
+(`session/application/commands.py`, end of file) is the character-level ETL: it writes a
+player's current HP from the hot room onto their character row and marks the character dead
+at zero. Position and status effects are commented-out TODOs and stay that way.
+
+Three facts established before deciding this:
+
+- It reads `session.is_active()`, which this plan deletes, so it must move whatever else
+  happens.
+- **Nothing calls it.** `POST /api/sessions/{id}/disconnect` has no caller in the frontend,
+  and api-game's only outbound calls to api-site are the role change and the character
+  summary (`api-game/site_client.py`). HP changed in play therefore never reaches
+  PostgreSQL today. That is a pre-existing bug, not one this plan introduces.
+- **The End ETL does not cover it.** `_extract_and_sync_game_state` syncs character
+  *colour* only, and `PlayerState` carries no HP field.
+
+**The destination is the character row**, which is user-owned. Not the game, not the party.
+The game's cold state is the board, log, screen and audio; the party records which character
+someone brought, not that character's state. (05 says this outright: "Runtime state stays on
+the character … named here so nobody later 'fixes' it by moving characters into the session".)
+
+The command moves to the game module and is addressed by game id:
+
+1. `POST /api/games/{game_id}/disconnect` body
+   `{"user_id": UUID, "character_id": UUID, "character_state": {...}}`.
+2. Load the game (404 if absent). Require `status == ACTIVE`
+   (`ValueError("No game is running")`).
+3. Character ownership check and the campaign-lock check unchanged, with the campaign read
+   from `game.campaign_id` instead of `session.campaign_id`.
+4. The HP write, the `mark_dead()` branch and the character save are unchanged.
+
+**Its caller** (Phase C): api-game's `player_disconnect` handler
+(`websocket_handlers/websocket_events.py:780`), which fires on every socket close. It reads
+the disconnecting player's `hp_current` from the room's `player_metadata` and posts it
+through a new `site_client.save_character_state(...)`, following the shape of the existing
+`request_role_change`. Failures are logged and swallowed — a disconnect must never be held
+up by api-site, and the player's next disconnect or the game's End will try again.
+
+**Not taken (decided 2026-09-06):** adding `hp_current` to `PlayerState` so the End ETL
+persists HP for everyone. It would make the save redundant rather than best-effort, but it
+is a contract change and a genuine scope addition. Revisit if disconnect saves prove lossy.
+
 ### Reset game
 
 **Already removed from `feature/home-page`.** Phase E verifies.
@@ -647,7 +713,9 @@ and must do the same.
 | `StartSession` — status guard `:719`, STARTING `:730-732`, **reads of session state**: audio `:441-443`, boards + seed `:581-582`, map `:635-637`, image `:657-659`, spotify/display/log in the payload `:803-807`; payload `session_id=` `:780`; api-game POST `:816`; echo tripwire `:830-832`; **seed stamp** `:839`; activate `:838-843`; rollback `:846-853`; `mark_played` + `session_started` `:858-875` | `commands.py` (numbers pre-Reset-removal; the class starts ~100 lines earlier now) |
 | `_ExtractedGameState`, `_extract_and_sync_game_state` (end POST `:931-933`), `_save_session_with_retry`, `_abort_stuck_stop`, `_async_cleanup_game` (DELETE `:1170`) | `commands.py` |
 | `PauseSession` — ACTIVE guard `:1236`, `pause()` `:1240`, **phase-2 state copy onto the session** `:1254-1260`, `clear_schedule` on HOST_ENDED `:1261-1267`, retry `:1269`, event split `:1290`, phase 3 `:1315` | `commands.py` |
-| `RemovePlayerFromSession`, `SelectCharacterForSession` (deprecated), `DisconnectFromGame` | `commands.py` (end of file) |
+| `RemovePlayerFromSession`, `SelectCharacterForSession` (deprecated — reads no status, stays put), `DisconnectFromGame` (reads `session.is_active()`; moves to the game module) | `commands.py` (end of file) |
+| api-game's outbound calls to api-site (the pattern for the new one) | `api-game/site_client.py:27, 71` |
+| api-game's disconnect handler | `api-game/websocket_handlers/websocket_events.py:780` |
 | Session routes: `my-sessions`, get, by campaign, remove player, **start**, **end**, schedule, select-character, disconnect | `modules/session/api/endpoints.py` |
 | `SessionResponse` (`status`, `started_at`, `stopped_at`), `RosterPlayerResponse`, `ScheduleSessionRequest` | `modules/session/api/schemas.py:10-68` |
 | Repository: `get_active_session_for_campaign` `:50`, `get_stopping_sessions` `:64`, `get_expired_sessions` `:77`, `get_active_sessions` `:95`, `save` `:110` (maps the state fields), `_model_to_aggregate` | `modules/session/repositories/session_repository.py` |
@@ -731,6 +799,11 @@ exactly. Add `UpdateGame(game_repository).execute(game_id, host_id, name, summar
 check `ValueError("Only the host can edit the game")`; applies `rename` when `name` is not
 None, `summarise` when `summary` is not None).
 
+**`DisconnectFromGame` moves too**, into the same module, rewired per "Player disconnect"
+above: it takes `game_id`, injects `GameRepository` and `CharacterRepository` (no
+`SessionRepository`), and reads the campaign from `game.campaign_id`. Its body below the
+guards is unchanged. Delete it from the session module.
+
 `CreateSession` keeps its one-session guard. `ScheduleSession` gains a `GameRepository`
 constructor argument, the open-game refusal, and the `next_game_name` parameter passed
 through to `session.schedule(scheduled_at, next_game_name)`; its event call passes the
@@ -748,6 +821,7 @@ name too.
 | Library `DeleteAsset` scrub `:214` | every session's `remove_asset_references` | the newest ended game's `remove_asset_references`, per affected campaign's session |
 | Expiry sweeper | `get_expired_sessions`, `PauseSession(SYSTEM)` | `get_expired_open_games`, `EndGame(EndReason.SYSTEM)`; stuck-ENDING reconcile over `get_ending_games` |
 | `admin.py` | `get_active_sessions`, `pause-all-sessions`, `pause-session` | `get_open_games`; commands renamed `end-all-games`, `end-game`; `list-active` prints game id, campaign id, `started_at` |
+| `DisconnectFromGame` | `session.is_active()` | loads the game by id; `status == ACTIVE`; campaign from `game.campaign_id` |
 
 Then delete `get_active_session_for_campaign`, `get_stopping_sessions`,
 `get_expired_sessions`, `get_active_sessions` from `SessionRepository`, the state-field
@@ -769,10 +843,13 @@ router):
 | `POST /api/games/` | `StartGameRequest` | `GameResponse` 201 | 404 session not found; 400 any `ValueError` |
 | `POST /api/games/{game_id}/end` | `EndGameRequest` | 204 | 404 game not found; 400 any `ValueError` |
 | `PATCH /api/games/{game_id}` | `UpdateGameRequest` | `GameResponse` | 404; 400 |
+| `POST /api/games/{game_id}/disconnect` | `DisconnectRequest(user_id: UUID, character_id: UUID, character_state: dict)` | 204 | 404 game/character not found; 400 any `ValueError` |
 
-Three routes. No GET: reads come through `SessionResponse.game` / `.games`.
+Four routes. No GET: reads come through `SessionResponse.game` / `.games`. The disconnect
+route is called by api-game, not by a browser, and stays unauthenticated in the same way the
+existing session route was.
 
-Session router: delete `POST /{id}/start` and `POST /{id}/end`. Keep the rest. The session
+Session router: delete `POST /{id}/start`, `POST /{id}/end` and `POST /{id}/disconnect`. Keep the rest. The session
 endpoints' response helper attaches `game` (`get_open_game_for_session`) and `games`
 (`get_ended_games_for_session`).
 
@@ -865,6 +942,10 @@ code first. Harness: the `run()` helper and the api-game mocking already used in
   leaves older games untouched.
 - Session response: `games` is ENDED only, newest first; `GameResponse.model_fields` contains
   none of the eight state names.
+- `DisconnectFromGame`: refuses when no game is running and when the game is not ACTIVE;
+  refuses a character the user does not own; refuses a character locked to a different
+  campaign; writes `hp_current` and marks the character dead at zero; leaves the game and
+  the session rows untouched.
 - Sweeper picks up an expired open game and ends it with SYSTEM.
 - Migration data step (PostgreSQL only; skip otherwise): a played session becomes exactly
   one ENDED game carrying its state; a never-played session becomes none; counts match.
@@ -874,7 +955,8 @@ code first. Harness: the `run()` helper and the api-game mocking already used in
 - Directory tree: add `game/` under `modules/` (api / application `StartGame, EndGame,
   UpdateGame` / domain `game_aggregate.py` / model / repositories); `session/` comment →
   "(who and when: roster, schedule)" and its `commands.py` list →
-  `CreateSession, ScheduleSession, RemovePlayerFromSession`.
+  `CreateSession, ScheduleSession, RemovePlayerFromSession`. The game module's
+  `commands.py` list is `StartGame, EndGame, UpdateGame, DisconnectFromGame`.
 - **Rewrite "Game vs Session — the vocabulary boundary"**: Game is one play, an aggregate
   with a lifecycle (STARTING/ACTIVE/ENDING/ENDED) **that owns the state of play**; it is
   hot while open and a Mongo room keyed by its id exists exactly then; the newest ended game
@@ -904,8 +986,16 @@ code first. Harness: the `run()` helper and the api-game mocking already used in
 ### Phase C — api-game and nginx
 
 - `api-game/app.py:526-664` and `:674-850`: read `request.game_id`; log lines say "game".
-  No behaviour change: api-game never knew what a session was. Run
-  `docker exec api-game-dev python -m pytest -q`.
+  No behaviour change: api-game never knew what a session was.
+- **New outbound call.** `site_client.py` gains `save_character_state(game_id, user_id,
+  character_id, character_state)` following `request_role_change`'s shape (async httpx,
+  `API_SITE_URL`, log and swallow every failure). `WebsocketEvent.player_disconnect`
+  (`websocket_handlers/websocket_events.py:780`) calls it for the disconnecting player when
+  the room's `player_metadata` holds a `character_id`, sending
+  `{"current_hp": <player_metadata hp_current>}`. Best-effort: a failure is logged at
+  warning and the disconnect proceeds. This is what makes the character ETL real for the
+  first time.
+- Run `docker exec api-game-dev python -m pytest -q`.
 - nginx: `location /api/game/` (trailing slash) does not match `/api/games/…`, so the new
   prefix falls through to api-site via the `/api/` catch-all in dev and would in prod. Add
   an explicit `location /api/games/` block to BOTH configs anyway: in
@@ -1062,6 +1152,10 @@ memory (a page outside the protected routes that imports the touched modules, re
     no active map and no orphaned token board for it; an older game's record is untouched.
 14. **Late joiner while live** is added to the room (accept an invite during a game; the
     player can join).
+14a. **Disconnect saves HP**: with a player in a live game, change their HP in the room,
+    close their tab, and confirm the character row's `hp_current` matches in PostgreSQL.
+    Take HP to zero and confirm the character is marked dead. Stop api-site and repeat:
+    the disconnect still completes in the game and a warning is logged.
 15. **No Reset anywhere**: no button; `POST /api/sessions/{id}/reset` is 404/405.
 16. **Migration precondition**: with a session left `active` in the dev DB, `alembic upgrade`
     fails with the message; end it, upgrade succeeds; `\d games` shows the partial unique index

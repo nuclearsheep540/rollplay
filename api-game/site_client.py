@@ -67,6 +67,44 @@ async def request_role_change(
         raise Exception(f"Failed to connect to api-site: {e}")
 
 
+async def save_character_state(
+    game_id: str,
+    user_id: str,
+    character_id: str,
+    character_state: dict,
+) -> None:
+    """Push one player's runtime state to api-site as they leave a game.
+
+    Best-effort by design: a disconnect must never be held up by api-site being
+    slow or down, and the player's next disconnect (or the game's End) carries
+    the state again. So every failure is logged and swallowed.
+
+    The route is under /internal, which nginx 404s at the edge — Docker-network
+    only, which is what lets it take a user id in the body instead of a JWT.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{API_SITE_URL}/api/games/internal/{game_id}/disconnect",
+                json={
+                    "user_id": user_id,
+                    "character_id": character_id,
+                    "character_state": character_state,
+                },
+            )
+            if response.status_code == 204:
+                logger.info(
+                    f"Saved character state for {character_id} leaving game {game_id}"
+                )
+                return
+            logger.warning(
+                f"Character state save for {character_id} → api-site "
+                f"{response.status_code}: {response.text}"
+            )
+    except httpx.RequestError as e:
+        logger.warning(f"Network error saving character state for {character_id}: {e}")
+
+
 async def fetch_character_summary(character_id: str):
     """Pull a character's session snapshot from api-site (Phase I).
 

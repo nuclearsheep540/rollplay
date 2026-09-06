@@ -98,7 +98,7 @@ export default function SocialPanel({ user, toasts = [], onDismissToast, openSig
   const liveSessionByFriendId = useMemo(() => {
     const map = {}
     for (const campaign of campaignData?.campaigns || []) {
-      const liveSession = campaign.sessions?.find(session => session.status === 'active')
+      const liveSession = campaign.sessions?.find(session => session.game?.status === 'active')
       if (!liveSession) continue
       const memberIds = campaign.member_ids || campaign.player_ids || []
       for (const memberId of memberIds) {
@@ -183,8 +183,9 @@ export default function SocialPanel({ user, toasts = [], onDismissToast, openSig
 
   const handleEnterSession = (session) => {
     setIsOpen(false)
-    // api-game keys the live game by the session id
-    router.push(`/game?room_id=${session.id}`)
+    // The room id is the GAME's id — the session is the table, the game is the
+    // play happening at it.
+    router.push(`/game?room_id=${session.game.id}`)
   }
 
   const handleNotificationNavigate = (notification) => {

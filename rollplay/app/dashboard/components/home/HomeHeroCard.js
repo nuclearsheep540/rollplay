@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 
 import { useHeroImage } from '@/app/dashboard/hooks/useHeroImage'
 import { useStartGame } from '@/app/dashboard/hooks/mutations/useSessionMutations'
-import { findCurrentSession } from '@/app/dashboard/utils/homeRanking'
+import { findCurrentSession, findOpenGame } from '@/app/dashboard/utils/homeRanking'
 import { gameStatusLine } from '@/app/dashboard/utils/gameStatusLine'
 import { COLORS } from '@/app/styles/colorTheme'
 import PlateButton from './PlateButton'
@@ -47,11 +47,13 @@ export default function HomeHeroCard({ campaign, user, playerCharacter }) {
   const startGame = useStartGame()
 
   const session = findCurrentSession(campaign)
+  const game = findOpenGame(campaign)
   const isGameMaster = campaign.host_id === user?.id
-  const isLive = session?.status === 'active'
-  const isTransitioning = session?.status === 'starting' || session?.status === 'stopping'
+  const isLive = game?.status === 'active'
+  const isTransitioning = game?.status === 'starting' || game?.status === 'ending'
 
-  const enterGame = () => router.push(`/game?room_id=${session.id}`)
+  // The room id IS the game's id — one identifier for the game and its room.
+  const enterGame = () => router.push(`/game?room_id=${game.id}`)
   const openCampaignDrawer = () =>
     router.push(`/dashboard?tab=campaigns&expand_campaign_id=${campaign.id}`)
 

@@ -18,7 +18,7 @@ from imageservice import ImageService, ImageSettings
 from gameservice import GameService
 from map_token_ops import VALID_MAP_TOKEN_OPS, filter_hidden_tokens, grid_cell_label, is_valid_asset_key
 from map_token_holds import MapTokenHolds
-from site_client import fetch_character_summary
+from site_client import fetch_character_summary, save_character_state
 from shared_contracts.image import ImageConfig
 from shared_contracts.grid_math import grid_geometry_changed, grid_usable, resnap_token_position
 from shared_contracts.map import MapConfig
@@ -777,6 +777,37 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message=error_message)
 
     @staticmethod
+    async def _save_leaver_character_state(room_id, user_id):
+        """Hand a leaving player's runtime state to api-site (best-effort).
+
+        The room's player_metadata is the only place a live game's hp lives;
+        the player's character row is where it belongs once they have gone. A
+        player with no character seated has nothing to save.
+        """
+        try:
+            room = await GameService.get_room(room_id)
+            metadata = (room or {}).get("player_metadata", {}) or {}
+            player = metadata.get(user_id) or {}
+            character_id = player.get("character_id")
+            if not character_id:
+                return
+            hp_current = player.get("hp_current")
+            if hp_current is None:
+                return
+            await save_character_state(
+                game_id=room_id,
+                user_id=user_id,
+                character_id=character_id,
+                character_state={"current_hp": hp_current},
+            )
+        except Exception as save_error:
+            # Never let a cold-save problem interrupt a disconnect: the socket
+            # is already gone and the room still needs tidying.
+            logger.warning(
+                "Could not save character state for %s leaving room %s: %s",
+                user_id, room_id, save_error)
+
+    @staticmethod
     async def player_disconnect(websocket, data, event_data, user_id, client_id, manager):
         """Handle player disconnect event"""
         display_name = await WebsocketEvent._display_name(client_id, user_id)
@@ -793,6 +824,13 @@ class WebsocketEvent():
                 "live connection kept, holds untouched", user_id, client_id)
             manager.remove_connection(websocket, client_id, user_id)
             return WebsocketEventResult(broadcast_message=None)
+
+        # Save the leaver's character state cold before anything else touches
+        # the room. Their runtime state (hp) lives on player_metadata while the
+        # game is hot and on their own character row once they are gone — this
+        # is the only moment we know both. Best-effort: never blocks the
+        # disconnect (see site_client.save_character_state).
+        await WebsocketEvent._save_leaver_character_state(client_id, user_id)
 
         # Drop any map-token holds the leaver had — remote clients clear their
         # lift affordances off this handler's player_disconnected broadcast.
