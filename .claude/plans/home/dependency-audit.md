@@ -3,6 +3,13 @@
 > Part of the [Home landing page epic](00-epic.md). Compiled 2026-08-29 from four code sweeps
 > of api-site, api-game, and rollplay/app, with file:line evidence for every claim.
 >
+> **Snapshot, not status (2026-09-06):** this is the pre-build ground truth. Since then #168,
+> #170 and #175 shipped `last_played_at`, admin, news, likes/receipts, presence push, the
+> pulse event store, `scheduled_at`, the one-session invariant and `campaigns.max_players`,
+> and deleted `active_sessions`, `SessionsManager.js` and the `tab=account` dead-end. Still
+> true: no live seat count over HTTP, no activity-reporting channel on `/ws/events`, no
+> Market backend, api-game HTTP unauthenticated. The epic's SHIPPED sections are current.
+>
 > **Rule of this document**: existence findings only. Each Home-page UI feature is mapped to
 > the events, data, and schema that would serve it, and each dependency is marked EXISTS or
 > DOES NOT EXIST. No solution design here — that happens in the stage plans.

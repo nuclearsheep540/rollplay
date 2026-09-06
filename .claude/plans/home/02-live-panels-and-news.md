@@ -1,5 +1,16 @@
 # Stage 2 — Live panels + news
 
+> **SHIPPED — PR #170 (2026-09-01), branch `feature/home-page`. Not yet QA'd end to end.**
+> The shipped record, with every deviation from the PR sketch below, is in
+> [implementation/step-02-news-and-pulse.md](implementation/step-02-news-and-pulse.md) §SHIPPED
+> and [implementation/step-02b-news-media-scoping.md](implementation/step-02b-news-media-scoping.md)
+> §SHIPPED (+ the 17-finding Copilot round). Headlines: no NGINX change was needed (the
+> `/api/` catch-all already serves news); editor routes live under
+> `app/(authenticated)/news/editor/`; images are article-scoped with a shared library and a
+> promote/claim move; `unpublish` exists; Pulse's ticker is arrivals-only and its weight
+> table is live-game + online-friends only (the rest is Pulse v2). The calm pill's next-game
+> line landed with stage 3 (#175).
+>
 > Part of the [Home landing page epic](00-epic.md). Goal: the "alive" layer on top of the stage-1
 > shell — Pulse, the What's-new authored-news feature, and the infrastructure each one drags
 > in, landed exactly when first needed (admin access arrives with news authoring, visit tracking

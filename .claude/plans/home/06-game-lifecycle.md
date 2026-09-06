@@ -1,7 +1,18 @@
 # Stage 6 — Game lifecycle: two verbs, one session
 
+> **SHIPPED — PR #175 (2026-09-06): PRs 1 and 2 below plus [03](03-scheduling.md) as PR 3,
+> one commit on `feature/home-page`. Not yet QA'd; the acceptance script at the bottom is
+> the QA plan.** Built as written, including the 2026-09-06 revision that Reset also clears
+> the table (via `RemovePlayerFromCampaign` / `CancelCampaignInvite`). Migration is
+> `9584fb2e1a4c` (data steps ordered as §PR 1.8 describes, reasoning in its docstring).
+> Tests: `modules/session/tests/test_session_lifecycle.py`, the rewritten
+> `test_campaign_with_session.py`, `test_session_events.py`. **One item not done:**
+> `DeleteCampaignModal.js` copy still reads "All associated game sessions will also be
+> deleted" rather than telling the GM to end the game first (PR 2 §3, last bullet) — the
+> backend refusal is in place; fix the copy during QA.
+>
 > Part of the [Home landing page epic](00-epic.md). **Decided 2026-09-05** (Matt + Fable, from
-> GM feedback), **not started.** Written for the implementing agent: every decision below is
+> GM feedback). Written for the implementing agent: every decision below is
 > locked, every anchor was verified against the repo on 2026-09-05 (branch
 > `feature/home-page`, HEAD `413599e`). Line numbers drift — re-grep the symbol before editing,
 > never trust a number blindly.
@@ -366,7 +377,7 @@ Add (each creating its own state, each run alone first):
 ### 4. Home hero (`HomeHeroCard.js`, `homeRanking.js`)
 
 - `sessionStatusLabel`: `'Session live'` → `'Game live'`; `'No session running'` → the idle
-  line. Idle line while 03 is not yet shipped: keep the existing last-played based copy.
+  line. (03 shipped in the same PR, so the idle line is `gameStatusLine.js`'s.)
 - Primary action: `ENTER GAME` / `JOIN GAME` when live; host idle → always `START GAME`
   (delete the `hasPlayed` branch and `RESUME SESSION`); player idle → `WAITING FOR GM`
   (unchanged).

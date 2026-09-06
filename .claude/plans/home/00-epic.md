@@ -1,19 +1,26 @@
 # Epic — Home landing page
 
-> **Status: agreed, staged, not started.** Design conversation ran on claude.ai chat (2026-08-28),
-> handed over to Claude Code the same day and reconciled against the repo.
+> **Status (2026-09-06): stages 1, 2, 6 and 3 are BUILT on `feature/home-page` — full QA of
+> 01/02/03 is the next step before release.** Design conversation ran on claude.ai chat
+> (2026-08-28), handed over to Claude Code the same day and reconciled against the repo.
+> Shipped record: [SHIPPED — steps 1 & 2](#shipped--delivery-steps-1--2-2026-08-29--2026-08-30)
+> and [SHIPPED — steps 4, 7 & 8](#shipped--delivery-steps-4-7--8-2026-08-31--2026-09-06).
+> Still to build: stage 4 (Market), the seat count ("N at the table"), the tagline bank,
+> Pulse v2, the music line. Parked: stage 5.
 >
 > **Operating model:** this file is the epic — EVERYTHING required to deliver the Home vision
 > lives here (decisions, corrections, full scope). The numbered stage plans are *extractions*
 > from it: shippable chunks of a few PRs each, written in detail only when their turn comes.
-> Currently extracted: [01-home-shell-and-ranked-campaigns.md](01-home-shell-and-ranked-campaigns.md),
-> [02-live-panels-and-news.md](02-live-panels-and-news.md),
-> [03-scheduling.md](03-scheduling.md) (rewritten 2026-09-05 as PR 3 of stage 6 — RSVP dropped),
+> Currently extracted: [01-home-shell-and-ranked-campaigns.md](01-home-shell-and-ranked-campaigns.md)
+> (SHIPPED #168), [02-live-panels-and-news.md](02-live-panels-and-news.md) (SHIPPED #170),
+> [03-scheduling.md](03-scheduling.md) (rewritten 2026-09-05 as PR 3 of stage 6 — RSVP dropped;
+> SHIPPED #175),
 > [04-market.md](04-market.md) (shape only; largest stage, will split further at extraction),
 > [05-campaign-create-and-publish.md](05-campaign-create-and-publish.md) (shape only; PARKED,
 > unscheduled — the create→build→publish flow, captured 2026-08-29),
 > [06-game-lifecycle.md](06-game-lifecycle.md) (added 2026-09-05 from GM feedback: two verbs,
-> one session per campaign, FINISHED retired — delivers BEFORE stage 3 and reshapes it).
+> one session per campaign, FINISHED retired — delivers BEFORE stage 3 and reshapes it;
+> SHIPPED #175).
 > Supporting docs here too: [market-legal-notes.md](market-legal-notes.md) (legal terrain),
 > [media-source-asset-split.md](media-source-asset-split.md) (full implementation plan — a
 > stage-4 prerequisite; Market is its main driver), and [design-mock.html](design-mock.html)
@@ -155,17 +162,20 @@ Rule: **infrastructure lands with the first feature that needs it, not before.**
 permission exists until news authoring does; no read tracking until the news NEW! receipt
 does. (New-since-last-visit campaign lines were killed 2026-08-29 — see 02.)
 
-- **Stage 1 — [Home shell + ranked campaigns](01-home-shell-and-ranked-campaigns.md).** The page
+- **Stage 1 — [Home shell + ranked campaigns](01-home-shell-and-ranked-campaigns.md)** — SHIPPED
+  (#168, 2026-08-30). The page
   exists, is the default landing, and renders the hero/compact/overflow ranking from data the
   app already has (plus one summary field). Includes demo retirement and the empty state.
-- **Stage 2 — [Live panels + news](02-live-panels-and-news.md).** The "alive" layer: Pulse
+- **Stage 2 — [Live panels + news](02-live-panels-and-news.md)** — SHIPPED (#170,
+  2026-09-01). The "alive" layer: Pulse
   (friends online + your live games; the music line follows once the api-game hot-state read
   exists), What's-new (news module + TipTap authoring + admin infra), Market slot placeholder.
-- **Stage 3 — [Scheduling](03-scheduling.md).** `scheduled_at` on the campaign's one session,
+- **Stage 3 — [Scheduling](03-scheduling.md)** — SHIPPED (#175, 2026-09-06). `scheduled_at`
+  on the campaign's one session,
   GM control in the drawer, hero/drawer display, pulse calm pill, ranking middle slot. No
   RSVP (dropped 2026-09-05). Rewritten in full 2026-09-05 as PR 3 of stage 6.
 - **Stage 6 — [Game lifecycle](06-game-lifecycle.md)** (added 2026-09-05; delivers BEFORE
-  stage 3). Two user-facing verbs (Start game / End game) plus Reset game; every campaign
+  stage 3) — SHIPPED (#175, 2026-09-06). Two user-facing verbs (Start game / End game) plus Reset game; every campaign
   has exactly one session, always; FINISHED retired; End game = backend pause, pause kept
   as the system control; seat count moves to campaign settings; the in-game seat editor
   goes. Driven by GM feedback and a real bug: the in-game end button (#173) marked the
@@ -231,7 +241,7 @@ owning their scope.)
      **DECIDED 2026-08-31: delete it** (Matt confirmed — never computed, no readers).
    - **The live seat count** (`active_session_members` fed from api-game) — unchanged,
      still needs its own scoping incl. the api-game unauthenticated-HTTP constraint.
-4. **Game lifecycle, then scheduling** (revised 2026-09-05). First
+4. **Game lifecycle, then scheduling** (revised 2026-09-05) — **SHIPPED #175**. First
    [06-game-lifecycle.md](06-game-lifecycle.md) PRs 1–2 (backend model + frontend
    vocabulary — shipped in ONE release, the branch is the integration point), then
    [03-scheduling.md](03-scheduling.md) as its PR 3. No RSVP.
@@ -241,15 +251,16 @@ owning their scope.)
    and the ranking upgrade moved into 03 (2026-09-05), and "confirmed count" went with
    RSVP. Needs 3 + 4.
 6. **Tagline template bank** — small, pure texture, any time after 1.
-7. **News vertical** — admin infra → news module → authoring → Home card + likes + NEW!
-   read receipt. Self-contained. (Extraction 2026-08-31, covering steps 7+8 and the
+7. **News vertical** — **SHIPPED #170** — admin infra → news module → authoring → Home card
+   + likes + NEW! read receipt. Self-contained. (Extraction 2026-08-31, covering steps 7+8 and the
    presence-push decision:
    [implementation/step-02-news-and-pulse.md](implementation/step-02-news-and-pulse.md).)
    (2026-08-31: authoring = a standalone `/news/editor`
    behind a new admin-only ADMIN launcher section; content write-through to S3
    `news_media/` with a restore CLI; `author_name` plain string, no user FK; `is_admin`
    exposed on `UserResponse` for FE gating. Detail in 02.)
-8. **Pulse** — in two deliberate releases (framing agreed 2026-08-29): **v1** wires what
+8. **Pulse** — **v1 SHIPPED #170; v2 not started** — in two deliberate releases (framing
+   agreed 2026-08-29): **v1** wires what
    the social tab already reads — friends online + live games, poll-based, zero new
    dependencies — and is a complete shippable feature in its own right. (Revised
    2026-08-31: presence goes push — `friend_online`/`friend_offline` events emitted on
@@ -369,10 +380,81 @@ entry is knowingly overtaken in part.
 - **Unexercised QA**: reduced-motion behaviour, horizontal scroll at narrow widths, and
   the "Nothing at the table yet" hero variant (needs a campaign whose sessions are all
   FINISHED — its copy is also unreviewed). **Unreachable after 06** (every campaign always
-  has one live-able session) — 06 PR 2 deletes the variant.
+  has one live-able session) — 06 PR 2 deleted the variant (#175).
 - **`active_sessions`**: audit found nothing reads it. Recommendation is deletion rather
   than the planned `active_session_id` replacement — see step 3 above. **DECIDED
-  2026-08-31: delete.**
+  2026-08-31: delete. Deleted in #170.**
+
+## SHIPPED — delivery steps 4, 7 & 8 (2026-08-31 → 2026-09-06)
+
+> PRs #170 (news + pulse, 2026-09-01) and #175 (lifecycle + scheduling, 2026-09-06), both
+> on `feature/home-page`. Same rule as the section above: the plans record intent, this
+> records what shipped; where they disagree this is the newer truth. Full per-PR detail
+> with deviations lives in [02](02-live-panels-and-news.md), [03](03-scheduling.md),
+> [06](06-game-lifecycle.md) and the `implementation/step-02*` docs.
+> **None of this has had a full QA pass yet** — that is the next step (01, 02, 03 together).
+
+### Step 7 — News vertical (#170)
+
+- **Admin access** exactly as decided: `ADMIN_EMAILS` in `dev.env`/`prod.env`,
+  `require_admin` in `shared/dependencies/auth.py`, `is_admin` on `UserResponse` evaluated
+  per request. No role column, no JWT claim.
+- **`modules/news/`** aggregate module: posts with four per-surface banner keys, TipTap doc,
+  `author_name` string, likes + per-user read receipts, publish/unpublish, S3 write-through
+  to `news_media/{id}/article.json` and an `admin.py restore-news` CLI (proved: delete rows
+  → restore → present). Image storage is **per-article scoped with a shared library and a
+  promote/claim move** (the 02b scoping pass) — default tab THIS ARTICLE.
+- **Editor** at `(authenticated)/news/editor` behind an ADMIN launcher section: tabbed 1-up
+  preview rendering the real Home card and article components, image rail with drag-to-
+  banner, alt-text control, link modal. Home renders the latest post as the noticeboard
+  card with NEW! receipt and the like counter as CTA.
+- **No NGINX change was needed** — the `/api/` catch-all already routes to api-site (plan
+  02's NGINX bullet was wrong).
+
+### Step 8 — Pulse v1 + presence push (#170)
+
+- `friend_online` / `friend_offline` emitted on events-WS connect/disconnect **transitions**,
+  fanned out to accepted friends; online toasts, offline is silent, neither persists. A
+  `users.last_seen` grace window and a bounded `users.pulse_events` JSONB list back the
+  ticker, so it hydrates on load rather than starting empty.
+- `PulseLine` under the hero: breathing dot, avatar coins, event pills with age-eased
+  opacity, sticky live-game pill with Join, calm pill (which #175 then taught to name the
+  next scheduled game).
+- Rider fixed: `session_started` no longer persists a notification for the host.
+- **Deferred:** ticker is arrivals-only (no session-start pills); weight table is
+  live-game + online-friends only — the richer signals are Pulse v2.
+
+### Step 4 — Game lifecycle (06 PRs 1–2) + scheduling (03) (#175)
+
+- **One session per campaign, always.** `CreateSession` is internal only; the campaign
+  create route makes the session; `ResetSession` (`POST /{id}/reset`) deletes and recreates
+  it — and, per the 2026-09-06 revision, first removes every non-DM member and cancels
+  pending invites through the existing campaign commands. Migration `9584fb2e1a4c`
+  backfilled `campaigns.max_players`, deleted FINISHED rows, and gave every session-less
+  campaign a fresh INACTIVE one with its roster.
+- **FINISHED retired** end to end. `PauseReason` (`HOST_ENDED` / `SYSTEM`) lives on the
+  aggregate; `POST /{id}/end` is the GM's End game, the sweeper and `admin.py` pass
+  `SYSTEM`. New `session_ended` event (toast, non-host, not persisted); `session_finished`
+  gone. Session `name`, the create/rename/delete/pause/finish routes, the in-game seat
+  editor and api-game's seats endpoint + `seat_count_change` handler are all deleted.
+  Seats are `campaigns.max_players` (1–8), edited in the campaign form, read at Start.
+- **Frontend vocabulary**: `useStartGame` / `useEndGame` / `useResetGame` /
+  `useScheduleGame`; `EndGameModal`, `ResetGameModal` (3 s confirm), `ScheduleGameModal`;
+  hero reads START GAME / ENTER GAME / JOIN GAME, never RESUME; the "Nothing at the table
+  yet" hero variant is gone; the in-game end button (#173) now calls `/end`.
+- **Scheduling**: `sessions.scheduled_at` (migration `b1ae5a5e538b`), `schedule()` /
+  `clear_schedule()` on the aggregate, `PATCH /{id}/schedule`, `session_scheduled` event
+  (toast + persisted, host excluded, ISO instant in the payload formatted client-side).
+  One display rule in `dashboard/utils/gameStatusLine.js` ("Started 2 hours ago" / "Next
+  game · Thu 4 Sep, 20:00" / last played) shared by hero and drawer; ranking is live >
+  soonest future schedule > last played; the calm pulse pill names the soonest next game.
+- **Deviations to know at QA:**
+  - The schedule control is a native date input plus a new **`shared/components/TimeField`**
+    (typed or picked, five-minute marks, nothing enforced) — not the plan's single
+    `datetime-local` input, whose picker lists all sixty minutes.
+  - **`DeleteCampaignModal` copy was not updated**: it still says associated sessions will
+    be deleted, while the backend now refuses with "End the game before deleting this
+    campaign" when live. Small copy fix, flagged for the QA pass.
 
 ## Out of scope (this epic)
 
@@ -389,10 +471,10 @@ entry is knowingly overtaken in part.
 
 | Decision | When |
 |---|---|
-| Ranking computed FE-side from existing hooks vs dedicated summary endpoint | Stage 1, backend PR |
+| Ranking computed FE-side from existing hooks vs dedicated summary endpoint | RESOLVED: FE-side (`homeRanking.js` over `useCampaigns`), no endpoint |
 | Workshop launcher items: deep-link with media context vs open at own pickers | Step 2 (launcher PR) |
 | Create-card ghost shadow (mock: none — "a card that isn't real yet casts none") — confirm or revert with real card art | Step 1 dev QA |
 | Pulse activity-weighting signals beyond online/in-session (editing character, writing notes) — design the weight table now, feed signals as they become available | Stage 2, Pulse PR |
-| TipTap image support for news (`@tiptap/extension-image` + S3 flow) | Stage 2, news PR |
-| Schedule affordance on the hero — v1 puts the only control in the drawer and the hero displays; add a hero opener if GMs miss it | Stage 3 QA |
+| TipTap image support for news (`@tiptap/extension-image` + S3 flow) | RESOLVED 2026-08-31: yes, shipped in #170 |
+| Schedule affordance on the hero — v1 puts the only control in the drawer and the hero displays; add a hero opener if GMs miss it | Stage 3 QA (now — #175 is built) |
 | Market: user-facing naming ("Market" implies commerce — legal lean: library-style name + share/adopt verbs), audio in sharing v1 (lean: exclude), featured vetting mechanics | Stage 4 extraction, with solicitor input (`market-legal-notes.md`) |
