@@ -323,101 +323,6 @@ async def update_map_config_scoped(room_id: str, request: dict):
 
     return {"success": True, "pc_token_scale": pc_token_scale}
 
-@app.put("/game/{room_id}/seats")
-async def update_seat_count(room_id: str, request: dict):
-    """Update the maximum number of seats for a game room and handle displaced players"""
-    try:
-        check_room = await GameService.get_room(id=room_id)
-        max_players = request.get("max_players")
-        updated_by = request.get("updated_by")
-        displaced_players = request.get("displaced_players", [])
-        
-        # Validate seat count
-        if not isinstance(max_players, int) or max_players < 1 or max_players > 8:
-            raise HTTPException(status_code=400, detail="Seat count must be between 1 and 8")
-        
-        # Update seat count in database
-        await GameService.update_seat_count(room_id, max_players)
-        
-        # Handle displaced players - move them back to lobby
-        for displaced_player in displaced_players:
-            displaced_user_id = displaced_player.get("userId")
-            if displaced_user_id:
-                try:
-                    logger.info(f"Moving {displaced_user_id} from seat {displaced_player.get('seatId')} to lobby")
-
-                    # Update player's party status in ConnectionManager
-                    await connection_manager.remove_player_from_party(room_id, displaced_user_id)
-
-                    # Send displacement notification to the player
-                    displacement_message = {
-                        "event_type": "player_displaced",
-                        "data": {
-                            "user_id": displaced_user_id,
-                            "reason": "seat_reduction",
-                            "message": "You have been moved to the lobby due to seat count reduction",
-                            "former_seat": displaced_player.get("seatId", "unknown")
-                        }
-                    }
-                    await connection_manager.send_to_player(room_id, displaced_user_id, displacement_message)
-
-                    # Log displacement to adventure log
-                    log_message = f"{displaced_user_id} was moved to lobby due to seat reduction"
-                    await adventure_log.add_log_entry(
-                        room_id=room_id,
-                        message=log_message,
-                        log_type=LogType.SYSTEM,
-                        from_player="System"
-                    )
-
-                except Exception as e:
-                    logger.error(f"Error handling displaced player {displaced_user_id}: {str(e)}")
-                    # Continue processing other players even if one fails
-        
-        # Get current seat layout from database after displacement
-        try:
-            # Get updated room data to get actual seat layout
-            updated_room = await GameService.get_room(id=room_id)
-            current_seats = updated_room.get("seat_layout", [])
-            
-            # Create new_seats array matching the new max_players count
-            new_seats = []
-            for i in range(max_players):
-                if i < len(current_seats):
-                    # Keep existing player if they weren't displaced
-                    player_in_seat = current_seats[i]
-                    # Check if this player was displaced
-                    was_displaced = any(dp.get("userId") == player_in_seat for dp in displaced_players)
-                    new_seats.append("empty" if was_displaced else player_in_seat)
-                else:
-                    new_seats.append("empty")
-            
-            seat_change_message = {
-                "event_type": "seat_count_change", 
-                "data": {
-                    "max_players": max_players,
-                    "new_seats": new_seats,
-                    "updated_by": updated_by,
-                    "displaced_players": displaced_players
-                }
-            }
-            await connection_manager.update_room_data(room_id, seat_change_message)
-            logger.info(f"Seat count updated successfully to {max_players}, displaced {len(displaced_players)} players")
-        except Exception as e:
-            logger.warning(f"Error broadcasting seat count change: {str(e)}")
-            # Don't fail the entire operation if broadcast fails
-        
-        return {
-            "success": True,
-            "room_id": room_id,
-            "max_players": max_players,
-            "updated_by": updated_by,
-            "displaced_players": displaced_players
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get("/game/{room_id}")
 async def gameservice_get(room_id):
     check_room = await GameService.get_room(id=room_id)
@@ -913,7 +818,6 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
             session_stats=SessionStats(
                 duration_minutes=duration_minutes,
                 total_logs=log_count,
-                max_players=room.get("max_players", 0),
             ),
             audio_state=raw_audio_state,
             audio_track_config=room.get("audio_track_config", {}),

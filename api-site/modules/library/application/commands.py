@@ -625,8 +625,8 @@ class BoardInPlayError(Exception):
 
 
 def check_map_boards_in_play(asset_id, campaign_ids, session_repository, force=False):
-    """Raise BoardInPlayError when a non-finished session's board for this
-    map is in play, unless the caller forces past the warning.
+    """Raise BoardInPlayError when a campaign's board for this map is in play,
+    unless the caller forces past the warning.
 
     In-play is derived, never stored (decision 25): the board differs from
     its seed snapshot (see modules.session.domain.token_merge). A board
@@ -640,8 +640,6 @@ def check_map_boards_in_play(asset_id, campaign_ids, session_repository, force=F
     for campaign_id in (campaign_ids or []):
         sessions = session_repository.get_by_campaign_id(campaign_id)
         for session in sessions:
-            if session.status == SessionStatus.FINISHED:
-                continue
             stored_board = (session.map_token_state or {}).get(asset_key) or []
             seed_board = (session.map_token_seed or {}).get(asset_key) or []
             if board_in_play(seed_board, stored_board):

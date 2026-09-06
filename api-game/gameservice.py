@@ -230,33 +230,6 @@ class GameService:
         return str(result)
 
     @staticmethod
-    async def update_seat_count(room_id, new_max):
-        """Update the maximum number of seats for a room"""
-        collection = GameService._get_active_session()
-        
-        filter_criteria = GameService.room_filter(room_id)
-
-        logger.info(f"Updating seat count with filter: {filter_criteria}")
-        logger.info(f"New max players: {new_max}")
-        
-        result = await collection.update_one(
-            filter_criteria,
-            {
-                "$set": {
-                    "max_players": new_max,
-                }
-            }
-        )
-        
-        logger.info(f"Update result: matched={result.matched_count}, modified={result.modified_count}")
-        
-        if result.matched_count == 0:
-            logger.error(f"No document found with _id: {room_id}")
-            raise Exception(f"Room {room_id} not found")
-        
-        return str(result)
-
-    @staticmethod
     async def get_seat_layout(room_id: str) -> list:
         """Get the current seat layout for a room"""
         collection = GameService._get_active_session()

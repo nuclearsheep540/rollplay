@@ -46,7 +46,7 @@ structural, not an ETL change: stop creating new rows. The same applies to the a
 | 2 | **Every campaign has exactly one session, always.** Created with the campaign (today's auto-create in the campaign create route), replaced wholesale by Reset game, never zero, never two. There is no user-facing create. Start and Schedule never create a session — they require the one that always exists. |
 | 3 | **End game = backend pause.** ACTIVE → STOPPING → INACTIVE with the full hot-to-cold ETL. Pause stays as the backend's name for it and as the *system-level* control (the expiry sweeper, the admin CLI). INACTIVE is the only not-live state. Cards always say Start game — **never Resume**; a system-paused game is indistinguishable from an idle one to users. |
 | 4 | **FINISHED is retired entirely** — the status, the aggregate methods, the command, the endpoint, the frontend readers and the existing rows. Nothing needs it: a game stopped is an INACTIVE session; a game wiped is a Reset. |
-| 5 | **Reset game = delete + recreate in one server operation**, INACTIVE only, behind a confirm. It loses play state only: token positions, adventure log, what was on screen (map/image/display), audio and Spotify config, roster join times. Players, characters, character locks, assets, notes and authored NPC baselines all stay — invites are campaign-level and the new row auto-enrolls every member (`CreateSession`, `commands.py:106-116`). |
+| 5 | **Reset game = delete + recreate in one server operation**, INACTIVE only, behind a confirm. **Revised 2026-09-06 — it also clears the table.** Reset exists for a fresh run with new players, so every non-DM member is removed (through the existing remove-player and cancel-invite commands: locks released, people notified) before the row is replaced. Loses: the party and pending invites, player tokens, npc tokens' in-play positions (back to the workshop baseline), adventure log, schedule, what was on screen, audio and Spotify config. Keeps: assets, notes, the baselines, and the players' characters (released, still theirs). |
 | 6 | **Seat count moves to the campaign** (`campaigns.max_players`, 1–8, default 8). Edited in campaign settings at any time; **takes effect at the next Start** because api-game reads it from the start payload. The in-game seat editor and its api-game endpoint are removed. |
 | 7 | **Session name is removed** (column, request fields, the "Session Name" input on the campaign form, `session.name` readers). One session per campaign needs no name. |
 | 8 | **A campaign is editable while its game is live.** No guard on either side — there is one GM, campaign data lives in PostgreSQL and does not need to survive the ETL. Explicit decision; do not add a lock. |
@@ -347,9 +347,11 @@ Add (each creating its own state, each run alone first):
   session" CTA and "No active session" branch (there is always a session — if
   `campaign.sessions` is empty the data is wrong; render nothing rather than a create door),
   `PauseSessionModal.js`, `FinishSessionModal.js`.
-- `DeleteSessionModal.js` → `ResetGameModal.js`. Copy, exactly this meaning: "Reset this
-  game? Token positions, the adventure log and what was on screen are wiped. Players,
-  characters, assets and notes stay." Confirm button: RESET GAME.
+- `DeleteSessionModal.js` → `ResetGameModal.js`. Copy (revised 2026-09-06): everything
+  returns to baseline — player tokens removed, npc tokens back to where the map was
+  authored, log/schedule/screen cleared, **every player removed and their characters
+  released, invite them again to play**; maps, assets and notes stay. 3-second confirm
+  delay, the friction the old permanent finish carried. Confirm button: RESET GAME.
 - `EndGameModal.js` (from `FinishSessionModal.js`): "End the game? Everyone at the table is
   returned to their dashboard. Token positions and the log are kept." (Phrase it so a GM
   understands nothing is lost.)
@@ -424,8 +426,9 @@ for a surviving reference. Run `npx next lint` for the hooks-deps class of issue
    started this; it must be the first check.)
 2. **Never Resume.** After End game, hero and drawer both say START GAME.
 3. **Reset game** on an idle campaign: new session id, board and log empty, NPCs back at
-   their workshop baseline, roster intact, player's character still locked to the campaign.
-   Refused while live.
+   their workshop baseline, every non-DM member removed from the campaign and notified,
+   their character released, pending invites cancelled, roster = the DM alone. Refused
+   while live with nothing changed.
 4. **System pause is silent.** Let the sweeper pause a game (or run `admin.py
    pause-session`): players get no toast, no notification row; cards flip to idle.
 5. **End game toasts players, not the host**; no notification row is created.

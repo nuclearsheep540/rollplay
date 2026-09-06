@@ -6,8 +6,9 @@
 import { useRouter } from 'next/navigation'
 
 import { useHeroImage } from '@/app/dashboard/hooks/useHeroImage'
-import { useStartSession } from '@/app/dashboard/hooks/mutations/useSessionMutations'
+import { useStartGame } from '@/app/dashboard/hooks/mutations/useSessionMutations'
 import { findCurrentSession } from '@/app/dashboard/utils/homeRanking'
+import { gameStatusLine } from '@/app/dashboard/utils/gameStatusLine'
 import { COLORS } from '@/app/styles/colorTheme'
 import PlateButton from './PlateButton'
 import {
@@ -31,40 +32,34 @@ const HERO_ART_BASE = `
 
 const LIVE_GREEN = '#16A34A'
 
-function sessionStatusLabel(session) {
-  switch (session?.status) {
-    case 'active': return 'Session live'
-    case 'starting': return 'Starting…'
-    case 'stopping': return 'Ending…'
-    default: return 'No session running'
-  }
-}
-
 /**
  * The ranked campaign — answers "is my game on, and what do I do next?".
- * Actions are role-conditional: the game master starts and runs the session,
- * the player joins it.
+ * Actions are role-conditional: the game master starts and runs the game, the
+ * player joins it.
+ *
+ * The GM's idle button always reads START GAME, never RESUME: a game the GM
+ * ended and one the expiry sweeper closed are the same state, and neither is
+ * worth explaining at the table.
  */
 export default function HomeHeroCard({ campaign, user, playerCharacter }) {
   const router = useRouter()
   const { url: artUrl } = useHeroImage(campaign)
-  const startSession = useStartSession()
+  const startGame = useStartGame()
 
   const session = findCurrentSession(campaign)
   const isGameMaster = campaign.host_id === user?.id
   const isLive = session?.status === 'active'
   const isTransitioning = session?.status === 'starting' || session?.status === 'stopping'
-  const hasPlayed = Boolean(session?.started_at)
 
-  const enterSession = () => router.push(`/game?room_id=${session.id}`)
+  const enterGame = () => router.push(`/game?room_id=${session.id}`)
   const openCampaignDrawer = () =>
     router.push(`/dashboard?tab=campaigns&expand_campaign_id=${campaign.id}`)
 
   const renderPrimaryAction = () => {
     if (isLive) {
       return (
-        <PlateButton variant="gold" live onClick={enterSession}>
-          {isGameMaster ? 'ENTER SESSION' : 'JOIN SESSION'}
+        <PlateButton variant="gold" live onClick={enterGame}>
+          {isGameMaster ? 'ENTER GAME' : 'JOIN GAME'}
         </PlateButton>
       )
     }
@@ -76,10 +71,10 @@ export default function HomeHeroCard({ campaign, user, playerCharacter }) {
     return (
       <PlateButton
         variant="gold"
-        disabled={isTransitioning || startSession.isPending}
-        onClick={() => startSession.mutate(session.id)}
+        disabled={isTransitioning || startGame.isPending || !session}
+        onClick={() => startGame.mutate(session.id)}
       >
-        {startSession.isPending ? 'STARTING…' : hasPlayed ? 'RESUME SESSION' : 'START SESSION'}
+        {startGame.isPending ? 'STARTING…' : 'START GAME'}
       </PlateButton>
     )
   }
@@ -140,7 +135,7 @@ export default function HomeHeroCard({ campaign, user, playerCharacter }) {
                 }}
               />
             )}
-            {sessionStatusLabel(session)}
+            {gameStatusLine(campaign)}
           </span>
         </div>
 

@@ -33,9 +33,10 @@ from modules.user.model.user_model import User
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.campaign.application.commands import CancelCampaignInvite, RemovePlayerFromCampaign
 from modules.session.model.session_model import SessionJoinedUser
 from modules.session.domain.token_merge import merge_token_boards
-from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
+from modules.session.domain.session_aggregate import PauseReason, SessionEntity, SessionStatus
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
@@ -49,7 +50,11 @@ logger = logging.getLogger(__name__)
 
 
 class CreateSession:
-    """Create a new session within a campaign"""
+    """Create the campaign's one session.
+
+    Not reachable over HTTP: a campaign is born with its session and only ever
+    gets another through ResetSession. There is no user-facing "create a game".
+    """
 
     def __init__(
         self,
@@ -63,18 +68,20 @@ class CreateSession:
 
     async def execute(
         self,
-        name: str,
         campaign_id: UUID,
-        host_id: UUID,
-        max_players: int = 8
+        host_id: UUID
     ) -> SessionEntity:
         """
-        Create a new session and add it to the campaign.
+        Create the campaign's session and enrol its members.
 
         Cross-aggregate coordination:
         - Creates Session aggregate
         - Updates Campaign to include session_id
-        - Automatically invites all campaign players to the new session
+        - Automatically enrols all campaign members in the new session
+
+        Raises:
+            ValueError: campaign missing, caller is not the host, or the campaign
+                already has its session (the one-session invariant).
         """
         # Validate campaign exists and user is host
         campaign = self.campaign_repo.get_by_id(campaign_id)
@@ -84,24 +91,17 @@ class CreateSession:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only campaign host can create sessions")
 
-        # Business Rule: Only one session (INACTIVE/STARTING/ACTIVE/STOPPING) per campaign at a time
-        existing_sessions = []
-        for session_id in campaign.session_ids:
-            existing_session = self.session_repo.get_by_id(session_id)
-            # Check for INACTIVE, STARTING, ACTIVE, or STOPPING (exclude only FINISHED)
-            if existing_session and existing_session.status in [
-                SessionStatus.INACTIVE, SessionStatus.STARTING, SessionStatus.ACTIVE, SessionStatus.STOPPING
-            ]:
-                existing_sessions.append(existing_session.name)
-
-        if existing_sessions:
+        # The one-session invariant: a campaign has exactly one session for its
+        # whole life. Any existing row — whatever its status — means this call is
+        # a bug, not a user error, so the message is for us.
+        if campaign.session_ids:
             raise ValueError(
-                f"Campaign already has a session: '{existing_sessions[0]}'. "
-                f"Please finish or delete the existing session before creating a new one."
+                f"Campaign {campaign_id} already has a session "
+                f"({campaign.session_ids[0]}) — reset it rather than creating another"
             )
 
         # Create session aggregate (host_id auto-inherited from campaign)
-        session = SessionEntity.create(name=name, campaign_id=campaign_id, host_id=host_id, max_players=max_players)
+        session = SessionEntity.create(campaign_id=campaign_id, host_id=host_id)
 
         # Automatically add all active campaign members to the session (bypass invite flow)
         # Campaign members already accepted at campaign level, no need for session-level acceptance
@@ -132,7 +132,6 @@ class CreateSession:
             events = SessionEvents.session_created(
                 non_dm_member_ids=non_dm_members,
                 session_id=session.id,
-                session_name=session.name,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
                 host_id=host_id,
@@ -148,75 +147,167 @@ class CreateSession:
         return session
 
 
-class UpdateSession:
-    """Update session details"""
-
-    def __init__(self, session_repository: SessionRepository):
-        self.session_repo = session_repository
-
-    def execute(
-        self,
-        session_id: UUID,
-        host_id: UUID,
-        name: Optional[str] = None
-    ) -> SessionEntity:
-        """Update session details (only host can update)"""
-        session = self.session_repo.get_by_id(session_id)
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
-
-        if session.host_id != host_id:
-            raise ValueError("Only host can update session details")
-
-        if name is not None:
-            session.update_name(name)
-
-        self.session_repo.save(session)
-        return session
-
-
-class DeleteSession:
-    """Delete a session"""
+class ScheduleSession:
+    """Set or clear when the campaign's next game is."""
 
     def __init__(
         self,
         session_repository: SessionRepository,
-        campaign_repository: CampaignRepository
+        campaign_repository: CampaignRepository,
+        user_repository: UserRepository,
+        event_manager: EventManager
     ):
         self.session_repo = session_repository
         self.campaign_repo = campaign_repository
+        self.user_repo = user_repository
+        self.event_manager = event_manager
 
-    def execute(
+    async def execute(
         self,
         session_id: UUID,
-        host_id: UUID
-    ) -> bool:
-        """
-        Delete session and remove from campaign.
+        host_id: UUID,
+        scheduled_at: Optional[datetime]
+    ) -> SessionEntity:
+        """Record the host's declared next game, or clear it with None.
 
-        Cross-aggregate coordination:
-        - Deletes Session aggregate
-        - Updates Campaign to remove session_id
+        Cosmetic data: nothing is started, reminded or enforced by it. The value
+        outlives its own date on purpose — a past time is hidden by display
+        rules rather than deleted, so the record of what was said survives.
+
+        Raises:
+            ValueError: session missing, caller is not the host, a game is
+                running, or the datetime is naive (both guards live on the
+                aggregate).
         """
         session = self.session_repo.get_by_id(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
         if session.host_id != host_id:
-            raise ValueError("Only host can delete session")
+            raise ValueError("Only the host can schedule the game")
 
-        # Get campaign to update
+        session.schedule(scheduled_at)
+        self.session_repo.save(session)
+
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
-        if not campaign:
-            raise ValueError(f"Campaign {session.campaign_id} not found")
+        if campaign:
+            host_user = self.user_repo.get_by_id(host_id)
+            events = SessionEvents.session_scheduled(
+                campaign_member_ids=campaign.get_all_member_ids(),
+                session_id=session.id,
+                campaign_id=session.campaign_id,
+                campaign_name=campaign.title,
+                host_id=host_id,
+                host_screen_name=(host_user.screen_name if host_user else None) or "Unknown",  # never email (PII)
+                scheduled_at=scheduled_at
+            )
+            for event_config in events:
+                await self.event_manager.broadcast(event_config)
+            logger.info(
+                f"Broadcast session_scheduled to {len(events)} recipient(s) for session {session.id}"
+            )
 
-        # Delete session (repository validates business rules)
+        return session
+
+
+class ResetSession:
+    """Reset the campaign's game — a fresh run, for new players.
+
+    Two things happen. The table is cleared: every member but the DM is removed,
+    their characters released, pending invites cancelled — each through the same
+    command the drawer uses one at a time, so people are told exactly as if the
+    host had removed them by hand. Then play state is wiped by replacing the
+    session row: delete-then-create rather than clearing nine columns and a
+    roster table one by one, so a column added later is reset for free instead
+    of being silently remembered.
+
+    What survives is everything the campaign owns: assets, notes, the authored
+    npc baselines the next start re-seeds from, and the players' characters —
+    released, still theirs.
+    """
+
+    def __init__(
+        self,
+        session_repository: SessionRepository,
+        campaign_repository: CampaignRepository,
+        user_repository: UserRepository,
+        character_repository: CharacterRepository,
+        event_manager: EventManager
+    ):
+        self.session_repo = session_repository
+        self.campaign_repo = campaign_repository
+        self.user_repo = user_repository
+        self.character_repo = character_repository
+        self.event_manager = event_manager
+
+    async def execute(
+        self,
+        session_id: UUID,
+        host_id: UUID
+    ) -> SessionEntity:
+        """Clear the table, then replace the campaign's session with an empty one.
+
+        Loses: every non-DM member and pending invite, player tokens, the npc
+        tokens' in-play positions (they return to the workshop baseline), the
+        adventure log, the schedule, what was on screen, and the audio/Spotify
+        config. Keeps assets, notes, the baselines themselves, and the players'
+        characters (released from the campaign, still owned by them).
+
+        Returns the NEW session, whose id differs from the one passed in.
+
+        Raises:
+            ValueError: session missing, caller is not the host, or a game is
+                running. The live-game check runs BEFORE anyone is removed, so a
+                refusal changes nothing; the repository's delete guards it again.
+        """
+        session = self.session_repo.get_by_id(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        if session.host_id != host_id:
+            raise ValueError("Only the host can reset this game")
+
+        if not session.can_delete():
+            raise ValueError("End the game before resetting it")
+
+        campaign_id = session.campaign_id
+        campaign = self.campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Clear the table. Ids are snapshotted here; each command reloads the
+        # campaign itself, so every removal saves against a fresh aggregate.
+        cancel_invite = CancelCampaignInvite(self.campaign_repo, self.user_repo, self.event_manager)
+        for invited_id in list(campaign.invited_player_ids):
+            await cancel_invite.execute(campaign_id=campaign_id, player_id=invited_id, host_id=host_id)
+
+        remove_player = RemovePlayerFromCampaign(
+            self.campaign_repo, self.user_repo, self.event_manager, self.character_repo
+        )
+        for member_id in campaign.get_all_member_ids():
+            if member_id == campaign.dm_id:
+                continue
+            await remove_player.execute(campaign_id=campaign_id, player_id=member_id, host_id=host_id)
+
         self.session_repo.delete(session_id)
 
-        # In-memory view only; the row is already gone with the session.
-        campaign.remove_session(session_id)
+        # The campaign is momentarily sessionless, which every read surface
+        # assumes cannot happen — so a failure here is loud, not swallowed.
+        try:
+            replacement = await CreateSession(
+                self.session_repo, self.campaign_repo, self.event_manager
+            ).execute(campaign_id=campaign_id, host_id=host_id)
+        except Exception:
+            logger.error(
+                f"Reset left campaign {campaign_id} with no session: the old session "
+                f"{session_id} was deleted but its replacement could not be created"
+            )
+            raise
 
-        return True
+        logger.info(
+            f"Reset campaign {campaign_id}: table cleared, session {session_id} replaced by {replacement.id}"
+        )
+        return replacement
 
 
 class StartSession:
@@ -628,25 +719,12 @@ class StartSession:
         if session.status != SessionStatus.INACTIVE:
             raise ValueError(f"Cannot start session in {session.status} status")
 
-        # 4. Business Rule: Only one session (INACTIVE/STARTING/ACTIVE/STOPPING) per campaign at a time
+        # 4. Load the campaign — the source of truth for the roster, the DM, and
+        # the seat count the game is built with. (No "another session is live"
+        # check: a campaign has exactly one session, enforced at creation.)
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {session.campaign_id} not found — cannot start session without a campaign")
-        if campaign:
-            active_sessions = []
-            for sid in campaign.session_ids:
-                existing_session = self.session_repo.get_by_id(sid)
-                # Check for INACTIVE, STARTING, ACTIVE, or STOPPING (exclude only FINISHED)
-                if existing_session and existing_session.id != session.id and existing_session.status in [
-                    SessionStatus.INACTIVE, SessionStatus.STARTING, SessionStatus.ACTIVE, SessionStatus.STOPPING
-                ]:
-                    active_sessions.append(existing_session.name)
-
-            if active_sessions:
-                raise ValueError(
-                    f"Campaign already has an active or paused session: '{active_sessions[0]}'. "
-                    f"Please finish or delete the existing session before starting a new one."
-                )
 
         # 5. Set STARTING status
         session.start()  # Domain method sets status = STARTING
@@ -702,7 +780,9 @@ class StartSession:
                 session_id=str(session.id),
                 campaign_id=str(session.campaign_id),
                 dungeon_master=dm_contract,
-                max_players=session.max_players,
+                # Seat count is a campaign setting, read fresh at every start —
+                # so an edit made mid-game takes effect the next time it runs.
+                max_players=campaign.max_players,
                 # Campaign membership is the source of truth at start — keep this in lock-step with
                 # the session_user DTOs (both from get_all_member_ids), not the frozen joined_users.
                 joined_user_ids=[str(uid) for uid in campaign.get_all_member_ids()],
@@ -789,7 +869,6 @@ class StartSession:
                 events = SessionEvents.session_started(
                     campaign_member_ids=all_recipients,
                     session_id=session.id,
-                    session_name=session.name,
                     campaign_id=session.campaign_id,
                     campaign_name=campaign.title,
                     host_id=host_id,
@@ -810,12 +889,16 @@ class StartSession:
         return session
 
 
-# === Shared ETL helpers for PauseSession and FinishSession ===
+# === Shared ETL helpers for taking a game down (hot → cold) ===
 
 @dataclass
 class _ExtractedGameState:
-    """State extracted from MongoDB during session ETL (hot → cold)"""
-    max_players: int
+    """State extracted from MongoDB during session ETL (hot → cold).
+
+    Deliberately does NOT carry the seat count: it is campaign settings, owned
+    cold and pushed hot at start. Reading it back would let the running game
+    overwrite an edit the GM made in settings while it was live.
+    """
     audio_config: dict
     spotify_config: dict
     map_config: dict
@@ -858,10 +941,6 @@ async def _extract_and_sync_game_state(
         end_response = SessionEndResponse(**response.json())
         final_state = end_response.final_state
         logger.info(f"Fetched final state for {session_id}: {len(final_state.players)} players")
-
-        # Extract max_players from MongoDB session stats
-        max_players = final_state.session_stats.max_players if final_state.session_stats else session.max_players
-        logger.info(f"Session max_players: {max_players} (original: {session.max_players})")
 
         # Collect per-asset audio settings from BOTH active channels AND stashed track configs.
         # Uses a common shape: {volume, looping, effects} — channel state always has values,
@@ -1003,7 +1082,6 @@ async def _extract_and_sync_game_state(
         logger.info(f"Extracted map token state: {len(map_token_state)} board(s)")
 
         return _ExtractedGameState(
-            max_players=max_players,
             audio_config=audio_config,
             spotify_config=spotify_config,
             map_config=map_config,
@@ -1107,7 +1185,12 @@ async def _async_cleanup_game(session_id: UUID):
 
 class PauseSession:
     """
-    Pause session: ACTIVE → STOPPING → INACTIVE (three-phase fail-safe).
+    Take a running game down: ACTIVE → STOPPING → INACTIVE (three-phase fail-safe).
+
+    One command, two callers, told apart by PauseReason: the host pressing End
+    game, and the system closing an abandoned game (expiry sweeper, admin CLI).
+    They share every step — the difference is only what the players are told, so
+    a single ETL serves both rather than two near-copies drifting apart.
 
     Three-phase pattern ensures data preservation:
     1. Fetch final state from MongoDB (non-destructive)
@@ -1131,9 +1214,15 @@ class PauseSession:
         self.event_manager = event_manager
         self.asset_repo = asset_repository
 
-    async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
+    async def execute(self, session_id: UUID, host_id: UUID, reason: PauseReason) -> SessionEntity:
         """
-        Pause a session using fail-safe three-phase pattern.
+        Take the game down using the fail-safe three-phase pattern.
+
+        Args:
+            reason: HOST_ENDED when the host pressed End game, SYSTEM when the
+                sweeper or an admin closed it. Required rather than defaulted —
+                every call site states which it is, because the choice decides
+                whether players hear about it.
 
         Raises:
             ValueError: If validation fails or api-game call fails
@@ -1143,9 +1232,9 @@ class PauseSession:
         if not session:
             raise ValueError("Session not found")
         if session.host_id != host_id:
-            raise ValueError("Only the host can pause this session")
+            raise ValueError("Only the host can end this game")
         if session.status != SessionStatus.ACTIVE:
-            raise ValueError(f"Cannot pause session in {session.status} status")
+            raise ValueError(f"Cannot end a game in {session.status} status")
 
         # 2. Set STOPPING status
         session.pause()
@@ -1161,8 +1250,7 @@ class PauseSession:
         # state and the INACTIVE transition, retried through the backoff. If
         # every attempt fails, roll the session back to ACTIVE: the game is
         # still hot (phase-3 cleanup only runs after a successful write), so
-        # the pause can simply be attempted again.
-        session.max_players = extracted.max_players
+        # ending it can simply be attempted again.
         session.audio_config = extracted.audio_config
         session.spotify_config = extracted.spotify_config
         session.map_config = extracted.map_config
@@ -1170,6 +1258,12 @@ class PauseSession:
         session.active_display = extracted.active_display
         session.adventure_log = extracted.adventure_log
         session.map_token_state = extracted.map_token_state
+        if reason is PauseReason.HOST_ENDED:
+            # The declared game just happened, so the date stops being "next".
+            # Rides the same commit as the extracted state. A SYSTEM take-down
+            # leaves it alone: the sweeper closing a forgotten game says nothing
+            # about what the GM told the table.
+            session.clear_schedule()
         session.deactivate()  # Sets INACTIVE, stopped_at = now
 
         save_error = await _save_session_with_retry(self.session_repo, session, session_id)
@@ -1177,173 +1271,50 @@ class PauseSession:
             logger.error(f"PostgreSQL write failed for {session_id} after retries: {save_error}")
             if _abort_stuck_stop(self.session_repo, session_id):
                 raise ValueError(
-                    f"Failed to pause the session — it is still live and can be "
-                    f"paused again. Error: {str(save_error)}"
+                    f"Failed to end the game — it is still live and can be "
+                    f"ended again. Error: {str(save_error)}"
                 )
             raise ValueError(
-                f"Failed to pause the session and it could not be returned to live. "
+                f"Failed to end the game and it could not be returned to live. "
                 f"Game preserved in MongoDB — needs admin attention. Error: {str(save_error)}"
             )
         logger.info(f"Session {session_id} marked INACTIVE in PostgreSQL")
 
-        # 5. Broadcast session_paused event
+        # 5. Tell the campaign — the ONE place the two reasons diverge.
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
         if campaign:
             host_user = self.user_repo.get_by_id(host_id)
+            host_screen_name = (host_user.screen_name if host_user else None) or "Unknown"  # never email (PII)
             all_recipients = campaign.get_all_member_ids()
 
-            events = SessionEvents.session_paused(
-                campaign_member_ids=all_recipients,
-                session_id=session.id,
-                session_name=session.name,
-                campaign_id=session.campaign_id,
-                paused_by_id=host_id,
-                paused_by_screen_name=(host_user.screen_name if host_user else None) or "Unknown"  # never email (PII)
-            )
+            if reason is PauseReason.HOST_ENDED:
+                events = SessionEvents.session_ended(
+                    campaign_member_ids=all_recipients,
+                    session_id=session.id,
+                    campaign_id=session.campaign_id,
+                    campaign_name=campaign.title,
+                    host_id=host_id,
+                    host_screen_name=host_screen_name
+                )
+            else:
+                events = SessionEvents.session_paused(
+                    campaign_member_ids=all_recipients,
+                    session_id=session.id,
+                    campaign_id=session.campaign_id,
+                    paused_by_id=host_id,
+                    paused_by_screen_name=host_screen_name
+                )
+
             for event_config in events:
                 await self.event_manager.broadcast(event_config)
-            logger.info(f"Broadcasting session_paused event to {len(all_recipients)} recipients for session {session.id}")
+            logger.info(
+                f"Broadcast {reason} take-down to {len(events)} recipient(s) for session {session.id}"
+            )
 
         # 6. PHASE 3: Background cleanup (fire-and-forget)
         asyncio.create_task(_async_cleanup_game(session_id))
 
-        logger.info(f"Session {session_id} paused successfully, cleanup scheduled")
-        return session
-
-
-class FinishSession:
-    """
-    Finish session permanently: ACTIVE/INACTIVE → FINISHED.
-    Performs full ETL if session is ACTIVE, then marks as FINISHED.
-    FINISHED sessions cannot be resumed and are preserved in campaign history.
-    """
-
-    def __init__(
-        self,
-        session_repository: SessionRepository,
-        user_repository: UserRepository,
-        character_repository: CharacterRepository,
-        campaign_repository: CampaignRepository,
-        event_manager: EventManager,
-        asset_repository: MediaAssetRepository = None
-    ):
-        self.session_repo = session_repository
-        self.user_repo = user_repository
-        self.character_repo = character_repository
-        self.campaign_repo = campaign_repository
-        self.event_manager = event_manager
-        self.asset_repo = asset_repository
-
-    async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
-        """
-        Finish a session permanently.
-
-        Flow:
-        - If ACTIVE: Performs full ETL (like PauseSession) then sets FINISHED
-        - If INACTIVE: Sets FINISHED directly
-
-        Session will be marked FINISHED and cannot be resumed.
-
-        Raises:
-            ValueError: If validation fails or api-game call fails
-        """
-        # 1. Load session
-        session = self.session_repo.get_by_id(session_id)
-        if not session:
-            raise ValueError("Session not found")
-
-        # 2. Validate host ownership
-        if session.host_id != host_id:
-            raise ValueError("Only the host can finish this session")
-
-        # 3. If session is INACTIVE, just mark as FINISHED
-        if session.status == SessionStatus.INACTIVE:
-            session.finish()  # Domain method sets status = FINISHED
-            self.session_repo.save(session)
-            logger.info(f"Session {session_id} marked FINISHED (was INACTIVE)")
-
-            # Broadcast session_finished event to all campaign members (silent state update)
-            campaign = self.campaign_repo.get_by_id(session.campaign_id)
-            if campaign:
-                # All campaign members (including host)
-                all_recipients = campaign.get_all_member_ids()
-
-                events = SessionEvents.session_finished(
-                    dm_id=campaign.dm_id,
-                    non_dm_member_ids=[uid for uid in campaign.get_all_member_ids() if uid != campaign.dm_id],
-                    session_id=session.id,
-                    session_name=session.name,
-                    campaign_id=session.campaign_id
-                )
-
-                # Broadcast to each recipient
-                for event_config in events:
-                    await self.event_manager.broadcast(event_config)
-
-                logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
-
-            return session
-
-        # 4. If session is ACTIVE, perform ETL then mark as FINISHED
-        if session.status != SessionStatus.ACTIVE:
-            raise ValueError(f"Cannot finish session in {session.status} status. Only ACTIVE or INACTIVE sessions can be finished.")
-
-        # 5. Set STOPPING status (ETL process starting)
-        session.finish_from_active()  # Domain method sets status = STOPPING
-        self.session_repo.save(session)
-        logger.info(f"Session {session_id} status set to STOPPING (finishing)")
-
-        # 6. PHASE 1: Extract and sync game state from MongoDB
-        extracted = await _extract_and_sync_game_state(
-            session_id, session, self.asset_repo, self.session_repo, self.character_repo
-        )
-
-        # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED — same retry +
-        # rollback contract as PauseSession's phase 2.
-        session.max_players = extracted.max_players
-        session.audio_config = extracted.audio_config
-        session.spotify_config = extracted.spotify_config
-        session.map_config = extracted.map_config
-        session.image_config = extracted.image_config
-        session.active_display = extracted.active_display
-        session.adventure_log = extracted.adventure_log
-        session.map_token_state = extracted.map_token_state
-        session.mark_finished()  # Sets FINISHED, stopped_at = now
-
-        save_error = await _save_session_with_retry(self.session_repo, session, session_id)
-        if save_error:
-            logger.error(f"PostgreSQL write failed for {session_id} after retries: {save_error}")
-            if _abort_stuck_stop(self.session_repo, session_id):
-                raise ValueError(
-                    f"Failed to finish the session — it is still live and can be "
-                    f"finished again. Error: {str(save_error)}"
-                )
-            raise ValueError(
-                f"Failed to finish the session and it could not be returned to live. "
-                f"Game preserved in MongoDB — needs admin attention. Error: {str(save_error)}"
-            )
-        logger.info(f"Session {session_id} marked FINISHED in PostgreSQL")
-
-        # 8. Broadcast session_finished event to all campaign members (silent state update)
-        campaign = self.campaign_repo.get_by_id(session.campaign_id)
-        if campaign:
-            all_recipients = campaign.get_all_member_ids()
-
-            events = SessionEvents.session_finished(
-                dm_id=campaign.dm_id,
-                non_dm_member_ids=[uid for uid in all_recipients if uid != campaign.dm_id],
-                session_id=session.id,
-                session_name=session.name,
-                campaign_id=session.campaign_id
-            )
-            for event_config in events:
-                await self.event_manager.broadcast(event_config)
-            logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
-
-        # 9. PHASE 3: Background cleanup (fire-and-forget)
-        asyncio.create_task(_async_cleanup_game(session_id))
-
-        logger.info(f"Session {session_id} finished successfully, cleanup scheduled")
+        logger.info(f"Session {session_id} ended ({reason}) successfully, cleanup scheduled")
         return session
 
 

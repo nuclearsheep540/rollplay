@@ -63,7 +63,6 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
 
     return SessionResponse(
         id=model.id,
-        name=model.name,
         campaign_id=model.campaign_id,
         host_id=model.host_id,
         host_name=host_name,
@@ -71,10 +70,10 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
         created_at=model.created_at,
         started_at=model.started_at,
         stopped_at=model.stopped_at,
+        scheduled_at=model.scheduled_at,
         joined_users=joined_user_ids,
         roster=roster,
-        player_count=len(joined_user_ids),
-        max_players=model.max_players
+        player_count=len(joined_user_ids)
     )
 
 

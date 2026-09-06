@@ -110,12 +110,12 @@ api-site/
 │   │   │   └── campaign_member_model.py
 │   │   ├── repositories/campaign_repository.py
 │   │   └── dependencies/providers.py
-│   ├── session/                   # Game session lifecycle (start/pause/finish)
+│   ├── session/                   # Game session lifecycle (start/end/reset)
 │   │   ├── api/
 │   │   │   ├── endpoints.py
 │   │   │   └── schemas.py
 │   │   ├── application/
-│   │   │   ├── commands.py        # CreateSession, StartSession, PauseSession, FinishSession
+│   │   │   ├── commands.py        # CreateSession, StartSession, PauseSession, ResetSession
 │   │   │   └── queries.py
 │   │   ├── domain/
 │   │   │   ├── session_aggregate.py
@@ -286,7 +286,7 @@ When a DM creates a game session, all `campaign.player_ids` are automatically ad
 ### Session Access (no Sessions tab)
 There is no Sessions surface — the old read-only Sessions tab and its `SessionsManager.js` were removed 2026-08-30. Sessions are reached through:
 - **Home hero**: the ranked campaign shows live state; GM gets START/RESUME/ENTER in place, players get JOIN when live.
-- **Campaigns tab drawer**: all session management (create/start/pause/finish/delete) lives in the expanded campaign card.
+- **Campaigns tab drawer**: Start game / End game / Reset game live in the expanded campaign card. There is no create — every campaign always has exactly one session.
 - **Social panel**: friends' live sessions in shared campaigns offer an Enter button.
 Character selection still gates entry where required (modal in the campaign drawer).
 
@@ -631,9 +631,39 @@ naming on cold-side code is that history, not a distinction.
 exists. There is deliberately no second identifier: a `sessions.active_game_id` column was
 retired 2026-08-30 because it duplicated both facts.
 
+**One campaign, one session, for life** (2026-09). A campaign is created with its session and
+keeps that row forever: it is what carries play state between games — token boards, the
+adventure log, what was on screen. Only an explicit **Reset game** replaces it (delete +
+create, `ResetSession`), and nothing else may create one. Reset is a fresh run for new
+players (2026-09-06): it also clears the table — every non-DM member removed through the
+same remove-player and cancel-invite commands the drawer uses, so locks release and people
+are told; their characters stay theirs. Assets, notes and authored npc baselines survive.
+
+The user-facing verbs are **Start game** and **End game**, and End game IS the backend's
+`PauseSession` — ACTIVE → STOPPING → INACTIVE with the full ETL. `PauseReason` tells the two
+callers apart: `HOST_ENDED` (the GM pressed the button; players get a toast, and from stage 3
+the schedule clears) and `SYSTEM` (the expiry sweeper or `admin.py pause-session`, silent).
+Never surface "pause" or "resume" to users — a system-paused game and an idle one are
+deliberately indistinguishable, and both offer START GAME.
+
+**FINISHED was retired** with this change. It was terminal, so the next game needed a NEW
+session row — and pc tokens live only on the previous board (`token_merge.py`), so every
+"finish" silently stranded the players' pieces while npcs re-seeded from the workshop
+baseline. There is now no terminal state: INACTIVE is the only resting one.
+
+**Seats are campaign settings** (`campaigns.max_players`), pushed hot in the start payload and
+never read back from a running game. A campaign stays editable while its game is live —
+deliberate: cold data, one editor, and the edit simply applies at the next start.
+
+**`sessions.scheduled_at` is cosmetic.** It records when the GM says the next game is, so the
+table can align — nothing starts on it, nobody is reminded, no rule is enforced by it. Host-set
+while idle; cleared by End game but never by a system pause and never by the clock (a past value
+is hidden by display rules, not deleted). Stored as an instant and rendered in each viewer's own
+timezone, so there is no user timezone setting and the server's zone never matters.
+
 ### HTTP-Based ETL (Session Lifecycle)
 **Game Start** (Cold→Hot): api-site gathers state from PostgreSQL → HTTP POST to api-game → MongoDB document created → game status set to ACTIVE
-**Game End** (Hot→Cold): api-site requests final state via HTTP → persists to PostgreSQL → sends delete to api-game → MongoDB document removed → game status set to INACTIVE/FINISHED
+**Game End** (Hot→Cold): api-site requests final state via HTTP → persists to PostgreSQL → sends delete to api-game → MongoDB document removed → session status set to INACTIVE
 
 ## Docker Services
 - **rollplay**: Next.js frontend (single SPA)

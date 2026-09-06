@@ -180,13 +180,6 @@ class TestBoardInPlayGuard:
         ])
         check_map_boards_in_play(asset_id, [uuid4()], session_repo, force=True)
 
-    def test_finished_sessions_never_block(self):
-        asset_id = uuid4()
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.FINISHED, {str(asset_id): [make_baseline_token()]}),
-        ])
-        check_map_boards_in_play(asset_id, [uuid4()], session_repo)
-
     def test_empty_or_absent_board_never_blocks(self):
         asset_id = uuid4()
         session_repo = FakeSessionRepository([

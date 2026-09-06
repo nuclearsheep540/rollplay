@@ -67,6 +67,7 @@ from modules.news.model.news_post_like_model import NewsPostLike  # noqa: F401
 from modules.news.model.news_post_read_model import NewsPostRead  # noqa: F401
 from integrations.spotify.models import SpotifyAccount  # noqa: F401
 from modules.session.application.commands import PauseSession
+from modules.session.domain.session_aggregate import PauseReason
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.user.application.commands import SetMaxSlots, UserNotFoundError
 from modules.session.repositories.session_repository import SessionRepository
@@ -131,7 +132,6 @@ def list_active():
             lease = session.urls_expire_at.isoformat() if session.urls_expire_at else "-"
 
             click.echo(f"  session   {session.id}")
-            click.echo(f"  name      {session.name}")
             click.echo(f"  campaign  {campaign_title} ({session.campaign_id})")
             click.echo(f"  host      {host_name}")
             click.echo(f"  started   {started}")
@@ -181,8 +181,8 @@ def pause_all_sessions(yes):
                 # Optional ids for the type checker.
                 continue
             try:
-                _run_draining_tasks(pause.execute(session.id, host_id=session.host_id))
-                click.echo(f"  paused  {session.id} ('{session.name}')")
+                _run_draining_tasks(pause.execute(session.id, host_id=session.host_id, reason=PauseReason.SYSTEM))
+                click.echo(f"  paused  {session.id}")
                 paused_count += 1
             except ValueError as reason:
                 # Benign races (e.g. the host paused it between our query and
@@ -223,14 +223,14 @@ def pause_session(session_id):
         pause = _build_pause_command(db, session_repo)
 
         try:
-            _run_draining_tasks(pause.execute(session.id, host_id=session.host_id))
+            _run_draining_tasks(pause.execute(session.id, host_id=session.host_id, reason=PauseReason.SYSTEM))
         except ValueError as reason:
             # PauseSession's ACTIVE-only guard and ETL failures surface here
             # with self-explanatory messages (session already paused, api-game
             # unreachable with the game preserved for retry, ...).
             raise click.ClickException(str(reason))
 
-        click.echo(f"Session {session.id} ('{session.name}') paused — state persisted, resumable.")
+        click.echo(f"Session {session.id} paused — state persisted, resumable.")
     finally:
         db.close()
 

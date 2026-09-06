@@ -5,24 +5,19 @@
  * Home's campaign selection — which campaign is the hero, and which is the
  * one being built.
  *
- * A campaign reaches the hero through its SESSION, not through existing: with
- * nothing live-able there is no game to answer "is my game on?" and no honest
- * START target. Campaign creation currently always creates a session, so every
- * campaign qualifies today — the filter is the hook the create/publish flow
- * hangs off later.
+ * Every campaign carries exactly one session, for life, so every campaign the
+ * user belongs to can hero. The ranking decides which one, not whether.
  */
 
-const SESSION_FINISHED = 'finished'
 const SESSION_ACTIVE = 'active'
 
-/** The campaign's live-able session: the first that hasn't been finished. */
+/**
+ * The campaign's session — it has exactly one, created with the campaign and
+ * replaced only by a reset. Null means the data is wrong, not that the campaign
+ * is unplayable.
+ */
 export function findCurrentSession(campaign) {
-  for (const session of campaign?.sessions || []) {
-    if (session.status !== SESSION_FINISHED) {
-      return session
-    }
-  }
-  return null
+  return campaign?.sessions?.[0] ?? null
 }
 
 export function isCampaignLive(campaign) {
@@ -40,34 +35,48 @@ function lastEditedOf(campaign) {
   return new Date(campaign.updated_at).getTime()
 }
 
+// A game the GM has declared, if it is still ahead of us. A past declaration
+// ranks as none — it is history, not a plan.
+function upcomingScheduleOf(campaign) {
+  const scheduledAt = findCurrentSession(campaign)?.scheduled_at
+  if (!scheduledAt) {
+    return 0
+  }
+  const when = new Date(scheduledAt).getTime()
+  return when > Date.now() ? when : 0
+}
+
 /**
- * Rank rules in priority order. The scheduled slot (stage 3) inserts as
- * another block between live and last played.
+ * Rank rules in priority order: live, then the soonest game still to come,
+ * then whatever was played most recently.
  */
 function compareHeroRank(first, second) {
   if (isCampaignLive(first) !== isCampaignLive(second)) {
     return isCampaignLive(first) ? -1 : 1
   }
+
+  const firstScheduled = upcomingScheduleOf(first)
+  const secondScheduled = upcomingScheduleOf(second)
+  if (Boolean(firstScheduled) !== Boolean(secondScheduled)) {
+    return firstScheduled ? -1 : 1
+  }
+  if (firstScheduled && secondScheduled && firstScheduled !== secondScheduled) {
+    return firstScheduled - secondScheduled  // soonest first
+  }
+
   return lastPlayedOf(second) - lastPlayedOf(first)
 }
 
 /**
- * The single most relevant campaign, or null when the user has none that can
- * be played yet. Ranking picks the hero only — the Campaigns tab is the index.
+ * The single most relevant campaign, or null when the user has none at all.
+ * Ranking picks the hero only — the Campaigns tab is the index.
  */
 export function selectHeroCampaign(campaigns) {
-  const eligible = []
-  for (const campaign of campaigns || []) {
-    if (findCurrentSession(campaign)) {
-      eligible.push(campaign)
-    }
-  }
-
-  if (eligible.length === 0) {
+  if (!campaigns?.length) {
     return null
   }
 
-  return eligible.sort(compareHeroRank)[0]
+  return [...campaigns].sort(compareHeroRank)[0]
 }
 
 /**

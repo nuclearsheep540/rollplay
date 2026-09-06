@@ -29,7 +29,6 @@ from map_token_ops import filter_map_token_state_for_player
 # in this table.
 EVENT_HANDLERS = {
     "seat_change": WebsocketEvent.seat_change,
-    "seat_count_change": WebsocketEvent.seat_count_change,
     "player_kicked": WebsocketEvent.player_kicked,
     "role_change": WebsocketEvent.role_change,
     "color_change": WebsocketEvent.color_change,

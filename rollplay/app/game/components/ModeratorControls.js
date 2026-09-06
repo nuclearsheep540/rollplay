@@ -25,7 +25,6 @@ export default function ModeratorControls({
   thisUserId,
   currentUser,
   onRoleChange, // Callback when roles are changed
-  setSeatCount, // Function to change seat count
   handleKickPlayer, // Function to kick players
   handleClearSystemMessages, // Function to clear system messages
   displayNameMap = {},
@@ -381,25 +380,6 @@ export default function ModeratorControls({
         </div>
         {expandedSections.party && (
           <div>
-            {/* Seat Count Management */}
-            <div className={MODERATOR_CHILD}>
-              <div className={MODERATOR_LABEL}>Seat Count (Current: {gameSeats?.length || 0})</div>
-              <div>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(count => (
-                  <button
-                    key={count}
-                    className={count === (gameSeats?.length || 0) 
-                      ? "m-1 bg-sky-300 hover:bg-sky-800 text-white font-semibold py-2 px-3 border-b-4 border-blue-700 hover:border-blue-500 rounded" 
-                      : "m-1 bg-sky-600 hover:bg-sky-800 text-white font-semibold py-2 px-3 border-b-4 border-blue-700 hover:border-blue-500 rounded"
-                    }
-                    onClick={() => setSeatCount(count)}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Kick Player */}
             <button 
               className={MODERATOR_CHILD}
