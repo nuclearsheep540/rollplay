@@ -178,8 +178,11 @@ does. (New-since-last-visit campaign lines were killed 2026-08-29 — see 02.)
 - **Parked — [Campaign create + publish](05-campaign-create-and-publish.md).** Shape only,
   unscheduled; v1 known-thin (save-without-publish + a publish button over the existing
   create form). Records the publish-is-a-seal concept (publish ≠ share) and the
-  create→build→publish flow; step 1's session-triggered hero eligibility is its shipped
-  groundwork.
+  create→build→publish flow. **Its groundwork is gone (2026-09-05):** step 1's
+  session-triggered hero eligibility was the hook, and
+  [06-game-lifecycle.md](06-game-lifecycle.md) makes every campaign carry a session from
+  birth — so publish, if ever extracted, needs an explicit `published` flag on the
+  campaign and the hero filter reads that instead.
 
 ## Delivery sequence (pecking order — decided 2026-08-29)
 
