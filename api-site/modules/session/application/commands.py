@@ -33,7 +33,6 @@ from modules.user.model.user_model import User
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.repositories.campaign_repository import CampaignRepository
-from modules.campaign.application.commands import CancelCampaignInvite, RemovePlayerFromCampaign
 from modules.session.model.session_model import SessionJoinedUser
 from modules.session.domain.token_merge import merge_token_boards
 from modules.session.domain.session_aggregate import PauseReason, SessionEntity, SessionStatus
@@ -53,7 +52,7 @@ class CreateSession:
     """Create the campaign's one session.
 
     Not reachable over HTTP: a campaign is born with its session and only ever
-    gets another through ResetSession. There is no user-facing "create a game".
+    is never replaced. There is no user-facing "create a game".
     """
 
     def __init__(
@@ -97,7 +96,7 @@ class CreateSession:
         if campaign.session_ids:
             raise ValueError(
                 f"Campaign {campaign_id} already has a session "
-                f"({campaign.session_ids[0]}) — reset it rather than creating another"
+                f"({campaign.session_ids[0]}) — there is never a second"
             )
 
         # Create session aggregate (host_id auto-inherited from campaign)
@@ -208,106 +207,6 @@ class ScheduleSession:
             )
 
         return session
-
-
-class ResetSession:
-    """Reset the campaign's game — a fresh run, for new players.
-
-    Two things happen. The table is cleared: every member but the DM is removed,
-    their characters released, pending invites cancelled — each through the same
-    command the drawer uses one at a time, so people are told exactly as if the
-    host had removed them by hand. Then play state is wiped by replacing the
-    session row: delete-then-create rather than clearing nine columns and a
-    roster table one by one, so a column added later is reset for free instead
-    of being silently remembered.
-
-    What survives is everything the campaign owns: assets, notes, the authored
-    npc baselines the next start re-seeds from, and the players' characters —
-    released, still theirs.
-    """
-
-    def __init__(
-        self,
-        session_repository: SessionRepository,
-        campaign_repository: CampaignRepository,
-        user_repository: UserRepository,
-        character_repository: CharacterRepository,
-        event_manager: EventManager
-    ):
-        self.session_repo = session_repository
-        self.campaign_repo = campaign_repository
-        self.user_repo = user_repository
-        self.character_repo = character_repository
-        self.event_manager = event_manager
-
-    async def execute(
-        self,
-        session_id: UUID,
-        host_id: UUID
-    ) -> SessionEntity:
-        """Clear the table, then replace the campaign's session with an empty one.
-
-        Loses: every non-DM member and pending invite, player tokens, the npc
-        tokens' in-play positions (they return to the workshop baseline), the
-        adventure log, the schedule, what was on screen, and the audio/Spotify
-        config. Keeps assets, notes, the baselines themselves, and the players'
-        characters (released from the campaign, still owned by them).
-
-        Returns the NEW session, whose id differs from the one passed in.
-
-        Raises:
-            ValueError: session missing, caller is not the host, or a game is
-                running. The live-game check runs BEFORE anyone is removed, so a
-                refusal changes nothing; the repository's delete guards it again.
-        """
-        session = self.session_repo.get_by_id(session_id)
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
-
-        if session.host_id != host_id:
-            raise ValueError("Only the host can reset this game")
-
-        if not session.can_delete():
-            raise ValueError("End the game before resetting it")
-
-        campaign_id = session.campaign_id
-        campaign = self.campaign_repo.get_by_id(campaign_id)
-        if not campaign:
-            raise ValueError(f"Campaign {campaign_id} not found")
-
-        # Clear the table. Ids are snapshotted here; each command reloads the
-        # campaign itself, so every removal saves against a fresh aggregate.
-        cancel_invite = CancelCampaignInvite(self.campaign_repo, self.user_repo, self.event_manager)
-        for invited_id in list(campaign.invited_player_ids):
-            await cancel_invite.execute(campaign_id=campaign_id, player_id=invited_id, host_id=host_id)
-
-        remove_player = RemovePlayerFromCampaign(
-            self.campaign_repo, self.user_repo, self.event_manager, self.character_repo
-        )
-        for member_id in campaign.get_all_member_ids():
-            if member_id == campaign.dm_id:
-                continue
-            await remove_player.execute(campaign_id=campaign_id, player_id=member_id, host_id=host_id)
-
-        self.session_repo.delete(session_id)
-
-        # The campaign is momentarily sessionless, which every read surface
-        # assumes cannot happen — so a failure here is loud, not swallowed.
-        try:
-            replacement = await CreateSession(
-                self.session_repo, self.campaign_repo, self.event_manager
-            ).execute(campaign_id=campaign_id, host_id=host_id)
-        except Exception:
-            logger.error(
-                f"Reset left campaign {campaign_id} with no session: the old session "
-                f"{session_id} was deleted but its replacement could not be created"
-            )
-            raise
-
-        logger.info(
-            f"Reset campaign {campaign_id}: table cleared, session {session_id} replaced by {replacement.id}"
-        )
-        return replacement
 
 
 class StartSession:

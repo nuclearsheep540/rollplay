@@ -173,31 +173,6 @@ class SessionRepository:
 
         return model.id
 
-    def delete(self, session_id: UUID) -> bool:
-        """Delete session using SQLAlchemy ORM"""
-        model = (
-            self.db.query(SessionModel)
-            .filter_by(id=session_id)
-            .first()
-        )
-
-        if not model:
-            return False
-
-        # Business rule validation through aggregate
-        session = self._model_to_aggregate(model)
-        if not session.can_delete():
-            raise ValueError("Cannot delete session - the game must be ended first")
-
-        # Explicitly delete child records using SQLAlchemy ORM to avoid relationship conflicts
-        # Delete SessionJoinedUser records (prevents ORM trying to SET NULL on primary key)
-        self.db.query(SessionJoinedUser).filter_by(session_id=session_id).delete(synchronize_session=False)
-
-        # Now safe to delete the session
-        self.db.delete(model)
-        self.db.commit()
-        return True
-
     def _sync_joined_users(self, session_id: UUID, joined_user_ids: List[UUID]) -> None:
         """
         Sync joined_users list with session_joined_users table.

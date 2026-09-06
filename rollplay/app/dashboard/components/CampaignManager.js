@@ -13,7 +13,6 @@ import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
 import EndGameModal from './EndGameModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
-import ResetGameModal from './ResetGameModal'
 import ScheduleGameModal from './ScheduleGameModal'
 import CampaignInviteModal from './CampaignInviteModal'
 import CharacterSelectionModal from './CharacterSelectionModal'
@@ -28,7 +27,6 @@ import {
   faPlus,
   faPlay,
   faStop,
-  faRotateLeft,
   faCalendarDays,
   faRightToBracket,
   faUserPlus,
@@ -46,7 +44,7 @@ import { useCampaigns } from '../hooks/useCampaigns'
 import { useInvitedCampaignMembers } from '../hooks/useInvitedCampaignMembers'
 import { useCharacters } from '../hooks/useCharacters'
 import { useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
-import { useStartGame, useEndGame, useResetGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
+import { useStartGame, useEndGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
 import { findCurrentSession } from '../utils/homeRanking'
 import { gameStatusLine } from '../utils/gameStatusLine'
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
@@ -287,7 +285,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const removePlayerMutation = useRemovePlayer()
   const startGameMutation = useStartGame()
   const endGameMutation = useEndGame()
-  const resetGameMutation = useResetGame()
   const scheduleGameMutation = useScheduleGame()
   const releaseCharacterMutation = useReleaseCharacter()
 
@@ -310,7 +307,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const [leaveCampaignTarget, setLeaveCampaignTarget] = useState(null)
   const [removePlayerTarget, setRemovePlayerTarget] = useState(null)
   const [endGameTarget, setEndGameTarget] = useState(null)
-  const [resetGameTarget, setResetGameTarget] = useState(null)
   const [scheduleGameTarget, setScheduleGameTarget] = useState(null)
 
   // Invite modal — ID-only, campaign derived from query cache (no sync effect needed)
@@ -435,29 +431,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }
 
-  // Open reset game modal
-  const openResetGameModal = (campaign) => {
-    setResetGameTarget(campaign)
-  }
-
-  // Close reset game modal
-  const closeResetGameModal = () => {
-    setResetGameTarget(null)
-  }
-
-  // Reset the game — wipes play state, keeps the party (called from modal)
-  const resetGame = async () => {
-    if (!resetGameTarget) return
-
-    setError(null)
-
-    try {
-      await resetGameMutation.mutateAsync(findCurrentSession(resetGameTarget)?.id)
-      setResetGameTarget(null)
-    } catch (err) {
-      setError(err.message)
-    }
-  }
 
   // Enter game
   const enterGame = (game) => {
@@ -1414,8 +1387,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             .filter((campaign) => !selectedCampaign || selectedCampaign.id === campaign.id)
             .map((campaign) => {
               // A campaign has exactly one session, for life — created with it,
-              // replaced only by a reset. An empty list means the data is wrong,
-              // not that the GM has a game to create.
+              // never replaced. An empty list means the data is wrong, not that
+              // the GM has a game to create.
               const currentSession = allSessions.find(session => session.campaign_id === campaign.id)
               const isGameLive = currentSession?.status === 'active'
 
@@ -1704,18 +1677,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                         aria-label="Schedule the next game"
                                       >
                                         <FontAwesomeIcon icon={faCalendarDays} />
-                                      </button>
-                                      {/* Reset is a fresh run — players removed — and
-                                          rarely wanted; kept visually subordinate to Start. */}
-                                      <button
-                                        onClick={() => openResetGameModal(campaign)}
-                                        disabled={resetGameMutation.isPending || currentSession.status === 'starting'}
-                                        className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style={{backgroundColor: 'transparent', color: THEME.textSecondary, borderColor: THEME.borderSubtle}}
-                                        title="Reset the game: back to baseline, players removed"
-                                        aria-label="Reset the game: back to baseline, players removed"
-                                      >
-                                        <FontAwesomeIcon icon={faRotateLeft} />
                                       </button>
                                     </>
                                   ) : null}
@@ -2225,16 +2186,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
           onSave={saveSchedule}
           onCancel={() => setScheduleGameTarget(null)}
           isSaving={scheduleGameMutation.isPending}
-        />
-      )}
-
-      {/* Reset Game Confirmation Modal */}
-      {resetGameTarget && (
-        <ResetGameModal
-          campaign={resetGameTarget}
-          onConfirm={resetGame}
-          onCancel={closeResetGameModal}
-          isResetting={resetGameMutation.isPending}
         />
       )}
 

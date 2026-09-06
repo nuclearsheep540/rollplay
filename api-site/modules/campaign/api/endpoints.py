@@ -197,7 +197,7 @@ async def create_campaign(
         )
 
         # A campaign is born with its session and keeps that one for life — this
-        # is the only place one is created (reset aside). Without it the campaign
+        # is the only place one is created. Without it the campaign
         # would have nothing to start, and every read surface assumes it exists.
         session_command = CreateSession(session_repo, campaign_repo, event_manager)
         await session_command.execute(

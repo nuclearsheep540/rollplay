@@ -10,6 +10,14 @@
 > characters live** relative to the campaign, the session, and the create/publish flows
 > (section below). The thin v1 above is unchanged and still first; the character-form
 > work is the feature the membership move lands with.
+>
+> **Later on 2026-09-06 — first extraction written:** [07-game-aggregate.md](07-game-aggregate.md)
+> makes Game an aggregate (the session's status was always the game's), removes Reset, and
+> adds games history. It settles vocabulary for this file too: **Party** is the name for the
+> session's roster (a value inside the session, never an aggregate — no id, no lifecycle);
+> the membership/roles move described below is the SECOND extraction and follows 07. The
+> "Archived runs" open item below is superseded: with Reset gone a session is never replaced,
+> so nothing needs archiving.
 
 ## The concept
 

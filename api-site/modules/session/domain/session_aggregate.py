@@ -9,7 +9,7 @@ Ubiquitous Language:
 - Game = The live multiplayer experience (handled by api-game service)
 
 Every campaign has exactly one session, for its whole life: created with the
-campaign, replaced wholesale by a reset, never absent. It is started and ended
+campaign, never replaced, never absent. It is started and ended
 (ended is spelled `pause` here — see PauseReason) over and over.
 When a Session is ACTIVE, a Game exists in MongoDB (api-game).
 """
@@ -196,14 +196,6 @@ class SessionEntity:
     def is_active(self) -> bool:
         """Check if session currently has an active game running"""
         return self.status == SessionStatus.ACTIVE
-
-    def can_delete(self) -> bool:
-        """Business rule: a session can only be deleted while no game is running.
-
-        Deletion is how a reset wipes play state, and how a campaign takes its
-        session with it — neither may happen under a live game.
-        """
-        return self.status == SessionStatus.INACTIVE
 
     # --- Asset Reference Management ---
 

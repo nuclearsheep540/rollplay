@@ -42,7 +42,7 @@ class Session(Base):
 
     Exactly one row per campaign, for the campaign's whole life. It carries the
     play state that survives between games (token boards, adventure log, what was
-    on screen), which is why it is never replaced except by an explicit reset.
+    on screen), which is why it is never replaced.
 
     When status is ACTIVE, a live game exists in MongoDB (api-game service),
     keyed by this session's id.

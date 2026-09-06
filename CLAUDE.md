@@ -110,12 +110,12 @@ api-site/
 │   │   │   └── campaign_member_model.py
 │   │   ├── repositories/campaign_repository.py
 │   │   └── dependencies/providers.py
-│   ├── session/                   # Game session lifecycle (start/end/reset)
+│   ├── session/                   # Game session lifecycle (start/end)
 │   │   ├── api/
 │   │   │   ├── endpoints.py
 │   │   │   └── schemas.py
 │   │   ├── application/
-│   │   │   ├── commands.py        # CreateSession, StartSession, PauseSession, ResetSession
+│   │   │   ├── commands.py        # CreateSession, StartSession, PauseSession, ScheduleSession
 │   │   │   └── queries.py
 │   │   ├── domain/
 │   │   │   ├── session_aggregate.py
@@ -286,7 +286,7 @@ When a DM creates a game session, all `campaign.player_ids` are automatically ad
 ### Session Access (no Sessions tab)
 There is no Sessions surface — the old read-only Sessions tab and its `SessionsManager.js` were removed 2026-08-30. Sessions are reached through:
 - **Home hero**: the ranked campaign shows live state; GM gets START/RESUME/ENTER in place, players get JOIN when live.
-- **Campaigns tab drawer**: Start game / End game / Reset game live in the expanded campaign card. There is no create — every campaign always has exactly one session.
+- **Campaigns tab drawer**: Start game / End game live in the expanded campaign card. There is no create and no reset — every campaign always has exactly one session, for life.
 - **Social panel**: friends' live sessions in shared campaigns offer an Enter button.
 Character selection still gates entry where required (modal in the campaign drawer).
 
@@ -633,11 +633,12 @@ retired 2026-08-30 because it duplicated both facts.
 
 **One campaign, one session, for life** (2026-09). A campaign is created with its session and
 keeps that row forever: it is what carries play state between games — token boards, the
-adventure log, what was on screen. Only an explicit **Reset game** replaces it (delete +
-create, `ResetSession`), and nothing else may create one. Reset is a fresh run for new
-players (2026-09-06): it also clears the table — every non-DM member removed through the
-same remove-player and cancel-invite commands the drawer uses, so locks release and people
-are told; their characters stay theirs. Assets, notes and authored npc baselines survive.
+adventure log, what was on screen. Nothing replaces it and nothing else may create one.
+(A **Reset game** verb shipped briefly on `feature/home-page` and was pulled on 2026-09-06
+before QA: "run the campaign again" is a *copy of the campaign* — the Market's acquire
+operation, done by the author — not a second life for the same session. See
+`.claude/plans/home/07-game-aggregate.md`, which also moves the play state and the
+lifecycle status off the session onto a Game aggregate.)
 
 The user-facing verbs are **Start game** and **End game**, and End game IS the backend's
 `PauseSession` — ACTIVE → STOPPING → INACTIVE with the full ETL. `PauseReason` tells the two

@@ -15,7 +15,6 @@ from .schemas import (
 from modules.session.application.commands import (
     StartSession,
     PauseSession,
-    ResetSession,
     ScheduleSession,
     RemovePlayerFromSession,
     SelectCharacterForSession,
@@ -49,7 +48,7 @@ router = APIRouter(tags=["sessions"])
 # === Session reads ===
 #
 # There is no create route: a campaign is born with its session (the campaign
-# create endpoint) and only ever gets another through reset, below.
+# create endpoint) and never gets another.
 
 @router.get("/my-sessions", response_model=SessionListResponse)
 async def get_my_sessions(
@@ -166,8 +165,7 @@ async def end_game(
     End the running game (ACTIVE → INACTIVE) using the fail-safe three-phase pattern.
 
     The session itself survives — this is what the GM calls "End game", and the
-    same session starts again next time carrying its token boards and log. Only
-    a reset throws that away.
+    same session starts again next time carrying its token boards and log.
 
     This endpoint:
     1. Validates session ownership
@@ -223,33 +221,6 @@ async def schedule_game(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-
-@router.post("/{session_id}/reset", response_model=SessionResponse)
-async def reset_game(
-    session_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    campaign_repo: CampaignRepository = Depends(campaign_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    event_manager: EventManager = Depends(get_event_manager)
-):
-    """
-    Reset the campaign's game (host only, no game running) — a fresh run.
-
-    Clears the table: every non-DM member is removed and told, their characters
-    released, pending invites cancelled. Wipes play state — tokens, the adventure
-    log, the schedule, what was on screen, audio and Spotify config — by
-    replacing the session row. Assets, notes and the authored npc baselines stay.
-
-    Returns the NEW session: its id differs from the one in the path.
-    """
-    try:
-        command = ResetSession(session_repo, campaign_repo, user_repo, character_repo, event_manager)
-        replacement = await command.execute(session_id=session_id, host_id=user_id)
-        return GetSessionById(session_repo).execute(replacement.id)  # type: ignore[arg-type]
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 # === Character Actions ===
 

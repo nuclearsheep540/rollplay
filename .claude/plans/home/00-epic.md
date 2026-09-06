@@ -5,8 +5,11 @@
 > (2026-08-28), handed over to Claude Code the same day and reconciled against the repo.
 > Shipped record: [SHIPPED — steps 1 & 2](#shipped--delivery-steps-1--2-2026-08-29--2026-08-30)
 > and [SHIPPED — steps 4, 7 & 8](#shipped--delivery-steps-4-7--8-2026-08-31--2026-09-06).
-> Still to build: stage 4 (Market), the seat count ("N at the table"), the tagline bank,
-> Pulse v2, the music line. Parked: stage 5.
+> Still to build: stage 7 ([07-game-aggregate.md](07-game-aggregate.md), decided 2026-09-06 —
+> Game becomes an aggregate, sessions lose status, Reset removed, games history; ships on a
+> branch cut AFTER this one's QA), stage 4 (Market), the seat count ("N at the table"), the
+> tagline bank, Pulse v2, the music line. Parked: stage 5 (its membership/Party move is
+> stage 7's successor).
 >
 > **Operating model:** this file is the epic — EVERYTHING required to deliver the Home vision
 > lives here (decisions, corrections, full scope). The numbered stage plans are *extractions*
@@ -175,11 +178,22 @@ does. (New-since-last-visit campaign lines were killed 2026-08-29 — see 02.)
   GM control in the drawer, hero/drawer display, pulse calm pill, ranking middle slot. No
   RSVP (dropped 2026-09-05). Rewritten in full 2026-09-05 as PR 3 of stage 6.
 - **Stage 6 — [Game lifecycle](06-game-lifecycle.md)** (added 2026-09-05; delivers BEFORE
-  stage 3) — SHIPPED (#175, 2026-09-06). Two user-facing verbs (Start game / End game) plus Reset game; every campaign
+  stage 3) — SHIPPED (#175, 2026-09-06; Reset game pulled again the same day, see stage 7). Two user-facing verbs (Start game / End game); every campaign
   has exactly one session, always; FINISHED retired; End game = backend pause, pause kept
   as the system control; seat count moves to campaign settings; the in-game seat editor
   goes. Driven by GM feedback and a real bug: the in-game end button (#173) marked the
   session FINISHED, and the fresh row lost player tokens.
+- **Stage 7 — [Game as an aggregate](07-game-aggregate.md)** (decided 2026-09-06, not
+  started; new branch after this one's QA). `sessions.status` and the eight ETL state
+  fields were always the game's, never the session's: Game gets its own row and id (= the
+  room id), owns STARTING/ACTIVE/ENDING/ENDED, the ETL, and the state of play (seed at
+  Start; boards, log, screen, audio, Spotify at End). The session keeps only the party and
+  the schedule and is live iff it has an open game. Each game is an immutable record (name,
+  when, attendance, GM summary, end state); the next game seeds from the newest ended one,
+  so continuity survives without any state on the session. The drawer lists them as "Games
+  played" from `session.games`. **Reset game is removed** — the "run it again" case is a
+  campaign copy, which is the Market's acquire. Campaign→session stays one-to-one by rule.
+  The migration turns every played session's current state into its first ENDED game.
 - **Stage 4 — [Market](04-market.md).** Publish / browse / acquire packaged campaigns, the
   featured mechanism, and activation of Home's dormant Market slots. Shape recorded now; the
   largest stage, expected to split into multiple extraction plans when its turn comes.
@@ -427,9 +441,9 @@ entry is knowingly overtaken in part.
 ### Step 4 — Game lifecycle (06 PRs 1–2) + scheduling (03) (#175)
 
 - **One session per campaign, always.** `CreateSession` is internal only; the campaign
-  create route makes the session; `ResetSession` (`POST /{id}/reset`) deletes and recreates
-  it — and, per the 2026-09-06 revision, first removes every non-DM member and cancels
-  pending invites through the existing campaign commands. Migration `9584fb2e1a4c`
+  create route makes the session. `ResetSession` (`POST /{id}/reset`) shipped here and was
+  **pulled from the branch later on 2026-09-06, before QA** (stage 7 decision: "run it again"
+  is a campaign copy, not a replaced session). Migration `9584fb2e1a4c`
   backfilled `campaigns.max_players`, deleted FINISHED rows, and gave every session-less
   campaign a fresh INACTIVE one with its roster.
 - **FINISHED retired** end to end. `PauseReason` (`HOST_ENDED` / `SYSTEM`) lives on the
@@ -438,8 +452,9 @@ entry is knowingly overtaken in part.
   gone. Session `name`, the create/rename/delete/pause/finish routes, the in-game seat
   editor and api-game's seats endpoint + `seat_count_change` handler are all deleted.
   Seats are `campaigns.max_players` (1–8), edited in the campaign form, read at Start.
-- **Frontend vocabulary**: `useStartGame` / `useEndGame` / `useResetGame` /
-  `useScheduleGame`; `EndGameModal`, `ResetGameModal` (3 s confirm), `ScheduleGameModal`;
+- **Frontend vocabulary**: `useStartGame` / `useEndGame` / `useScheduleGame`;
+  `EndGameModal`, `ScheduleGameModal` (`useResetGame` / `ResetGameModal` shipped and were
+  pulled with Reset);
   hero reads START GAME / ENTER GAME / JOIN GAME, never RESUME; the "Nothing at the table
   yet" hero variant is gone; the in-game end button (#173) now calls `/end`.
 - **Scheduling**: `sessions.scheduled_at` (migration `b1ae5a5e538b`), `schedule()` /

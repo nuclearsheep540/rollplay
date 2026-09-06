@@ -7,7 +7,7 @@ import { authFetch } from '@/app/shared/utils/authFetch'
 /**
  * The campaign's game, as the dashboard drives it.
  *
- * Two verbs the GM sees — start and end — plus reset, the deliberate wipe.
+ * Two verbs the GM sees — start and end — plus scheduling the next one.
  * There is no create: a campaign is born with its session and keeps it for
  * life, which is what carries token positions and the adventure log from one
  * game to the next. "Pause" survives only inside api-site, for the expiry
@@ -85,36 +85,6 @@ export function useScheduleGame() {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to save the schedule')
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-    },
-  })
-}
-
-/**
- * Reset the campaign's game — wipes play state by replacing the session.
- *
- * The response carries a NEW session with a new id, so the campaigns query is
- * invalidated rather than patched: every surface re-reads the campaign and
- * picks the replacement up.
- */
-export function useResetGame() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/reset`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to reset the game')
-      }
-
-      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })

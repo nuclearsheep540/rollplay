@@ -13,8 +13,8 @@ const SESSION_ACTIVE = 'active'
 
 /**
  * The campaign's session — it has exactly one, created with the campaign and
- * replaced only by a reset. Null means the data is wrong, not that the campaign
- * is unplayable.
+ * never replaced. Null means the data is wrong, not that the campaign is
+ * unplayable.
  */
 export function findCurrentSession(campaign) {
   return campaign?.sessions?.[0] ?? null

@@ -3,8 +3,7 @@
 
 """The one-session invariant: a campaign has exactly one session, for life.
 
-Created with the campaign, replaced wholesale by a reset, never absent and never
-doubled. Everything downstream leans on it — the Home hero reads
+Created with the campaign, never replaced, never absent and never doubled. Everything downstream leans on it — the Home hero reads
 `campaign.sessions[0]`, the drawer offers Start against it, and the start ETL
 restores token boards and the adventure log from that single row. A second row
 would give a campaign two boards and two logs with no rule for which one a game
@@ -51,19 +50,6 @@ class TestOneSessionPerCampaign:
         with pytest.raises(ValueError, match="already belongs"):
             campaign.add_session(session_id)
 
-    def test_a_replacement_attaches_once_the_old_one_is_gone(self):
-        """What a reset does: the row is deleted, so the campaign can take a new
-        one. session_ids is read-derived from the sessions table, so dropping the
-        id here mirrors the delete the repository has already performed."""
-        campaign = make_campaign()
-        original_id = uuid4()
-        campaign.add_session(original_id)
-
-        campaign.session_ids.remove(original_id)
-        replacement_id = uuid4()
-        campaign.add_session(replacement_id)
-
-        assert campaign.session_ids == [replacement_id]
 
 
 class TestSessionIsUnnamedAndSeatless:

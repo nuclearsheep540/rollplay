@@ -11,6 +11,14 @@
 > deleted" rather than telling the GM to end the game first (PR 2 §3, last bullet) — the
 > backend refusal is in place; fix the copy during QA.
 >
+> **Superseded in part by [07-game-aggregate.md](07-game-aggregate.md) (decided 2026-09-06,
+> not yet built):** decision 3's "INACTIVE is the only not-live state" goes — the session
+> will carry no status at all, the Game aggregate does; decision 5 (Reset game) is REMOVED
+> outright; `PauseReason` becomes `EndReason`, STOPPING becomes ENDING; and the play state
+> (boards, log, screen, audio) moves off the session onto each game, with the next game
+> seeding from the newest ended one. The bug this plan fixed stays fixed by that seeding
+> rule. Everything else here stands and is the foundation 07 builds on.
+>
 > Part of the [Home landing page epic](00-epic.md). **Decided 2026-09-05** (Matt + Fable, from
 > GM feedback). Written for the implementing agent: every decision below is
 > locked, every anchor was verified against the repo on 2026-09-05 (branch
@@ -57,7 +65,7 @@ structural, not an ETL change: stop creating new rows. The same applies to the a
 | 2 | **Every campaign has exactly one session, always.** Created with the campaign (today's auto-create in the campaign create route), replaced wholesale by Reset game, never zero, never two. There is no user-facing create. Start and Schedule never create a session — they require the one that always exists. |
 | 3 | **End game = backend pause.** ACTIVE → STOPPING → INACTIVE with the full hot-to-cold ETL. Pause stays as the backend's name for it and as the *system-level* control (the expiry sweeper, the admin CLI). INACTIVE is the only not-live state. Cards always say Start game — **never Resume**; a system-paused game is indistinguishable from an idle one to users. |
 | 4 | **FINISHED is retired entirely** — the status, the aggregate methods, the command, the endpoint, the frontend readers and the existing rows. Nothing needs it: a game stopped is an INACTIVE session; a game wiped is a Reset. |
-| 5 | **Reset game = delete + recreate in one server operation**, INACTIVE only, behind a confirm. **Revised 2026-09-06 — it also clears the table.** Reset exists for a fresh run with new players, so every non-DM member is removed (through the existing remove-player and cancel-invite commands: locks released, people notified) before the row is replaced. Loses: the party and pending invites, player tokens, npc tokens' in-play positions (back to the workshop baseline), adventure log, schedule, what was on screen, audio and Spotify config. Keeps: assets, notes, the baselines, and the players' characters (released, still theirs). |
+| 5 | **REMOVED 2026-09-06 (pulled from the branch before QA — see [07](07-game-aggregate.md)).** ~~**Reset game = delete + recreate in one server operation**, INACTIVE only, behind a confirm.~~ **Revised 2026-09-06 — it also clears the table.** Reset exists for a fresh run with new players, so every non-DM member is removed (through the existing remove-player and cancel-invite commands: locks released, people notified) before the row is replaced. Loses: the party and pending invites, player tokens, npc tokens' in-play positions (back to the workshop baseline), adventure log, schedule, what was on screen, audio and Spotify config. Keeps: assets, notes, the baselines, and the players' characters (released, still theirs). |
 | 6 | **Seat count moves to the campaign** (`campaigns.max_players`, 1–8, default 8). Edited in campaign settings at any time; **takes effect at the next Start** because api-game reads it from the start payload. The in-game seat editor and its api-game endpoint are removed. |
 | 7 | **Session name is removed** (column, request fields, the "Session Name" input on the campaign form, `session.name` readers). One session per campaign needs no name. |
 | 8 | **A campaign is editable while its game is live.** No guard on either side — there is one GM, campaign data lives in PostgreSQL and does not need to survive the ETL. Explicit decision; do not add a lock. |
