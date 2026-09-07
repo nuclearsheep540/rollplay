@@ -1050,6 +1050,8 @@ class EndGame:
         reason: EndReason,
         name: Optional[str] = None,
         summary: Optional[str] = None,
+        next_scheduled_at: Optional[datetime] = None,
+        next_game_name: Optional[str] = None,
     ) -> GameAggregate:
         """
         End the game using the fail-safe three-phase pattern.
@@ -1062,6 +1064,11 @@ class EndGame:
             name, summary: the GM's record of the night, offered in the End
                 dialog. Both optional and never blocking; a caller that passes
                 neither leaves what the game already had.
+            next_scheduled_at, next_game_name: the plan for the NEXT game, set
+                in the same wrap-up. Applied after the schedule is cleared, so
+                "this one happened, the next is Thursday" is one act. Only the
+                host path takes them — the sweeper has nothing to say about
+                when the table meets again.
 
         Raises:
             ValueError: If validation fails or the api-game call fails
@@ -1113,14 +1120,22 @@ class EndGame:
 
         session = self.session_repo.get_by_id(game.session_id)
 
-        # 5. The host's game just happened, so the date stops being "next". A
-        # SYSTEM take-down leaves it alone: the sweeper closing a forgotten game
+        # 5. The host's game just happened, so the date stops being "next" —
+        # and if they named the next one in the same breath, that replaces it.
+        # A SYSTEM take-down does neither: the sweeper closing a forgotten game
         # says nothing about what the GM told the table. This is the only thing
-        # ending ever writes to the session, and it is not play state.
-        if reason is EndReason.HOST and session and session.scheduled_at:
-            session.clear_schedule()
-            self.session_repo.save(session)
-            logger.info(f"Cleared the next-game date on session {game.session_id}")
+        # ending ever writes to the session, and none of it is play state.
+        if reason is EndReason.HOST and session:
+            had_plan = bool(session.scheduled_at or session.next_game_name)
+            makes_plan = bool(next_scheduled_at or next_game_name)
+            if had_plan or makes_plan:
+                session.clear_schedule()
+                session.schedule(next_scheduled_at, next_game_name)
+                self.session_repo.save(session)
+                logger.info(
+                    f"Session {game.session_id}: next game "
+                    f"{'set to ' + next_scheduled_at.isoformat() if next_scheduled_at else 'cleared'}"
+                )
 
         # 6. Tell the campaign — the ONE place the two reasons diverge.
         campaign = self.campaign_repo.get_by_id(game.campaign_id)
@@ -1156,6 +1171,28 @@ class EndGame:
             logger.info(
                 f"Broadcast {reason} take-down to {len(events)} recipient(s) for game {game.id}"
             )
+
+            # A wrap-up that names the next game says so with the SAME event the
+            # drawer's schedule control raises — so the toast reads the same and
+            # the notification is findable later, which is the whole reason
+            # session_scheduled persists and session_ended does not.
+            if reason is EndReason.HOST and (next_scheduled_at or next_game_name):
+                scheduled_events = SessionEvents.session_scheduled(
+                    campaign_member_ids=all_recipients,
+                    session_id=game.session_id,
+                    campaign_id=game.campaign_id,
+                    campaign_name=campaign.title,
+                    host_id=host_id,
+                    host_screen_name=host_screen_name,
+                    scheduled_at=next_scheduled_at,
+                    next_game_name=next_game_name,
+                )
+                for event_config in scheduled_events:
+                    await self.event_manager.broadcast(event_config)
+                logger.info(
+                    f"Broadcast the next game to {len(scheduled_events)} recipient(s) "
+                    f"for session {game.session_id}"
+                )
 
         # 7. PHASE 3: Background cleanup (fire-and-forget)
         asyncio.create_task(_async_cleanup_game(game_id))

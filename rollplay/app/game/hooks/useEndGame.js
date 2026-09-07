@@ -23,8 +23,14 @@ import { authFetch } from '@/app/shared/utils/authFetch';
  *
  * The room id in the game's URL IS the game's id, so no extra lookup is needed.
  *
- * name and summary are the GM's record of the night, offered in the confirm
- * dialog. Both optional; neither blocks ending.
+ * The hook also loads the game itself when the wrap-up opens, so the dialog can
+ * prefill from it. A GM who named the game in the schedule form before starting
+ * should find that name already in the box, not have to type it again: the name
+ * moved onto the game at Start, and this is where the runtime reads it back.
+ * The runtime knows only a room id, which IS the game id, so one GET by that id
+ * answers it.
+ *
+ * Everything the wrap-up collects stays optional; none of it blocks ending.
  *
  * api-site refuses anyone but the host, and the caller is expected to only
  * offer this to them; the refusal arrives as a 400 and is surfaced.
@@ -32,10 +38,32 @@ import { authFetch } from '@/app/shared/utils/authFetch';
 export function useEndGame() {
   const [isEnding, setIsEnding] = useState(false);
   const [error, setError] = useState(null);
+  const [game, setGame] = useState(null);
 
   const clearError = useCallback(() => setError(null), []);
 
-  const endGame = useCallback(async (gameId, { name = null, summary = null } = {}) => {
+  /**
+   * Read the game the wrap-up is about, so it can prefill.
+   *
+   * Best-effort: a failure leaves whatever we already had — the fields simply
+   * start empty and the GM can still type, because not knowing tonight's name
+   * is no reason to block ending the game. Deliberately does NOT blank first:
+   * a runtime serves one room and one game for its whole life, so there is no
+   * stale predecessor to guard against, and clearing would make the wrap-up
+   * flash its fallback every time it is asked to refresh.
+   */
+  const loadGame = useCallback(async (gameId) => {
+    if (!gameId) return;
+    try {
+      const response = await authFetch(`/api/games/${gameId}`, { credentials: 'include' });
+      if (!response.ok) return;
+      setGame(await response.json());
+    } catch (caught) {
+      console.warn('ENDGAME: could not read the game to prefill the wrap-up', caught);
+    }
+  }, []);
+
+  const endGame = useCallback(async (gameId, { name = null, summary = null, nextScheduledAt = null } = {}) => {
     if (!gameId) return false;
     setIsEnding(true);
     setError(null);
@@ -44,7 +72,7 @@ export function useEndGame() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name, summary }),
+        body: JSON.stringify({ name, summary, next_scheduled_at: nextScheduledAt }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -62,5 +90,5 @@ export function useEndGame() {
     }
   }, []);
 
-  return { endGame, isEnding, error, clearError };
+  return { endGame, isEnding, error, clearError, game, loadGame };
 }

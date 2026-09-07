@@ -57,15 +57,39 @@ export function formatRelativeTime(timestamp) {
 
 
 /**
- * Format a scheduled game for display: "Thu 4 Sep, 20:00".
+ * Format a game's date for display: "Thu 4 Sep, 20:00" — or "Tomorrow 20:00".
+ *
+ * The near days are named rather than dated. "Tomorrow 20:00" is what someone
+ * would say out loud, and it is the answer to the question the line is really
+ * being read for: is this soon? A weekday and a date make the reader work that
+ * out for themselves.
+ *
+ * Today and tomorrow are CALENDAR days in the viewer's zone, not 24-hour
+ * windows: a game at 00:30 tonight is "Tomorrow 00:30" even though it is two
+ * hours away, because that is the day it happens on.
  *
  * Rendered in the VIEWER's timezone, not the server's and not the GM's. The
  * stored value is an instant, so a game the GM set for 20:00 in London shows as
  * 15:00 to a player in New York — which is the point: everyone reads the same
- * moment in their own clock.
+ * moment in their own clock. It also means "today" is the viewer's today, so
+ * the same game can honestly read as Today for one player and Tomorrow for
+ * another across a date line.
+ *
+ * Computed per call rather than cached, so a page left open overnight stops
+ * saying "Today" about yesterday.
  */
 export function formatScheduledTime(timestamp) {
-  return dayjs(timestamp).format('ddd D MMM, HH:mm')
+  const when = dayjs(timestamp)
+  const today = dayjs().startOf('day')
+  const daysAway = when.startOf('day').diff(today, 'day')
+
+  if (daysAway === 0) {
+    return `Today ${when.format('HH:mm')}`
+  }
+  if (daysAway === 1) {
+    return `Tomorrow ${when.format('HH:mm')}`
+  }
+  return when.format('ddd D MMM, HH:mm')
 }
 
 /**

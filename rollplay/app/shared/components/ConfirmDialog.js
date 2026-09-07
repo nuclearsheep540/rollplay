@@ -40,10 +40,6 @@ const VARIANT_STYLES = {
  *   disabled after the dialog opens, counting down in its label. For actions
  *   severe enough that a reflex click should not be able to complete them.
  *   Defaults to 0, which is no delay at all.
- * @param {ReactNode} children - Optional content between the description and
- *   the buttons, for a confirm that also collects something (the in-game End
- *   Game dialog takes the night's name and summary there). A dialog with no
- *   children renders exactly as it always did.
  */
 export default function ConfirmDialog({
   show,
@@ -59,7 +55,6 @@ export default function ConfirmDialog({
   icon,
   variant = 'danger',
   confirmDelaySeconds = 0,
-  children,
 }) {
   const cancelRef = useRef(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
@@ -112,9 +107,6 @@ export default function ConfirmDialog({
         {description && (
           <p className="text-center text-sm text-content-secondary mb-6">{description}</p>
         )}
-
-        {/* Anything the confirm also needs to collect */}
-        {children}
 
         {/* Buttons */}
         <div className="flex gap-3 mt-6">

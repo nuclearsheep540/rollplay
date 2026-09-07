@@ -45,22 +45,29 @@ export function useStartGame() {
 }
 
 /**
- * End the running game, optionally recording what it was called and what
- * happened. Nothing is lost — the next game starts from where this one ends.
+ * End the running game and wrap it up: what it was called, what happened, and
+ * when the next one is. Nothing is lost — the next game starts from where this
+ * one ends.
  *
- * Name and summary are always optional: a GM who just wants the game to stop
- * sends neither.
+ * Every field is optional: a GM who just wants the game to stop sends none.
+ * The next-game date travels with the end rather than through the schedule
+ * route because ending clears the old one, and a second call could fail and
+ * leave the table with no date at all.
  */
 export function useEndGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ gameId, name = null, summary = null }) => {
+    mutationFn: async ({ gameId, name = null, summary = null, nextScheduledAt = null }) => {
       const response = await authFetch(`/api/games/${gameId}/end`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name, summary }),
+        body: JSON.stringify({
+          name,
+          summary,
+          next_scheduled_at: nextScheduledAt,
+        }),
       })
 
       if (!response.ok) {

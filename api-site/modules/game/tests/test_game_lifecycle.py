@@ -597,6 +597,88 @@ class TestEndGame:
         assert stored.name == "The Siege of Kraghammer"
         assert stored.summary == "The party fled north."
 
+    def test_the_wrap_up_can_set_the_next_game(self, session, repos, session_repo):
+        """One act: this one happened, the next is Thursday.
+
+        Ending clears the date, so a separate schedule call afterwards could
+        half-fail and leave the table with none — which is why the wrap-up
+        carries it instead.
+        """
+        when = datetime.now(timezone.utc) + timedelta(days=7)
+        game = start_a_game(session, repos)
+
+        end_a_game(
+            game, repos, EndReason.HOST,
+            next_scheduled_at=when, next_game_name="The Siege of Kraghammer",
+        )
+
+        stored = session_repo.get_by_id(session.id)
+        assert stored.scheduled_at is not None
+        assert stored.next_game_name == "The Siege of Kraghammer"
+
+    def test_the_wrap_up_replaces_the_date_it_just_cleared(self, session, repos, session_repo):
+        """The old date named the game that just ended; the new one replaces it
+        rather than being cleared alongside it."""
+        old_date = datetime.now(timezone.utc) + timedelta(days=1)
+        new_date = datetime.now(timezone.utc) + timedelta(days=7)
+        session.schedule(old_date)
+        session_repo.save(session)
+        game = start_a_game(session, repos)
+
+        end_a_game(game, repos, EndReason.HOST, next_scheduled_at=new_date)
+
+        stored = session_repo.get_by_id(session.id)
+        assert stored.scheduled_at is not None
+        assert abs((stored.scheduled_at.replace(tzinfo=timezone.utc) - new_date).total_seconds()) < 1
+
+    def test_the_wrap_up_tells_the_players_the_next_date(self, session, repos, mock_event_manager):
+        when = datetime.now(timezone.utc) + timedelta(days=7)
+        game = start_a_game(session, repos)
+        mock_event_manager.broadcast.reset_mock()
+
+        end_a_game(game, repos, EndReason.HOST, next_scheduled_at=when)
+
+        broadcast = [call.args[0] for call in mock_event_manager.broadcast.call_args_list]
+        types = {event.event_type for event in broadcast}
+        assert types == {"session_ended", "session_scheduled"}
+        # session_scheduled persists so a player can find it later; the ending
+        # itself is momentary news and does not.
+        scheduled = [event for event in broadcast if event.event_type == "session_scheduled"]
+        assert all(event.save_notification for event in scheduled)
+
+    def test_ending_without_a_plan_says_nothing_about_the_next_game(
+        self, session, repos, mock_event_manager
+    ):
+        game = start_a_game(session, repos)
+        mock_event_manager.broadcast.reset_mock()
+
+        end_a_game(game, repos, EndReason.HOST)
+
+        broadcast = [call.args[0] for call in mock_event_manager.broadcast.call_args_list]
+        assert {event.event_type for event in broadcast} == {"session_ended"}
+
+    def test_the_system_take_down_never_plans_the_next_game(
+        self, session, repos, session_repo, mock_event_manager
+    ):
+        """The sweeper closing a forgotten game has nothing to say about when
+        the table meets again — and must not clear what the GM said either.
+
+        (The planned NAME is already gone by this point, and rightly: Start
+        moved it onto the game that is now being closed.)
+        """
+        when = datetime.now(timezone.utc) + timedelta(days=3)
+        session.schedule(when, "The Siege of Kraghammer")
+        session_repo.save(session)
+        game = start_a_game(session, repos)
+        assert game.name == "The Siege of Kraghammer"
+
+        end_a_game(game, repos, EndReason.SYSTEM, next_scheduled_at=None)
+
+        stored = session_repo.get_by_id(session.id)
+        assert stored.scheduled_at is not None
+        broadcast = [call.args[0] for call in mock_event_manager.broadcast.call_args_list]
+        assert "session_scheduled" not in {event.event_type for event in broadcast}
+
     def test_ending_leaves_no_open_game_so_the_next_can_start(self, session, repos, game_repo):
         game = start_a_game(session, repos)
         end_a_game(game, repos, EndReason.HOST)

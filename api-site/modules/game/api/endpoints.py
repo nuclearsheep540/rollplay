@@ -73,6 +73,39 @@ async def disconnect_from_game(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+# === Reads ===
+#
+# The dashboard reads games through SessionResponse.game/.games, which it gets
+# with the campaigns it already fetches. This route exists for the game runtime,
+# which knows only a room id — and the room id is a game id.
+
+@router.get("/{game_id}", response_model=GameResponse)
+async def get_game(
+    game_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    game_repo: GameRepository = Depends(get_game_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
+):
+    """One game, for anyone who plays in its campaign."""
+    game = game_repo.get_by_id(game_id)
+    if not game:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+
+    campaign = campaign_repo.get_by_id(game.campaign_id)
+    if not campaign or not campaign.is_member(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this game"
+        )
+
+    # The campaign is already loaded for the check above, so naming it here is
+    # free — and the runtime, which has only a room id, has no other way to know
+    # what campaign it is in.
+    response = GameResponse.model_validate(game)
+    response.campaign_name = campaign.title
+    return response
+
+
 # === Game lifecycle ===
 
 @router.post("/", response_model=GameResponse, status_code=status.HTTP_201_CREATED)
@@ -137,7 +170,11 @@ async def end_game(
 
     The session survives, and so does everything the party built: the game keeps
     the board, the log and what was on screen, and the next game seeds from it.
-    Optionally records what the night was called and what happened.
+
+    This is also the wrap-up: it optionally records what the night was called
+    and what happened, and sets when the next game is — in one act, because
+    ending clears the old date and a second call could leave the table with
+    none.
 
     This endpoint:
     1. Validates the game's host and status
@@ -146,6 +183,7 @@ async def end_game(
     4. PHASE 2: Writes it to PostgreSQL (fail-safe — MongoDB preserved on error)
     5. PHASE 3: Background cleanup of the MongoDB room
     6. Broadcasts session_ended to every campaign member except the host
+       (and session_scheduled too, when the wrap-up named the next game)
     """
     try:
         command = EndGame(
@@ -154,7 +192,9 @@ async def end_game(
         )
         await command.execute(
             game_id, user_id, reason=EndReason.HOST,
-            name=request.name, summary=request.summary
+            name=request.name, summary=request.summary,
+            next_scheduled_at=request.next_scheduled_at,
+            next_game_name=request.next_game_name,
         )
 
     except ValueError as e:

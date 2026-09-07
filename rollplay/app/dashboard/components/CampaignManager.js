@@ -11,7 +11,7 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
-import EndGameModal from './EndGameModal'
+import EndGameModal from '@/app/shared/components/EndGameModal'
 import EditGameModal from './EditGameModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
 import ScheduleGameModal from './ScheduleGameModal'
@@ -397,7 +397,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // End the game (after confirmation), recording what it was called and what
   // happened if the GM filled either in. Both are optional and never block.
-  const confirmEndGame = async ({ name, summary }) => {
+  const confirmEndGame = async ({ name, summary, nextScheduledAt }) => {
     if (!endGameTarget) return
 
     setError(null)
@@ -407,6 +407,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         gameId: findOpenGame(endGameTarget)?.id,
         name,
         summary,
+        nextScheduledAt,
       })
       setEndGameTarget(null)
     } catch (err) {
@@ -1722,7 +1723,16 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                 >
                                   GAMES PLAYED
                                 </h4>
-                                <div className="space-y-1.5">
+                                {/* Bounded and scrolling: a campaign accumulates a
+                                    game per evening forever, and an unconstrained
+                                    list pushes the party and invite panels below it
+                                    out of the drawer entirely. pr-1 keeps the
+                                    scrollbar off the row borders, matching the
+                                    members grid above. */}
+                                <div
+                                  className="space-y-1.5 overflow-y-auto pr-1"
+                                  style={{maxHeight: '14rem'}}
+                                >
                                   {playedGames.map((game, index) => {
                                     // Newest first, so the oldest game is number 1.
                                     const gameNumber = playedGames.length - index
@@ -2237,9 +2247,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       {/* End Game Confirmation Modal */}
       {endGameTarget && (
         <EndGameModal
-          campaign={endGameTarget}
+          open={!!endGameTarget}
+          campaignTitle={endGameTarget.title}
           game={findOpenGame(endGameTarget)}
           gameNumber={findPlayedGames(endGameTarget).length + 1}
+          error={error}
           onConfirm={confirmEndGame}
           onCancel={cancelEndGame}
           isEnding={endGameMutation.isPending}
