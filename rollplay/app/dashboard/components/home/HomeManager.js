@@ -3,9 +3,11 @@
 
 'use client'
 
+import { useMemo } from 'react'
 import { useCampaigns } from '@/app/dashboard/hooks/useCampaigns'
 import { useCharacters } from '@/app/dashboard/hooks/useCharacters'
 import { selectHeroCampaign, selectWorkingOnCampaign } from '@/app/dashboard/utils/homeRanking'
+import { selectTagline } from '@/app/dashboard/utils/tagline'
 import Spinner from '@/app/shared/components/Spinner'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import CharacterHand from './CharacterHand'
@@ -47,7 +49,7 @@ export default function HomeManager({ user }) {
   // open rather than owning a second copy of it.
   const { openSocialPanel } = useAuthenticated()
   const { data: campaignData, isLoading } = useCampaigns(user?.id)
-  const { data: characters } = useCharacters()
+  const { data: characters, isLoading: isLoadingCharacters } = useCharacters()
 
   const campaigns = campaignData?.campaigns || []
   const invitedCampaigns = campaignData?.invitedCampaigns || []
@@ -65,9 +67,16 @@ export default function HomeManager({ user }) {
     }
   }
 
+  // Blank until both queries land, then picked once per situation rather than
+  // per render, so a refetch does not reshuffle the line.
+  const tagline = useMemo(
+    () => (isLoading || isLoadingCharacters ? '' : selectTagline({ user, heroCampaign, characters })),
+    [isLoading, isLoadingCharacters, user, heroCampaign, characters]
+  )
+
   return (
     <div className="mx-auto w-full max-w-[1410px] pb-16">
-      <HomeGreeting user={user} />
+      <HomeGreeting user={user} tagline={tagline} />
 
       <section className="mt-[26px]">
         {isLoading ? (
