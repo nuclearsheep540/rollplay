@@ -636,6 +636,16 @@ class StartGame:
             # back to: an unstarted game is not history, and a STARTING row left
             # behind would block the next start through the one-open-game index.
             logger.error(f"Unexpected error starting game {game.id} for session {session_id}: {e}")
+
+            # The room may already exist: api-game creates it at step 8, and
+            # every step after that can still fail. Deleting the cold row alone
+            # would leave it hot and unreachable, keyed by an id no row names.
+            # Awaited rather than fired off, because this request is about to
+            # end and a background task on a dying request may never run. Its
+            # own errors are swallowed, and deleting a room that was never
+            # created is a no-op — so this is safe on every failure path.
+            await _async_cleanup_game(game.id)
+
             self.game_repo.delete(game.id)
             logger.info(f"Game {game.id} removed after failed start")
             raise ValueError(f"Failed to start game: {str(e)}")
@@ -985,10 +995,14 @@ def _abort_stuck_end(game_repo: GameRepository, game_id: UUID) -> bool:
 
 async def _async_cleanup_game(game_id: UUID):
     """
-    Background task to delete the hot room in MongoDB (fire-and-forget).
+    Delete the hot room in MongoDB. Every failure is logged and swallowed.
 
     api-game keys the room by the game's id, so that id addresses it.
     If this fails, the hourly cron job will clean up orphaned rooms.
+
+    Two callers, both relying on it never raising: EndGame fires it off as a
+    background task once the game is ENDED, and StartGame awaits it inline when
+    a start fails, to take down a room it may have just created.
     """
     try:
         async with httpx.AsyncClient() as client:
@@ -1118,9 +1132,49 @@ class EndGame:
             )
         logger.info(f"Game {game_id} marked ENDED in PostgreSQL")
 
+        # 5. PHASE 3: Background cleanup (fire-and-forget), scheduled the moment
+        # the terminal write lands and BEFORE any side effect can raise. Deleting
+        # the room is what closes every socket in it and sends the players home,
+        # so it must not be reachable only by falling through the schedule write
+        # and the broadcasts: a failure in either used to leave a room hot with
+        # its sockets open and no way to retry, because the game is no longer
+        # ACTIVE and End refuses it.
+        asyncio.create_task(_async_cleanup_game(game_id))
+
+        # Everything below is side effects on an already-ended game. Failures are
+        # logged and swallowed for the same reason StartGame swallows its own:
+        # they must never turn a completed take-down into a 500 the caller will
+        # retry against a game that is already gone.
+        try:
+            await self._record_the_wrap_up(
+                game, reason, next_scheduled_at, next_game_name, host_id
+            )
+        except Exception as side_effect_error:
+            logger.warning(
+                f"Game {game_id} ended, but a post-end side effect failed "
+                f"(next-game schedule or the take-down broadcasts): {side_effect_error}"
+            )
+
+        logger.info(f"Game {game_id} ended ({reason}) successfully, cleanup scheduled")
+        return game
+
+    async def _record_the_wrap_up(
+        self,
+        game: GameAggregate,
+        reason: EndReason,
+        next_scheduled_at: Optional[datetime],
+        next_game_name: Optional[str],
+        host_id: UUID,
+    ) -> None:
+        """Tell the session and the table what just happened.
+
+        Split out of execute() so a single try/except covers all of it: the game
+        is already ENDED and its room already scheduled for deletion by the time
+        this runs, so nothing in here may propagate.
+        """
         session = self.session_repo.get_by_id(game.session_id)
 
-        # 5. The host's game just happened, so the date stops being "next" —
+        # The host's game just happened, so the date stops being "next" —
         # and if they named the next one in the same breath, that replaces it.
         # A SYSTEM take-down does neither: the sweeper closing a forgotten game
         # says nothing about what the GM told the table. This is the only thing
@@ -1137,7 +1191,7 @@ class EndGame:
                     f"{'set to ' + next_scheduled_at.isoformat() if next_scheduled_at else 'cleared'}"
                 )
 
-        # 6. Tell the campaign — the ONE place the two reasons diverge.
+        # Tell the campaign — the ONE place the two reasons diverge.
         campaign = self.campaign_repo.get_by_id(game.campaign_id)
         if campaign:
             host_user = self.user_repo.get_by_id(host_id)
@@ -1194,12 +1248,6 @@ class EndGame:
                     f"for session {game.session_id}"
                 )
 
-        # 7. PHASE 3: Background cleanup (fire-and-forget)
-        asyncio.create_task(_async_cleanup_game(game_id))
-
-        logger.info(f"Game {game_id} ended ({reason}) successfully, cleanup scheduled")
-        return game
-
 
 class UpdateGame:
     """Edit a game's record: what it was called and what happened.
@@ -1243,13 +1291,26 @@ class UpdateGame:
 
 
 class DisconnectFromGame:
-    """Handle player disconnect from a running game (character-level ETL).
+    """A player left a running game. Validates, and deliberately writes nothing.
 
-    Called by api-game when a player's socket closes, not by a browser. It moves
-    ONE player's runtime state to their own character row — which is where run
-    data on a user-owned object belongs: not on the game (whose cold state is the
-    board, the log and the screen) and not on the session's party (which records
-    which character someone brought, not that character's condition).
+    **This command must never write character state, and the tests guard that.**
+
+    It used to copy `hp_current` out of the room's `player_metadata` onto the
+    character row. That was backwards. The in-game sheet patches HP straight to
+    api-site (`PATCH /api/characters/{id}/runtime`) and nothing pushes the result
+    back into the room, so the room's copy is a snapshot taken at character
+    selection and goes stale from the first hit. Writing it cold on disconnect
+    therefore overwrote a fresh value with an old one — it lost HP rather than
+    saving it.
+
+    The real fix is to make the room authoritative for combat state during play
+    and sync it at End: `.claude/plans/TODO-runtime-character-state-authority.md`,
+    option B. Under that design disconnect still writes nothing — End does the
+    ETL for everyone, including the players who left early.
+
+    So this stays a validated no-op: the route and its checks are the placeholder
+    for whatever per-player work a disconnect eventually needs, and api-game has
+    no caller for it today.
     """
 
     def __init__(
@@ -1265,23 +1326,16 @@ class DisconnectFromGame:
         game_id: UUID,
         user_id: UUID,
         character_id: UUID,
-        character_state: dict
     ) -> CharacterAggregate:
-        """
-        Save character state when a player disconnects from a running game.
+        """Check the leaver may act on this character, and return it unchanged.
 
-        Business rules:
+        Business rules (all still enforced — they are what a future writer needs):
         - A game must be running
-        - Character must be owned by user
-        - Character must be locked to the game's campaign
+        - The character must be owned by the user
+        - The character must be locked to the game's campaign
 
-        character_state structure:
-        {
-            "current_hp": int,
-            "current_position": {"x": int, "y": int},
-            "status_effects": [...],
-            ... other game-specific state
-        }
+        Returns the character exactly as it was found. Nothing is saved: see the
+        class docstring for why writing here loses HP instead of persisting it.
         """
         game = self.game_repo.get_by_id(game_id)
         if not game:
@@ -1302,21 +1356,12 @@ class DisconnectFromGame:
         if character.active_campaign != game.campaign_id:
             raise ValueError("Character not locked to this campaign")
 
-        # Update character state from MongoDB
-        if "current_hp" in character_state:
-            character.hp_current = character_state["current_hp"]
-
-        # Mark character dead if HP reached 0
-        if character.hp_current <= 0 and character.is_alive:
-            character.mark_dead()
-
-        # TODO: Add position tracking and other state fields when implemented
-        # character.position = character_state.get("current_position")
-        # character.status_effects = character_state.get("status_effects", [])
-
-        # Save character (character-level ETL complete)
-        self.character_repo.save(character)
-
-        logger.info(f"Character-level ETL complete for character {character_id} in game {game_id}")
+        # NO WRITE, and no save. The room's copy of this character's runtime
+        # state is older than the character row's, so persisting it here would
+        # undo every hit the player took tonight.
+        logger.info(
+            f"Player {user_id} left game {game_id} with character {character_id}; "
+            f"no character state written (End owns that ETL)"
+        )
 
         return character

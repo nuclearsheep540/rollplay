@@ -31,10 +31,15 @@ export function findOpenGame(campaign) {
 }
 
 /**
- * Games played here, newest first. Empty until a game has actually ended.
+ * How many games have been played here in total.
+ *
+ * Not the length of `session.games` — that is a capped slice, because a
+ * campaign gains a game per evening for life and the server sends only the
+ * latest few. Anything that numbers or counts games reads this instead, or it
+ * restarts the numbering at the cap.
  */
-export function findPlayedGames(campaign) {
-  return findCurrentSession(campaign)?.games ?? []
+export function countPlayedGames(campaign) {
+  return findCurrentSession(campaign)?.games_played ?? 0
 }
 
 export function isCampaignLive(campaign) {

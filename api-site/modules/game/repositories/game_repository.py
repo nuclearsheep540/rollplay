@@ -102,18 +102,42 @@ class GameRepository:
         )
         return self._model_to_aggregate(model) if model else None
 
-    def get_ended_games_for_session(self, session_id: UUID) -> List[GameAggregate]:
-        """Every game played at this session, newest first — the drawer's history."""
-        models = (
+    def get_ended_games_for_session(
+        self, session_id: UUID, limit: Optional[int] = None
+    ) -> List[GameAggregate]:
+        """Games played at this session, newest first — the drawer's history.
+
+        `limit` caps the rows returned. Every session response carries this
+        list, and a campaign gains a game per evening for its whole life, so an
+        uncapped read grows without bound on the dashboard's hottest query.
+        Pass None only where the caller genuinely needs all of them.
+        """
+        query = (
             self.db.query(GameModel)
             .filter(
                 GameModel.session_id == session_id,
                 GameModel.status == GameStatus.ENDED.value,
             )
             .order_by(GameModel.ended_at.desc().nulls_last(), GameModel.created_at.desc())
-            .all()
         )
-        return [self._model_to_aggregate(model) for model in models]
+        if limit is not None:
+            query = query.limit(limit)
+        return [self._model_to_aggregate(model) for model in query.all()]
+
+    def count_ended_games_for_session(self, session_id: UUID) -> int:
+        """How many games have been played here, however many are returned.
+
+        The drawer shows a capped list but says the true total, so "3 of 47"
+        is expressible without loading forty-seven rows.
+        """
+        return (
+            self.db.query(GameModel)
+            .filter(
+                GameModel.session_id == session_id,
+                GameModel.status == GameStatus.ENDED.value,
+            )
+            .count()
+        )
 
     def get_open_games(self) -> List[GameAggregate]:
         """Every open game — the admin command's work list.
@@ -206,7 +230,19 @@ class GameRepository:
             self.db.add(model)
             self.db.flush()
 
-        self.db.commit()
+        # SQLAlchemy leaves a session UNUSABLE after a failed commit — every
+        # later statement on it raises PendingRollbackError until someone rolls
+        # back. StartGame's error path is a real caller of that: it deletes the
+        # STARTING row it just failed to activate, and without this the delete
+        # raised too, leaving a phantom row that blocks the session's next start
+        # through the one-open-game index. Rolling back here keeps the failure
+        # the caller sees the ORIGINAL one, and hands them a usable session.
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
         self.db.refresh(model)
 
         if not aggregate.id:
@@ -226,7 +262,13 @@ class GameRepository:
             return False
 
         self.db.delete(model)
-        self.db.commit()
+        # Same contract as save(): a failed commit must not leave the session
+        # poisoned for whatever the caller does next.
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
         return True
 
     def _model_to_aggregate(self, model: GameModel) -> GameAggregate:

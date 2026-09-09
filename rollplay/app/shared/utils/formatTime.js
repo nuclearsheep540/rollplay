@@ -111,13 +111,6 @@ export function isUpcoming(timestamp) {
 const TYPED_TIME_FORMATS = ['HH:mm', 'H:mm', 'H:m', 'HH.mm', 'H.mm', 'H.m', 'HH mm', 'HHmm', 'HH', 'H']
 
 /**
- * Read a clock time the way a person types one, into "HH:mm" — or null.
- *
- * Accepts "20:05", "20.05", "2005", "20 05", "8:5", and a bare hour ("20").
- * Anything that is not a real time on a 24-hour clock is rejected rather than
- * guessed at; the caller decides what to fall back to.
- */
-/**
  * How long a game ran, as a person would say it.
  *
  * Whole minutes only — nobody cares that the evening was 3h 42m 17s, and a
@@ -150,7 +143,13 @@ export function formatDuration(startIso, endIso) {
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`
 }
 
-
+/**
+ * Read a clock time the way a person types one, into "HH:mm" — or null.
+ *
+ * Accepts "20:05", "20.05", "2005", "20 05", "8:5", and a bare hour ("20").
+ * Anything that is not a real time on a 24-hour clock is rejected rather than
+ * guessed at; the caller decides what to fall back to.
+ */
 export function parseClockTime(text) {
   const parsed = dayjs(String(text ?? '').trim(), TYPED_TIME_FORMATS, true)
   return parsed.isValid() ? parsed.format('HH:mm') : null

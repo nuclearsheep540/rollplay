@@ -66,9 +66,12 @@ export default function EndGameModal({
   const hasWholeDate = Boolean(date) && Boolean(time)
   const hasHalfDate = Boolean(date) !== Boolean(time)
 
+  // Trimmed strings, never null: End reads null as "leave it alone", and a
+  // GM who blanks a name the schedule form gave this game means "clear it".
+  // The aggregate turns an empty string into no name.
   const end = () => onConfirm({
-    name: name.trim() || null,
-    summary: summary.trim() || null,
+    name: name.trim(),
+    summary: summary.trim(),
     // `new Date` on a `YYYY-MM-DDTHH:mm` string reads it in the browser's own
     // zone, which is exactly the instant the GM means. Every other player's
     // browser renders it back in theirs.

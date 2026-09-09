@@ -106,9 +106,15 @@ class ApiGameStub:
     is a valid "nothing was going on" final state.
     """
 
-    def __init__(self, final_state=None):
+    def __init__(self, final_state=None, echo_game_id=None):
         self.final_state = final_state if final_state is not None else {}
         self.start_payloads = []
+        # Room ids this stub was asked to delete — how a test sees whether the
+        # hot room was cleaned up.
+        self.deleted_room_ids = []
+        # When set, the start response echoes THIS id instead of the one it was
+        # sent, tripping the command's id check after the room already exists.
+        self.echo_game_id = echo_game_id
 
     def __call__(self, *args, **kwargs):
         client = AsyncMock()
@@ -121,7 +127,7 @@ class ApiGameStub:
                 self.start_payloads.append(body)
                 response.json.return_value = {
                     "success": True,
-                    "game_id": body.get("game_id"),
+                    "game_id": self.echo_game_id or body.get("game_id"),
                     "message": "",
                 }
             else:
@@ -132,11 +138,15 @@ class ApiGameStub:
                 }
             return response
 
-        response = MagicMock()
-        response.status_code = 200
-        response.json.return_value = {"success": True}
+        async def delete(url, **request_kwargs):
+            self.deleted_room_ids.append(url.rsplit("/", 1)[-1])
+            deleted = MagicMock()
+            deleted.status_code = 200
+            deleted.json.return_value = {"success": True}
+            return deleted
+
         client.post = AsyncMock(side_effect=post)
-        client.delete = AsyncMock(return_value=response)
+        client.delete = AsyncMock(side_effect=delete)
 
         context = MagicMock()
         context.__aenter__ = AsyncMock(return_value=client)
@@ -372,6 +382,20 @@ class TestStartGame:
         assert game_repo.get_open_game_for_session(session.id) is None
         assert game_repo.get_ended_games_for_session(session.id) == []
 
+    def test_a_failed_start_takes_the_hot_room_down_with_it(self, session, repos, game_repo):
+        """The room can outlive the row: api-game builds it, and every step after
+        that can still fail. Deleting only the cold row would leave it hot and
+        unreachable, keyed by an id no row names any more."""
+        # Echoing the wrong id trips the command's tripwire AFTER the room exists.
+        api_game = ApiGameStub(echo_game_id=str(uuid4()))
+
+        with pytest.raises(ValueError, match="Failed to start game"):
+            start_a_game(session, repos, api_game)
+
+        started = api_game.start_payloads[0]["game_id"]
+        assert api_game.deleted_room_ids == [started], "the hot room was left behind"
+        assert game_repo.get_open_game_for_session(session.id) is None
+
     def test_a_failed_start_keeps_the_planned_name(self, session, repos, session_repo):
         """The plan survives so the GM can simply press Start again."""
         session.name_next_game("The Siege of Kraghammer")
@@ -416,6 +440,42 @@ class TestStartGame:
         assert after.scheduled_at == before.scheduled_at
         assert set(after.joined_users) == set(before.joined_users)
         assert after.campaign_id == before.campaign_id
+
+
+class TestTheRepositoryLeavesAUsableSession:
+    """A failed commit must roll back before the caller's next statement.
+
+    SQLAlchemy refuses every statement on a session whose commit failed until
+    someone rolls back. StartGame's error path is a real caller of that: it
+    deletes the STARTING row it could not activate. Without the rollback the
+    delete raised too, the original error was masked, and the phantom row then
+    blocked that session's next start through the one-open-game index.
+    """
+
+    def test_save_rolls_back_when_the_commit_fails(self, game_repo, session, campaign, host):
+        game = GameAggregate.create(
+            session_id=session.id, campaign_id=campaign.id, host_id=host.id,
+        )
+
+        with patch.object(game_repo.db, "commit", side_effect=RuntimeError("db is gone")), \
+             patch.object(game_repo.db, "rollback") as rollback:
+            with pytest.raises(RuntimeError, match="db is gone"):
+                game_repo.save(game)
+
+        rollback.assert_called_once()
+
+    def test_delete_rolls_back_when_the_commit_fails(self, game_repo, session, campaign, host):
+        game = GameAggregate.create(
+            session_id=session.id, campaign_id=campaign.id, host_id=host.id,
+        )
+        game_repo.save(game)
+
+        with patch.object(game_repo.db, "commit", side_effect=RuntimeError("db is gone")), \
+             patch.object(game_repo.db, "rollback") as rollback:
+            with pytest.raises(RuntimeError, match="db is gone"):
+                game_repo.delete(game.id)
+
+        rollback.assert_called_once()
 
 
 class TestContinuity:
@@ -700,6 +760,53 @@ class TestEndGame:
             run(command.execute(game.id, player.id, reason=EndReason.HOST))
 
 
+class TestTheRoomIsAlwaysCleanedUp:
+    """A side effect that fails after ENDED must not strand the hot room.
+
+    Deleting the room is what closes the sockets and sends the players home. It
+    used to be scheduled last, after the schedule write and every broadcast, so
+    a raise in either left the room hot with its players still in it — and End
+    could not be retried, because the game was no longer ACTIVE.
+    """
+
+    def _end_with_a_broken_broadcast(self, game, repos):
+        game_repo, session_repo, user_repo, campaign_repo, event_manager = repos
+        event_manager.broadcast = AsyncMock(side_effect=RuntimeError("events are down"))
+        command = EndGame(
+            game_repository=game_repo, session_repository=session_repo,
+            user_repository=user_repo, character_repository=None,
+            campaign_repository=campaign_repo, event_manager=event_manager,
+            asset_repository=None,
+        )
+        scheduled = []
+
+        def capture(coroutine):
+            scheduled.append(coroutine)
+            coroutine.close()
+
+        with patch("modules.game.application.commands.httpx.AsyncClient", side_effect=ApiGameStub()), \
+             patch("modules.game.application.commands.asyncio.create_task", new=capture):
+            ended = run(command.execute(game.id, game.host_id, reason=EndReason.HOST))
+        return ended, scheduled
+
+    def test_cleanup_is_scheduled_even_when_the_broadcast_raises(self, session, repos):
+        game = start_a_game(session, repos)
+
+        ended, scheduled = self._end_with_a_broken_broadcast(game, repos)
+
+        assert len(scheduled) == 1, "the room's deletion was never scheduled"
+        assert ended.status == GameStatus.ENDED
+
+    def test_the_caller_is_not_told_the_take_down_failed(self, session, repos, game_repo):
+        """The game really did end, so End must not raise and invite a retry."""
+        game = start_a_game(session, repos)
+
+        self._end_with_a_broken_broadcast(game, repos)
+
+        assert game_repo.get_by_id(game.id).status == GameStatus.ENDED
+        assert game_repo.get_open_game_for_session(session.id) is None
+
+
 class TestGameHistory:
     def test_ended_games_come_back_newest_first(self, session, repos, game_repo, create_game, campaign):
         older = create_game(
@@ -723,6 +830,43 @@ class TestGameHistory:
         start_a_game(session, repos)
 
         assert game_repo.get_ended_games_for_session(session.id) == []
+
+    def _played(self, count, session, campaign, game_repo, create_game):
+        """`count` ended games, one a day apart so the ordering is unambiguous."""
+        for day in range(count):
+            game = create_game(
+                session_id=session.id, campaign_id=campaign.id, host_id=session.host_id,
+                status=GameStatus.ENDED, name=f"Night {day + 1}",
+            )
+            game.ended_at = datetime.utcnow() - timedelta(days=count - day)
+            game_repo.save(game)
+
+    def test_the_history_can_be_capped(self, session, game_repo, create_game, campaign):
+        """Every session response carries this list and a campaign gains a game
+        per evening for life, so it must not be able to grow without bound."""
+        self._played(9, session, campaign, game_repo, create_game)
+
+        recent = game_repo.get_ended_games_for_session(session.id, limit=5)
+
+        assert [game.name for game in recent] == [
+            "Night 9", "Night 8", "Night 7", "Night 6", "Night 5",
+        ]
+
+    def test_the_count_is_the_true_total_not_the_capped_slice(
+        self, session, game_repo, create_game, campaign
+    ):
+        """What the drawer numbers its games from. Reading the slice's length
+        instead would restart the numbering at the cap."""
+        self._played(9, session, campaign, game_repo, create_game)
+
+        assert game_repo.count_ended_games_for_session(session.id) == 9
+        assert len(game_repo.get_ended_games_for_session(session.id, limit=5)) == 5
+
+    def test_an_open_game_is_not_counted(self, session, repos, game_repo, create_game, campaign):
+        self._played(2, session, campaign, game_repo, create_game)
+        # An open game would break the one-open-per-session index if history
+        # counted it, and would also number tonight as though it were over.
+        assert game_repo.count_ended_games_for_session(session.id) == 2
 
 
 class TestUpdateGame:
@@ -765,7 +909,14 @@ class TestUpdateGame:
 
 
 class TestDisconnectFromGame:
-    """One player's runtime state to their own character row, as they leave."""
+    """A leaver's disconnect validates and writes NOTHING.
+
+    These are clobber guards. The room's player_metadata carries an HP snapshot
+    taken when the character was selected, while the in-game sheet patches HP
+    straight to PostgreSQL — so the room's copy is always the older of the two.
+    Writing it back on disconnect lost every hit the player had taken. If someone
+    reintroduces that write, the first two tests here fail.
+    """
 
     def _character(self, campaign_id, user_id, hp_current=20):
         return MagicMock(
@@ -775,30 +926,32 @@ class TestDisconnectFromGame:
             is_owned_by=lambda uid: uid == user_id,
         )
 
-    def test_writes_hp_to_the_character(self, session, repos, game_repo, campaign, host):
+    def test_leaves_the_character_row_untouched(self, session, repos, game_repo, campaign, host):
         game = start_a_game(session, repos)
-        character = self._character(campaign.id, host.id)
+        character = self._character(campaign.id, host.id, hp_current=7)
         character_repo = MagicMock(get_by_id=lambda _id: character)
 
         DisconnectFromGame(game_repo, character_repo).execute(
             game_id=game.id, user_id=host.id, character_id=uuid4(),
-            character_state={"current_hp": 7},
         )
 
+        # 7 is what the sheet wrote cold during play. The room still believes 20.
         assert character.hp_current == 7
-        character_repo.save.assert_called_once_with(character)
+        character_repo.save.assert_not_called()
 
-    def test_zero_hp_marks_the_character_dead(self, session, repos, game_repo, campaign, host):
+    def test_does_not_kill_a_character_the_room_thinks_is_down(
+        self, session, repos, game_repo, campaign, host
+    ):
+        """A stale zero in the room must not mark a healed character dead."""
         game = start_a_game(session, repos)
-        character = self._character(campaign.id, host.id)
+        character = self._character(campaign.id, host.id, hp_current=12)
         character_repo = MagicMock(get_by_id=lambda _id: character)
 
         DisconnectFromGame(game_repo, character_repo).execute(
             game_id=game.id, user_id=host.id, character_id=uuid4(),
-            character_state={"current_hp": 0},
         )
 
-        character.mark_dead.assert_called_once()
+        character.mark_dead.assert_not_called()
 
     def test_refused_when_no_game_is_running(self, session, repos, game_repo, campaign, host):
         game = start_a_game(session, repos)
@@ -808,7 +961,6 @@ class TestDisconnectFromGame:
         with pytest.raises(ValueError, match="No game is running"):
             DisconnectFromGame(game_repo, character_repo).execute(
                 game_id=game.id, user_id=host.id, character_id=uuid4(),
-                character_state={"current_hp": 7},
             )
 
     def test_refused_for_a_character_the_user_does_not_own(
@@ -820,7 +972,6 @@ class TestDisconnectFromGame:
         with pytest.raises(ValueError, match="not owned by user"):
             DisconnectFromGame(game_repo, character_repo).execute(
                 game_id=game.id, user_id=player.id, character_id=uuid4(),
-                character_state={"current_hp": 7},
             )
 
     def test_refused_for_a_character_locked_to_another_campaign(
@@ -832,7 +983,6 @@ class TestDisconnectFromGame:
         with pytest.raises(ValueError, match="not locked to this campaign"):
             DisconnectFromGame(game_repo, character_repo).execute(
                 game_id=game.id, user_id=host.id, character_id=uuid4(),
-                character_state={"current_hp": 7},
             )
 
 

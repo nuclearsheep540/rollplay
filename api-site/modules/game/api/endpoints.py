@@ -56,10 +56,13 @@ async def disconnect_from_game(
     game_repo: GameRepository = Depends(get_game_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Save one player's character state as they leave a running game.
+    """Note that a player left a running game. Writes nothing.
 
-    Called by api-game when a socket closes. Their runtime state goes to their
-    own character row, not to the game and not to the session's party.
+    A placeholder with its permission checks intact, and no caller today: the
+    room's runtime state is staler than the character row it would be written
+    to, so saving here loses HP rather than persisting it. End owns the
+    character ETL — see DisconnectFromGame and
+    `.claude/plans/TODO-runtime-character-state-authority.md`.
     """
     try:
         command = DisconnectFromGame(game_repo, character_repo)
@@ -67,7 +70,6 @@ async def disconnect_from_game(
             game_id=game_id,
             user_id=request.user_id,
             character_id=request.character_id,
-            character_state=request.character_state
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -47,7 +47,7 @@ import { useInvitedCampaignMembers } from '../hooks/useInvitedCampaignMembers'
 import { useCharacters } from '../hooks/useCharacters'
 import { useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
 import { useStartGame, useEndGame, useUpdateGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
-import { findCurrentSession, findOpenGame, findPlayedGames } from '../utils/homeRanking'
+import { countPlayedGames, findCurrentSession, findOpenGame } from '../utils/homeRanking'
 import { gameStatusLine } from '../utils/gameStatusLine'
 import { formatDuration, formatScheduledTime } from '@/app/shared/utils/formatTime'
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
@@ -1415,7 +1415,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
               // the GM has a game to create.
               const currentSession = allSessions.find(session => session.campaign_id === campaign.id)
               const currentGame = currentSession?.game ?? null
+              // A capped slice of the history, newest first. gamesPlayed is the
+              // true total: the list is short on purpose, the count is not.
               const playedGames = currentSession?.games ?? []
+              const gamesPlayed = currentSession?.games_played ?? 0
               const isGameLive = currentGame?.status === 'active'
 
               const isSelected = selectedCampaign?.id === campaign.id
@@ -1722,6 +1725,15 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                   style={{color: THEME.textSecondary}}
                                 >
                                   GAMES PLAYED
+                                  {/* The list is capped and scrolls, so it cannot
+                                      show how long a campaign has been running.
+                                      Say it. Only worth saying when some are
+                                      missing — otherwise the reader can count. */}
+                                  {gamesPlayed > playedGames.length && (
+                                    <span className="ml-2 font-normal tracking-normal opacity-70">
+                                      latest {playedGames.length} of {gamesPlayed}
+                                    </span>
+                                  )}
                                 </h4>
                                 {/* Bounded and scrolling: a campaign accumulates a
                                     game per evening forever, and an unconstrained
@@ -1734,8 +1746,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                   style={{maxHeight: '14rem'}}
                                 >
                                   {playedGames.map((game, index) => {
-                                    // Newest first, so the oldest game is number 1.
-                                    const gameNumber = playedGames.length - index
+                                    // Newest first, so the newest game carries the
+                                    // total and each older one counts down. Derived
+                                    // from gamesPlayed, never from the list length —
+                                    // the list is capped, so its length would restart
+                                    // the numbering at the cap once a campaign passes
+                                    // it, renaming every game the GM never named.
+                                    const gameNumber = gamesPlayed - index
                                     const duration = formatDuration(game.started_at, game.ended_at)
                                     return (
                                       <div
@@ -2250,7 +2267,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
           open={!!endGameTarget}
           campaignTitle={endGameTarget.title}
           game={findOpenGame(endGameTarget)}
-          gameNumber={findPlayedGames(endGameTarget).length + 1}
+          gameNumber={countPlayedGames(endGameTarget) + 1}
           error={error}
           onConfirm={confirmEndGame}
           onCancel={cancelEndGame}

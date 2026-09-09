@@ -35,7 +35,7 @@ export default function SiteHeader({ children }) {
           className="flex items-center hover:opacity-80 transition-opacity"
         >
           <img
-            src="/tabletop-logo-w.png"
+            src="/tabletop-extended-logo.png"
             alt="Tabletop Tavern"
             className="h-8 w-auto"
           />

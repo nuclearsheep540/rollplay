@@ -100,12 +100,15 @@ class UpdateGameRequest(BaseModel):
 
 
 class DisconnectRequest(BaseModel):
-    """A player's runtime state, sent by api-game when their socket closes.
+    """Who left, sent by api-game when a socket closes.
 
     user_id travels in the body because this route is service-to-service: there
     is no browser session to read it from.
+
+    Carries no character state, deliberately. The room's copy of a player's HP
+    is older than their character row's, so a state payload here could only
+    lose data — see DisconnectFromGame.
     """
 
     user_id: UUID
     character_id: UUID
-    character_state: dict

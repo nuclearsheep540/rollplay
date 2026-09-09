@@ -64,7 +64,12 @@ class SessionResponse(BaseModel):
     scheduled_at: Optional[datetime]  # The GM's declared next game; null when none
     next_game_name: Optional[str] = None  # What the next game is called; null once Start takes it
     game: Optional[GameResponse] = None  # The OPEN game, or null when nothing is running
-    games: List[GameResponse] = []  # Games played here, newest first
+    # The most recent games played here, newest first — capped, because a
+    # campaign gains one per evening for life and this response is built for
+    # every session on every dashboard read. games_played is the true total, so
+    # the drawer can say how many there are without carrying them all.
+    games: List[GameResponse] = []
+    games_played: int = 0
     joined_users: List[UUID]  # Users in session roster (the party)
     roster: List[RosterPlayerResponse]  # Enriched roster with character details
     player_count: int  # Count of joined_users
