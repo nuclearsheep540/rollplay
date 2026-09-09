@@ -54,7 +54,7 @@ export default function SessionCountdown({ expireAt }) {
 
   return (
     <div
-      title="Session auto-pauses when the timer ends"
+      title="The game ends when the timer runs out"
       style={{
         display: 'flex',
         alignItems: 'center',

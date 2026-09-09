@@ -60,6 +60,7 @@ export default function EndGameModal({
   const [summary, setSummary] = useState(game?.summary || '')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
+  const [nextName, setNextName] = useState('')
 
   // Date and time are one value: both, or neither. A name for the next game
   // with no date is fine — a GM can know what is next before knowing when.
@@ -68,7 +69,8 @@ export default function EndGameModal({
 
   // Trimmed strings, never null: End reads null as "leave it alone", and a
   // GM who blanks a name the schedule form gave this game means "clear it".
-  // The aggregate turns an empty string into no name.
+  // The aggregate turns an empty string into no name. The NEXT game's name is
+  // the opposite — nothing to leave alone, so blank travels as null.
   const end = () => onConfirm({
     name: name.trim(),
     summary: summary.trim(),
@@ -76,6 +78,7 @@ export default function EndGameModal({
     // zone, which is exactly the instant the GM means. Every other player's
     // browser renders it back in theirs.
     nextScheduledAt: hasWholeDate ? new Date(`${date}T${time}`).toISOString() : null,
+    nextGameName: nextName.trim() || null,
   })
 
   const fieldStyle = {
@@ -162,8 +165,23 @@ export default function EndGameModal({
             THE NEXT GAME
           </h4>
           <p className="text-xs mb-3" style={{ color: THEME.textSecondary }}>
-            Why not plan your next game session while everyone is here?
+            Why not plan the next game while everyone is here?
           </p>
+
+          {/* The same plan the Next Game modal takes: a name, a date, a time.
+              Start moves the name onto the game it opens, so what is typed
+              here is what the wrap-up prefills next time. */}
+          <input
+            type="text"
+            value={nextName}
+            maxLength={100}
+            disabled={isEnding}
+            onChange={(event) => setNextName(event.target.value)}
+            placeholder="Name (optional) — e.g. The Siege of Kraghammer"
+            aria-label="Name of the next game"
+            className="w-full mb-3 px-3 py-2 rounded-sm border text-sm focus:outline-none focus:ring-2 disabled:opacity-50"
+            style={fieldStyle}
+          />
 
           <div className="flex gap-3">
             <input

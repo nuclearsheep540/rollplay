@@ -109,6 +109,10 @@ class ApiGameStub:
     def __init__(self, final_state=None, echo_game_id=None):
         self.final_state = final_state if final_state is not None else {}
         self.start_payloads = []
+        # Game ids whose final state was requested — how a test sees that the
+        # take-down ETL ran for a game, when the room delete that follows it is
+        # a background task the test does not wait for.
+        self.end_game_ids = []
         # Room ids this stub was asked to delete — how a test sees whether the
         # hot room was cleaned up.
         self.deleted_room_ids = []
@@ -131,6 +135,7 @@ class ApiGameStub:
                     "message": "",
                 }
             else:
+                self.end_game_ids.append(body.get("game_id"))
                 response.json.return_value = {
                     "success": True,
                     "final_state": self.final_state,
@@ -705,6 +710,29 @@ class TestEndGame:
         # itself is momentary news and does not.
         scheduled = [event for event in broadcast if event.event_type == "session_scheduled"]
         assert all(event.save_notification for event in scheduled)
+
+    def test_the_wrap_up_announces_the_name_as_the_session_stored_it(
+        self, session, repos, session_repo, mock_event_manager
+    ):
+        """The event carries the stored name, not what the GM typed.
+
+        ScheduleSession broadcasts `session.next_game_name` after the aggregate
+        has trimmed it. The wrap-up raises the same event, so it must read the
+        same value — otherwise the toast and the card disagree over whitespace,
+        and a name of only spaces is announced as a name.
+        """
+        game = start_a_game(session, repos)
+        mock_event_manager.broadcast.reset_mock()
+
+        end_a_game(game, repos, EndReason.HOST, next_game_name="  The Siege of Kraghammer  ")
+
+        assert session_repo.get_by_id(session.id).next_game_name == "The Siege of Kraghammer"
+        broadcast = [call.args[0] for call in mock_event_manager.broadcast.call_args_list]
+        scheduled = [event for event in broadcast if event.event_type == "session_scheduled"]
+        assert scheduled, "a named next game is announced"
+        assert all(
+            event.data["next_game_name"] == "The Siege of Kraghammer" for event in scheduled
+        )
 
     def test_ending_without_a_plan_says_nothing_about_the_next_game(
         self, session, repos, mock_event_manager

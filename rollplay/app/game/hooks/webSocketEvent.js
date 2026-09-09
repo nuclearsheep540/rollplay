@@ -768,7 +768,7 @@ export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, h
   if (setSessionEndedData) {
     setSessionEndedData({ message, reason });
   } else {
-    alert(message || `This game session has ended: ${reason}`);
+    alert(message || `This game has ended: ${reason}`);
     setTimeout(() => {
       window.location.href = '/dashboard';
     }, 100);

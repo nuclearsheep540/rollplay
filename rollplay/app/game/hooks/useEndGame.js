@@ -63,7 +63,7 @@ export function useEndGame() {
     }
   }, []);
 
-  const endGame = useCallback(async (gameId, { name = null, summary = null, nextScheduledAt = null } = {}) => {
+  const endGame = useCallback(async (gameId, { name = null, summary = null, nextScheduledAt = null, nextGameName = null } = {}) => {
     if (!gameId) return false;
     setIsEnding(true);
     setError(null);
@@ -72,7 +72,12 @@ export function useEndGame() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name, summary, next_scheduled_at: nextScheduledAt }),
+        body: JSON.stringify({
+          name,
+          summary,
+          next_scheduled_at: nextScheduledAt,
+          next_game_name: nextGameName,
+        }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));

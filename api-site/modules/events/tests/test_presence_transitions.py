@@ -25,7 +25,7 @@ from modules.events.websocket_manager import EventConnectionManager
 
 def run_async(coro):
     """Run an async coroutine synchronously in tests (repo convention)."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 class FakeWebSocket:

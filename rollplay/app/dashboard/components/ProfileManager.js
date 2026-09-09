@@ -344,6 +344,9 @@ export default function ProfileManager({ user, onUserUpdate }) {
               }}
               disabled={updatingScreenName}
             />
+            <div className="text-xs mt-1" style={{color: THEME.textSecondary}}>
+              {(screenName || user.screen_name || '').length}/30 characters
+            </div>
             <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
               This is your display name shown to others (can be changed)
             </p>

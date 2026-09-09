@@ -377,7 +377,7 @@ export default function SocialPanel({ user, toasts = [], onDismissToast, openSig
                       className="min-w-0 flex-1"
                       status={
                         liveSeat
-                          ? <>In session · <span className="text-content-on-dark">{liveSeat.campaignTitle}</span></>
+                          ? <>Playing · <span className="text-content-on-dark">{liveSeat.campaignTitle}</span></>
                           : friend.is_online ? 'Online' : 'Offline'
                       }
                     />

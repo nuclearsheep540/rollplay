@@ -27,6 +27,10 @@ from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.game.dependencies.providers import get_game_repository
 from modules.game.repositories.game_repository import GameRepository
+from modules.game.application.commands import EndGame
+from modules.game.domain.game_aggregate import EndReason
+from modules.library.dependencies.providers import get_asset_repository
+from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.campaign.application.commands import (
     CreateCampaign,
     UpdateCampaign,
@@ -337,16 +341,39 @@ async def delete_campaign(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     game_repo: GameRepository = Depends(get_game_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
+    asset_repo: MediaAssetRepository = Depends(get_asset_repository),
     event_manager: EventManager = Depends(get_event_manager)
 ):
     """
-    Delete campaign.
+    Delete campaign (host only).
 
-    Refused while a game is running. Releases all character locks and
-    cascade-deletes the campaign's session and members.
+    A running game is a step on the way, not a refusal: it is ended first —
+    the real EndGame with EndReason.SYSTEM, so its ETL lands what outlives the
+    campaign (asset settings, character colours) and the room close sends
+    everyone home, with no "game has ended" toast ahead of the campaign_deleted
+    one — and then the campaign is deleted, its session, party and games
+    cascading with it. Two commands composed here, the way the create route
+    composes CreateCampaign and CreateSession.
+
+    The end acts as the CALLER, not as the game's host, so a member who may not
+    delete the campaign cannot end its game by asking for a delete: EndGame
+    refuses them before DeleteCampaign would. DeleteCampaign keeps its own
+    open-game refusal as the backstop — it now fires only for a game EndGame
+    could not close (STARTING, ENDING), which is a 400 rather than a cascade
+    under an open room.
     """
     try:
+        open_game = game_repo.get_open_game_for_campaign(campaign_id)
+        if open_game:
+            end_game = EndGame(
+                game_repo, session_repo, user_repo, character_repo,
+                campaign_repo, event_manager, asset_repo
+            )
+            await end_game.execute(open_game.id, host_id=user_id, reason=EndReason.SYSTEM)
+
         command = DeleteCampaign(campaign_repo, game_repo, character_repo, event_manager)
         success = await command.execute(campaign_id, user_id)
 

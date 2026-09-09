@@ -2546,17 +2546,16 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
    The ambient layer beneath the hero: a breathing source, avatar coins, and
    quiet pills emitted from it. */
 
+/* Size, ring and stacking only. A coin is a UserDisc, which owns its colour
+   and its initial's treatment — the same disc as everywhere else a user is
+   drawn, so the tavern's coins match the social panel. */
 .pulse-coin {
-  display: grid;
-  place-items: center;
   width: 22px;
   height: 22px;
   flex: none;
   border: 1.5px solid var(--palette-smoke);
   border-radius: 50%;
-  color: var(--palette-smoke);
   font-size: 10px;
-  font-weight: 700;
 }
 
 .pulse-coin-more {

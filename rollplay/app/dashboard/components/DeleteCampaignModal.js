@@ -20,7 +20,7 @@ export default function DeleteCampaignModal({ campaign, onConfirm, onCancel, isD
           Are you sure you want to delete <strong className="text-red-400">"{campaign.title || 'this campaign'}"</strong>?
         </>
       }
-      description="This action cannot be undone. All associated game sessions will also be deleted."
+      description="This cannot be undone. Any running game ends and everyone is sent back to their dashboard. Every game played here, its history and the party go with the campaign. Players keep their characters, and your assets are kept."
       confirmText="Delete Campaign"
       onConfirm={onConfirm}
       onCancel={onCancel}

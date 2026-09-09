@@ -18,12 +18,24 @@ import { resolveUserColor } from '@/app/utils/userColors'
  *
  * Size/typography/extras come in via className (e.g. 'w-8 h-8 text-sm');
  * children render inside the disc for overlays (online indicator dot).
+ * `style` is for positioning by the caller (a stacked coin's overlap and
+ * z-order) and never for the colour, which stays this component's to decide;
+ * `title` is the hover name.
  */
-export default function UserDisc({ userId, color, name, className = 'w-8 h-8 text-sm', children }) {
+export default function UserDisc({
+  userId,
+  color,
+  name,
+  className = 'w-8 h-8 text-sm',
+  style,
+  title,
+  children,
+}) {
   return (
     <span
       className={`relative rounded-full flex items-center justify-center font-bold flex-none select-none text-surface-secondary ${className}`}
-      style={{ backgroundColor: resolveUserColor(color, userId) }}
+      style={{ ...style, backgroundColor: resolveUserColor(color, userId) }}
+      title={title}
     >
       {(name || '?')[0].toUpperCase()}
       {children}

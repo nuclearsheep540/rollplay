@@ -315,7 +315,7 @@ export default function CharacterWizard() {
     }
     showToast?.({
       type: 'success',
-      message: 'Token crop saved - applies from your next game session',
+      message: 'Token crop saved — applies from your next game',
     })
   }
 

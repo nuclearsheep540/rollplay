@@ -232,7 +232,7 @@ class ConnectionManager:
             "event_type": "session_ended",
             "data": {
                 "reason": reason,
-                "message": "This game session has ended. You will be redirected shortly."
+                "message": "This game has ended."
             }
         }
 
