@@ -51,8 +51,8 @@ export default function WorkshopTokenControls({
     <div className="p-3 space-y-3">
       <p className="text-content-on-dark font-semibold text-xs">Token baseline</p>
       <p className="text-[11px] text-content-secondary leading-relaxed">
-        Prepared npc tokens for this map. They seed every new session and
-        persist between games; in-session changes never write back here.
+        Prepared npc tokens for this map. They seed each game at Start and
+        persist between games; in-game changes never write back here.
         New tokens start hidden from players.
       </p>
 
@@ -125,7 +125,7 @@ export default function WorkshopTokenControls({
               <LockToggleButton
                 locked={baselineToken.locked === true}
                 onToggle={() => onUpdateToken(baselineToken.id, { locked: !baselineToken.locked })}
-                lockedTitle="Locked in place at session start — click to unlock"
+                lockedTitle="Locked in place at game start — click to unlock"
               />
               <button
                 onClick={() => onDuplicateToken(baselineToken.id)}
@@ -150,9 +150,8 @@ export default function WorkshopTokenControls({
         <div className="border border-amber-400/50 bg-amber-900/20 rounded p-2 space-y-2">
           <p className="text-xs text-amber-200 leading-relaxed">{inPlayWarning}</p>
           <p className="text-[11px] text-amber-200/80 leading-relaxed">
-            Un-conflicting changes land when the session resumes; anything
-            play already touched keeps its in-game state until the session
-            finishes.
+            Un-conflicting changes land when the next game starts; anything
+            play already touched keeps its in-game state.
           </p>
           <div className="flex gap-2">
             <button
@@ -189,8 +188,8 @@ export default function WorkshopTokenControls({
       )}
 
       <p className="text-[11px] text-content-secondary leading-relaxed">
-        Drag tokens on the preview to position them. While a session is
-        active, edit tokens in-game from the DM panel instead.
+        Drag tokens on the preview to position them. While a game is
+        running, edit tokens in-game from the DM panel instead.
       </p>
     </div>
   );

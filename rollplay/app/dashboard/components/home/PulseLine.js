@@ -13,6 +13,7 @@ import { MAX_PULSE_EVENTS } from '@/app/shared/hooks/usePulse'
 import { findOpenGame } from '@/app/dashboard/utils/homeRanking'
 import { nextScheduledGame } from '@/app/dashboard/utils/gameStatusLine'
 import { formatScheduledTime } from '@/app/shared/utils/formatTime'
+import UserDisc from '@/app/shared/components/UserDisc'
 import { COLORS } from '@/app/styles/colorTheme'
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 
@@ -136,19 +137,19 @@ export default function PulseLine({ campaigns = [], onOpenSocial }) {
           className="flex flex-none items-center pl-1"
           title={`${onlineFriends.length} online`}
         >
+          {/* The same disc the social panel draws for this friend — so the
+              colour (chosen, or the palette hash until they choose) and the
+              initial match, and an avatar lands here the day it lands there. */}
           {coins.map((friend, index) => (
-            <span
+            <UserDisc
               key={friend.friend_id}
+              userId={friend.friend_id}
+              color={friend.friend_color}
+              name={friend.friend_screen_name}
               className="pulse-coin"
-              style={{
-                backgroundColor: friend.friend_color || COLORS.graphite,
-                marginLeft: index === 0 ? 0 : -8,
-                zIndex: MAX_COINS - index,
-              }}
+              style={{ marginLeft: index === 0 ? 0 : -8, zIndex: MAX_COINS - index }}
               title={friend.friend_screen_name || 'A friend'}
-            >
-              {(friend.friend_screen_name || '?').charAt(0).toUpperCase()}
-            </span>
+            />
           ))}
           {overflowCoins > 0 && (
             <span className="pulse-coin pulse-coin-more" style={{ marginLeft: -8 }}>

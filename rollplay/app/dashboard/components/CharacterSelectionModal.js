@@ -147,7 +147,7 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
             <div className="text-center py-8">
               <p className="mb-2 font-semibold text-content-on-dark">Character locked</p>
               <p className="text-sm text-content-secondary">
-                You can&apos;t change your character while a session is active. Pause or finish the session first.
+                You can&apos;t change your character while a game is running. End the game first.
               </p>
             </div>
           ) : availableCharacters.length === 0 ? (

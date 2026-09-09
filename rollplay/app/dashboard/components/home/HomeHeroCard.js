@@ -50,13 +50,16 @@ export default function HomeHeroCard({ campaign, user, playerCharacter }) {
   const game = findOpenGame(campaign)
   const isGameMaster = campaign.host_id === user?.id
   const isLive = game?.status === 'active'
-  const isTransitioning = game?.status === 'starting' || game?.status === 'ending'
 
   // The room id IS the game's id — one identifier for the game and its room.
   const enterGame = () => router.push(`/game?room_id=${game.id}`)
   const openCampaignDrawer = () =>
     router.push(`/dashboard?tab=campaigns&expand_campaign_id=${campaign.id}`)
 
+  // The button says what the game is doing, so nobody keeps pressing it: the
+  // in-flight states read STARTING… / ENDING… for both roles and are disabled.
+  // A player sees them too — the state is real, and it tells them a Join is
+  // seconds away — rather than a WAITING FOR GM that has already come true.
   const renderPrimaryAction = () => {
     if (isLive) {
       return (
@@ -66,6 +69,14 @@ export default function HomeHeroCard({ campaign, user, playerCharacter }) {
       )
     }
 
+    if (game?.status === 'starting' || startGame.isPending) {
+      return <PlateButton disabled>STARTING…</PlateButton>
+    }
+
+    if (game?.status === 'ending') {
+      return <PlateButton disabled>ENDING…</PlateButton>
+    }
+
     if (!isGameMaster) {
       return <PlateButton disabled>WAITING FOR GM</PlateButton>
     }
@@ -73,10 +84,10 @@ export default function HomeHeroCard({ campaign, user, playerCharacter }) {
     return (
       <PlateButton
         variant="gold"
-        disabled={isTransitioning || startGame.isPending || !session}
+        disabled={!session}
         onClick={() => startGame.mutate(session.id)}
       >
-        {startGame.isPending ? 'STARTING…' : 'START GAME'}
+        START GAME
       </PlateButton>
     )
   }

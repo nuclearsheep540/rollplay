@@ -1239,7 +1239,10 @@ class EndGame:
                     host_id=host_id,
                     host_screen_name=host_screen_name,
                     scheduled_at=next_scheduled_at,
-                    next_game_name=next_game_name,
+                    # The stored value, not the argument: the aggregate trimmed it
+                    # and blanked it to None, and ScheduleSession announces the
+                    # same field the same way. The toast must match the card.
+                    next_game_name=session.next_game_name if session else None,
                 )
                 for event_config in scheduled_events:
                     await self.event_manager.broadcast(event_config)

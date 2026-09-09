@@ -90,10 +90,10 @@ const LOADING_PHRASES = [
 const APP_TIPS = [
   'Press Shift to inspect grid cells and view coordinates.',
   'The DM can adjust reverb, filters, and effects per audio channel.',
-  'You can release your character between sessions to use them elsewhere.',
+  'You can release your character between games to use them elsewhere.',
   'Try fullscreen mode for the most immersive experience.',
   'The DM can present images in cinematic letterbox mode.',
-  'Use the adventure log to track key moments in your session.',
+  'Use the adventure log to track key moments in your game.',
   'The DM can set audio cues to transition multiple tracks at once.',
   'Characters can only be active in one campaign at a time.',
   'Moderators can assist the DM with map and image controls.',
@@ -2138,7 +2138,7 @@ export default function GameContent() {
               <div>
                 <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
                 <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
-                  You're watching this session. Select a character in your campaign to participate.
+                  You're watching this game. Select a character in your campaign to participate.
                 </p>
               </div>
             </div>
@@ -2806,9 +2806,9 @@ export default function GameContent() {
         isEnding={isEnding}
       />
 
-      {/* Session Ended Modal with Countdown */}
+      {/* Game Ended Modal with Countdown */}
       {sessionEndedData && (
-        <SessionEndedModal
+        <GameEndedModal
           message={sessionEndedData.message}
           reason={sessionEndedData.reason}
         />
@@ -2821,8 +2821,8 @@ export default function GameContent() {
   );
 }
 
-// Session Ended Modal Component with countdown progress bar
-function SessionEndedModal({ message, reason }) {
+// Game Ended Modal Component with countdown progress bar
+function GameEndedModal({ message, reason }) {
   const [progress, setProgress] = useState(0);
   const redirectDelay = 5000; // 5 seconds
 
@@ -2856,9 +2856,9 @@ function SessionEndedModal({ message, reason }) {
     >
       <div className="text-center">
         <div className="text-4xl mb-4">🎲</div>
-        <h2 className="text-xl font-bold text-white mb-2">Session Ended</h2>
+        <h2 className="text-xl font-bold text-white mb-2">Game Ended</h2>
         <p className="text-slate-300 mb-4">
-          {message || `This game session has ended: ${reason}`}
+          {message || `This game has ended: ${reason}`}
         </p>
         <p className="text-slate-400 text-sm mb-4">
           The game has ended for now. You will be redirected shortly

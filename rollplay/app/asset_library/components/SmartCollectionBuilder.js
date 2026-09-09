@@ -113,7 +113,7 @@ export default function SmartCollectionBuilder({
         type="text"
         value={name}
         onChange={(event) => setName(event.target.value)}
-        placeholder="e.g. Sea Session"
+        placeholder="e.g. Sea Voyage"
         autoFocus
         className="mb-5 w-full rounded-sm border border-border bg-surface-primary px-3.5 py-2.5 text-lg font-semibold text-content-primary outline-none transition-colors placeholder:font-normal placeholder:text-content-secondary focus:border-border-active"
       />

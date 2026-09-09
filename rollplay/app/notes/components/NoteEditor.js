@@ -101,7 +101,7 @@ export default function NoteEditor({ initialContent, onChange, editable = true, 
       TextStyle,
       FontFamily,
       UndoRedo,
-      Placeholder.configure({ placeholder: 'Session notes…' }),
+      Placeholder.configure({ placeholder: 'Campaign notes…' }),
       CharacterCount.configure({ limit: CHARACTER_LIMIT }),
     ],
     editorProps: {

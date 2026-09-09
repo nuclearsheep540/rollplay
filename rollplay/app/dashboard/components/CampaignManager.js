@@ -129,13 +129,13 @@ function PlayerCardAction({ isDm, canRemove, onRemove, canRelease, onRelease, re
 
   // The current user's own card: eject their character from the campaign (release, not delete).
   // stopPropagation because the card itself is clickable (opens the swap modal). Disabled while a
-  // session is live — the backend enforces the same rule.
+  // game is running — the backend enforces the same rule.
   if (canRelease) {
     return (
       <button
         onClick={(e) => { e.stopPropagation(); if (!releaseDisabled) onRelease?.() }}
         disabled={releaseDisabled}
-        title={releaseDisabled ? 'Cannot remove your character while a session is active' : 'Remove your character from this campaign'}
+        title={releaseDisabled ? 'Cannot release your character while a game is running' : 'Remove your character from this campaign'}
         aria-label="Remove your character from this campaign"
         style={{
           color: '#dc2626',
@@ -396,8 +396,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   }
 
   // End the game (after confirmation), recording what it was called and what
-  // happened if the GM filled either in. Both are optional and never block.
-  const confirmEndGame = async ({ name, summary, nextScheduledAt }) => {
+  // happened if the GM filled either in, and the plan for the next one. All
+  // optional and none of it blocks.
+  const confirmEndGame = async ({ name, summary, nextScheduledAt, nextGameName }) => {
     if (!endGameTarget) return
 
     setError(null)
@@ -408,6 +409,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         name,
         summary,
         nextScheduledAt,
+        nextGameName,
       })
       setEndGameTarget(null)
     } catch (err) {
@@ -1420,6 +1422,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
               const playedGames = currentSession?.games ?? []
               const gamesPlayed = currentSession?.games_played ?? 0
               const isGameLive = currentGame?.status === 'active'
+              // In flight either side of play. Starting also counts this
+              // browser's own request, which lands before the server says so.
+              const isGameStarting = currentGame?.status === 'starting'
+                || (startGameMutation.isPending && startGameMutation.variables === currentSession?.id)
+              const isGameEnding = currentGame?.status === 'ending'
 
               const isSelected = selectedCampaign?.id === campaign.id
 
@@ -1624,7 +1631,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     and horizontally masked so the stripes
                                     fade toward the right edge, leaving the
                                     action buttons unobscured. */}
-                                {(currentGame?.status === 'starting' || (startGameMutation.isPending && startGameMutation.variables === currentSession.id)) && (
+                                {isGameStarting && (
                                   <div
                                     className="absolute inset-0 pointer-events-none"
                                     style={{
@@ -1657,7 +1664,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                   />
                                 )}
                                 {/* One line, not two. A "Status: Idle" row under
-                                    "No game running" said the same thing twice —
+                                    "Last played · …" said the same thing twice —
                                     and did in every other state too (Starting…/
                                     Starting, Ending…/Ending). Liveness still has
                                     the pulsing Game Live badge on the card header,
@@ -1667,48 +1674,57 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     {gameStatusLine(campaign)}
                                   </p>
                                 </div>
+                                {/* The row keeps its shape across every state —
+                                    buttons disable and say why, they do not
+                                    vanish — so nothing the GM is about to press
+                                    moves under their hand. Only End comes and
+                                    goes, with the game it ends. */}
                                 <div className="flex gap-2 flex-shrink-0 self-stretch">
-                                  {isGameLive ? (
-                                    <>
-                                      <Button variant="success" size="md" className="flex items-center justify-center min-w-[7rem] !text-lg" onClick={() => enterGame(currentGame)}>
-                                        <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />Enter
-                                      </Button>
-                                      {campaign.host_id === user.id && (
-                                        <button
-                                          onClick={() => promptEndGame(campaign)}
-                                          disabled={endGameMutation.isPending}
-                                          className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                          style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
-                                          title="End Game"
-                                          aria-label="End Game"
-                                        >
-                                          <FontAwesomeIcon icon={faStop} />
-                                        </button>
-                                      )}
-                                    </>
-                                  ) : (!currentGame || currentGame.status === 'starting') && campaign.host_id === user.id ? (
-                                    <>
-                                      <Button
-                                        variant="success"
-                                        size="md"
-                                        className="flex items-center justify-center min-w-[7rem] !text-lg"
-                                        onClick={() => startGame(currentSession.id)}
-                                        disabled={(startGameMutation.isPending && startGameMutation.variables === currentSession.id) || Boolean(currentGame)}
-                                      >
-                                        <FontAwesomeIcon icon={faPlay} className="mr-2" />Start
-                                      </Button>
-                                      <button
-                                        onClick={() => setScheduleGameTarget(campaign)}
-                                        disabled={scheduleGameMutation.isPending || Boolean(currentGame)}
-                                        className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style={{backgroundColor: 'transparent', color: THEME.textSecondary, borderColor: THEME.borderSubtle}}
-                                        title="Set when the next game is"
-                                        aria-label="Schedule the next game"
-                                      >
-                                        <FontAwesomeIcon icon={faCalendarDays} />
-                                      </button>
-                                    </>
+                                  {(isGameLive || isGameEnding) ? (
+                                    <Button
+                                      variant="success"
+                                      size="md"
+                                      className="flex items-center justify-center min-w-[7rem] !text-lg"
+                                      onClick={() => enterGame(currentGame)}
+                                      disabled={isGameEnding}
+                                    >
+                                      <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />Enter
+                                    </Button>
+                                  ) : campaign.host_id === user.id ? (
+                                    <Button
+                                      variant="success"
+                                      size="md"
+                                      className="flex items-center justify-center min-w-[7rem] !text-lg"
+                                      onClick={() => startGame(currentSession.id)}
+                                      disabled={isGameStarting}
+                                    >
+                                      <FontAwesomeIcon icon={faPlay} className="mr-2" />{isGameStarting ? 'Starting…' : 'Start'}
+                                    </Button>
                                   ) : null}
+                                  {campaign.host_id === user.id && (isGameLive || isGameEnding) && (
+                                    <button
+                                      onClick={() => promptEndGame(campaign)}
+                                      disabled={endGameMutation.isPending || isGameEnding}
+                                      className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
+                                      title={isGameEnding ? 'Ending…' : 'End Game'}
+                                      aria-label={isGameEnding ? 'Ending…' : 'End Game'}
+                                    >
+                                      <FontAwesomeIcon icon={faStop} />
+                                    </button>
+                                  )}
+                                  {campaign.host_id === user.id && (
+                                    <button
+                                      onClick={() => setScheduleGameTarget(campaign)}
+                                      disabled={scheduleGameMutation.isPending || Boolean(currentGame)}
+                                      className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      style={{backgroundColor: 'transparent', color: THEME.textSecondary, borderColor: THEME.borderSubtle}}
+                                      title={currentGame ? 'End the game to change the schedule' : 'Set when the next game is'}
+                                      aria-label={currentGame ? 'End the game to change the schedule' : 'Schedule the next game'}
+                                    >
+                                      <FontAwesomeIcon icon={faCalendarDays} />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -1718,8 +1734,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                               null
                             )}
 
-                            {playedGames.length > 0 && (
-                              <div className="mt-4" onClick={(e) => e.stopPropagation()}>
+                            {/* Always rendered: the heading is part of the card's
+                                furniture, and a campaign with no history yet says
+                                so rather than leaving a gap where it will go. */}
+                            <div className="mt-4" onClick={(e) => e.stopPropagation()}>
                                 <h4
                                   className="text-xs font-semibold tracking-widest mb-2 drop-shadow"
                                   style={{color: THEME.textSecondary}}
@@ -1741,6 +1759,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     out of the drawer entirely. pr-1 keeps the
                                     scrollbar off the row borders, matching the
                                     members grid above. */}
+                                {playedGames.length === 0 ? (
+                                  <p className="text-xs" style={{color: THEME.textSecondary}}>
+                                    No games played yet
+                                  </p>
+                                ) : (
                                 <div
                                   className="space-y-1.5 overflow-y-auto pr-1"
                                   style={{maxHeight: '14rem'}}
@@ -1789,8 +1812,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     )
                                   })}
                                 </div>
-                              </div>
-                            )}
+                                )}
+                            </div>
                           </div>
 
                           {/* Players + Invite — fixed 2×5 grid of

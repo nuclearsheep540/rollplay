@@ -16,7 +16,8 @@ import { findCurrentSession, findOpenGame } from './homeRanking'
  *   idle, date ahead          → "Next game · Thu 4 Sep, 20:00"
  *   idle, name only           → "Next game · The Siege of Kraghammer"
  *   idle, date in the past    → falls through to the idle line
- *   idle, nothing planned     → "No game running"
+ *   idle, played before       → "Last played · 3 days ago"
+ *   idle, never played        → "Not played yet"
  *
  * A stale schedule is hidden rather than deleted: the GM's declaration is a
  * record, and the clock is not allowed to erase it — only the GM ending the
@@ -54,7 +55,13 @@ export function gameStatusLine(campaign) {
     return `Next game · ${plannedName}`
   }
 
-  return 'No game running'
+  // Nothing planned: say when the table last met. last_played_at is stamped
+  // when a game goes live, so it only speaks here, once nothing is running.
+  if (campaign?.last_played_at) {
+    return `Last played · ${formatRelativeTime(campaign.last_played_at)}`
+  }
+
+  return 'Not played yet'
 }
 
 /**
