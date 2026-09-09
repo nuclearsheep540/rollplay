@@ -472,9 +472,12 @@ def create_friendship(friendship_repo: FriendshipRepository, friend_request_repo
 # === API harness — TestClient + the two dependency overrides every endpoint test wants ===
 #
 # Promoted here from identical copies in characters/tests/api and game/tests/api
-# when a third suite (campaign/tests/api) needed the same thing. The registry
-# fixture is session-scoped and autouse: the app's routes read the singleton, so
-# it must exist before the first request, and booting it once is cheap.
+# when a third suite (campaign/tests/api) needed the same thing. Those copies
+# also carried a session-scoped, autouse fixture that booted the RulesetRegistry
+# singleton for the whole run. It is not carried over: `TestClient(app)` below
+# runs the app's lifespan, which initializes the registry itself, so every API
+# test gets a booted registry through the real path — and nothing shared and
+# mutable is left standing across tests that never asked for it.
 
 from typing import Iterator  # noqa: E402
 
@@ -482,23 +485,13 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from shared.dependencies.auth import get_current_user_id  # noqa: E402
 from shared.dependencies.db import get_db  # noqa: E402
-from shared.rulesets.registry import RulesetRegistry  # noqa: E402
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _initialize_registry():
-    """Boot the singleton ruleset registry once for the whole test session."""
-    RulesetRegistry.reset()
-    RulesetRegistry.initialize()
-    yield
-    RulesetRegistry.reset()
 
 
 @pytest.fixture
 def client(db_session, seed_default_edition) -> Iterator[TestClient]:
     """FastAPI TestClient wired to the shared in-memory SQLite session.
 
-    The registry is the real one (initialized at session scope).
+    Entering the client runs the app's lifespan, which boots the RulesetRegistry.
     Authentication is overridden per-request by ``auth_as``.
     """
     # Avoid importing app at module level so the test session doesn't pay the

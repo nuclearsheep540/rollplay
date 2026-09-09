@@ -1,7 +1,7 @@
 # Stage 8 — Ironing the creases: ship-readiness fixes for `feature/home-page`
 
 > Part of the [Home landing page epic](00-epic.md). **Decided 2026-09-09** (Matt + Fable, from
-> the code check recorded in [deliverables.md](deliverables.md) §K), **not started.** Ships as
+> the code check recorded in [deliverables.md](deliverables.md) §K). Ships as
 > ONE pull request on a branch cut from `feature/home-page` (`feature/home-page-creases`):
 > every item is small, they touch the same handful of files, and the branch is going to QA as
 > a whole.
@@ -227,9 +227,11 @@ the way. One confirm, no second prompt, nothing added beyond what is needed. Thr
    - `open_game = game_repo.get_open_game_for_campaign(campaign_id)`; if present,
      `await EndGame(...).execute(open_game.id, host_id=open_game.host_id, reason=EndReason.SYSTEM)`.
      SYSTEM, not HOST: the game ending is incidental, so players get no "game has ended"
-     toast and the schedule is left alone — the `campaign_deleted` broadcast that follows is
-     the news, and the room close (`EndGame` phase 3) sends everyone in the game to the
-     dashboard as it does today;
+     toast and the schedule is left alone. The `campaign_deleted` broadcast that follows is
+     itself silent (`show_toast=False`, `save_notification=False` — a cache invalidation, so
+     the campaign simply disappears from a dashboard); the room close (`EndGame` phase 3)
+     is the only thing a player sees, and it sends everyone in the game to the dashboard as
+     it does today;
    - then `DeleteCampaign(...).execute(...)` exactly as now. Its own open-game refusal
      **stays** as the backstop: it can only fire if the end above did not actually close the
      game, and that is a bug worth a 400 rather than a silent cascade.
@@ -355,8 +357,9 @@ deliberate: the state is real and it tells them a Join is seconds away. Delete
   using the api-game mocking harness `test_game_lifecycle.py` already has): with a campaign
   whose session has an ACTIVE game, `DELETE /api/campaigns/{id}` as the host → 200; the
   game's end ETL was called (the mocked api-game `end` was hit with that game's id and the
-  room delete was requested); the campaign, its session and its games rows are gone; no
-  `session_ended` broadcast (SYSTEM) and one `campaign_deleted`. Second test: with the game
+  room delete was scheduled — captured and driven through the stub); the campaign is gone
+  and no open game remains; no `session_ended` broadcast (SYSTEM), one silent
+  `campaign_deleted`. Second test: with the game
   STARTING, the delete is refused with 400 and the campaign and game are untouched. Run each
   alone against the unfixed code first — the first must fail with today's "End the game
   before deleting this campaign".
@@ -388,8 +391,9 @@ deliberate: the state is real and it tells them a Join is seconds away. Delete
    that name prefilled; `session.next_game_name` is null.
 5. **Delete**: with a game live and a player in it, press Delete Campaign → the one confirm
    reads the new copy; confirm → the player's tab gets the eviction modal and lands on a
-   dashboard without the campaign, the GM's drawer loses the campaign, no "game has ended"
-   toast is shown, and one `campaign_deleted` notification arrives. Same delete with no game
+   dashboard without the campaign, the GM's drawer loses the campaign, and nobody gets a
+   toast or a notification — `campaign_deleted` is a silent cache invalidation, so a player
+   already on their dashboard just sees the campaign vanish. Same delete with no game
    running → identical dialog, immediate. Press Delete while the game is STARTING → the
    modal closes and the banner reads the refusal; the campaign is still there.
 6. **Copy**: open every surface in item 4's table and read it — character-swap modal during a

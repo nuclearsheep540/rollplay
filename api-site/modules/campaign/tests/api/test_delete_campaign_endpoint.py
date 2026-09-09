@@ -16,6 +16,7 @@ not observable here; that cascade is the database's (declared in the migration
 and the model), not this endpoint's, and these tests assert the end instead.
 """
 
+import asyncio
 from unittest.mock import patch
 
 import pytest
@@ -72,10 +73,24 @@ def events_from(client, mock_event_manager):
 
 
 def delete_campaign(client, campaign_id, api_game):
-    """DELETE with api-game stubbed and the room-delete task closed unrun."""
+    """DELETE with api-game stubbed.
+
+    The room delete is a background task the request does not wait for, so it
+    is captured, then driven to completion here — still inside the api-game
+    patch, so the stub sees the delete. The returned list holds every coroutine
+    EndGame scheduled; a test that expects no end asserts it is empty.
+    """
+    scheduled = []
+
+    def capture(coroutine):
+        scheduled.append(coroutine)
+
     with patch("modules.game.application.commands.httpx.AsyncClient", side_effect=api_game), \
-         patch("modules.game.application.commands.asyncio.create_task", new=lambda coroutine: coroutine.close()):
-        return client.delete(f"/api/campaigns/{campaign_id}")
+         patch("modules.game.application.commands.asyncio.create_task", new=capture):
+        response = client.delete(f"/api/campaigns/{campaign_id}")
+        for coroutine in scheduled:
+            asyncio.run(coroutine)
+    return response, scheduled
 
 
 class TestDeleteEndsTheGameFirst:
@@ -88,15 +103,21 @@ class TestDeleteEndsTheGameFirst:
         api_game = ApiGameStub()
         auth_as(host.id)
 
-        response = delete_campaign(client, campaign.id, api_game)
+        response, scheduled = delete_campaign(client, campaign.id, api_game)
 
         assert response.status_code == 200, response.text
         assert campaign_repo.get_by_id(campaign.id) is None
         # The take-down ETL ran for that game before the delete …
         assert api_game.end_game_ids == [str(game.id)]
         assert game_repo.get_open_game_for_campaign(campaign.id) is None
-        # … silently: the system reason says nothing about a game ending, so the
-        # only news the players get is that the campaign is gone.
+        # … and the room delete was scheduled and, once driven, reached the
+        # stub. That close is what evicts the players, so it is part of the
+        # flow and not left to the end-game suite alone.
+        assert len(scheduled) == 1
+        assert api_game.deleted_room_ids == [str(game.id)]
+        # Silently: the system reason says nothing about a game ending, and
+        # campaign_deleted itself is a cache invalidation, not a toast — the
+        # room close is the only thing a player sees.
         broadcast = [call.args[0] for call in events_from.broadcast.call_args_list]
         assert {event.event_type for event in broadcast} == {"session_paused", "campaign_deleted"}
 
@@ -114,12 +135,13 @@ class TestDeleteEndsTheGameFirst:
         )
         auth_as(host.id)
 
-        response = delete_campaign(client, campaign.id, ApiGameStub())
+        response, scheduled = delete_campaign(client, campaign.id, ApiGameStub())
 
         assert response.status_code == 400
         assert campaign_repo.get_by_id(campaign.id) is not None
         assert game_repo.get_by_id(game.id).status is GameStatus.STARTING
         assert events_from.broadcast.call_count == 0
+        assert scheduled == []
 
     def test_a_player_cannot_end_a_game_by_asking_for_a_delete(
         self, client, auth_as, events_from, campaign, session, repos, campaign_repo, game_repo, player
@@ -130,9 +152,10 @@ class TestDeleteEndsTheGameFirst:
         events_from.broadcast.reset_mock()
         auth_as(player.id)
 
-        response = delete_campaign(client, campaign.id, ApiGameStub())
+        response, scheduled = delete_campaign(client, campaign.id, ApiGameStub())
 
         assert response.status_code == 400
         assert campaign_repo.get_by_id(campaign.id) is not None
         assert game_repo.get_by_id(game.id).status is GameStatus.ACTIVE
         assert events_from.broadcast.call_count == 0
+        assert scheduled == []

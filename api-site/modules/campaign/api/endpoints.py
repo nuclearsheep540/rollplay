@@ -353,9 +353,9 @@ async def delete_campaign(
     A running game is a step on the way, not a refusal: it is ended first —
     the real EndGame with EndReason.SYSTEM, so its ETL lands what outlives the
     campaign (asset settings, character colours) and the room close sends
-    everyone home, with no "game has ended" toast ahead of the campaign_deleted
-    one — and then the campaign is deleted, its session, party and games
-    cascading with it. Two commands composed here, the way the create route
+    everyone home, with no "game has ended" toast (campaign_deleted is itself
+    silent: a cache invalidation, not a notification) — and then the campaign
+    is deleted, its session, party and games cascading with it. Two commands composed here, the way the create route
     composes CreateCampaign and CreateSession.
 
     The end acts as the CALLER, not as the game's host, so a member who may not
