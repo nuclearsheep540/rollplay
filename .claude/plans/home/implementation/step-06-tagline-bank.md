@@ -32,8 +32,8 @@ never changes priority, so it lives inside the situation's function. A first cut
 voices into the chain and produced thirteen rows nobody could read as the spec.
 
 `HomeManager` computes it under `useMemo` keyed on the two queries, so it is picked once per
-situation rather than per render, and passes it to `HomeGreeting`. Blank (a `&nbsp;`) while
-the queries are in flight.
+situation rather than per render, and passes it to `HomeGreeting`. Blank (a `&nbsp;`) until
+both queries have data — in flight or failed, the newcomer line must not stand in.
 
 ## Decisions
 

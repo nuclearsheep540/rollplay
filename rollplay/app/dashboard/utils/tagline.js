@@ -40,7 +40,7 @@ function describeSituation({ user, heroCampaign, characters }) {
     name,
     campaign: heroCampaign.title,
     isOwner: heroCampaign.host_id === user?.id,
-    hasPlayers: (heroCampaign.player_ids || []).length > 0,
+    hasPlayers: roster.some((entry) => entry.user_id !== user?.id),
     character: roster.find((entry) => entry.user_id === user?.id)?.character_name,
     partner: oneOf(roster.filter((entry) => entry.user_id !== user?.id && entry.character_name))?.character_name,
     gameToday,

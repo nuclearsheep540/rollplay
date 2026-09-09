@@ -49,7 +49,7 @@ export default function HomeManager({ user }) {
   // open rather than owning a second copy of it.
   const { openSocialPanel } = useAuthenticated()
   const { data: campaignData, isLoading } = useCampaigns(user?.id)
-  const { data: characters, isLoading: isLoadingCharacters } = useCharacters()
+  const { data: characters } = useCharacters()
 
   const campaigns = campaignData?.campaigns || []
   const invitedCampaigns = campaignData?.invitedCampaigns || []
@@ -67,11 +67,11 @@ export default function HomeManager({ user }) {
     }
   }
 
-  // Blank until both queries land, then picked once per situation rather than
-  // per render, so a refetch does not reshuffle the line.
+  // Blank until both queries have data (loading or failed), then picked once
+  // per situation rather than per render, so a refetch does not reshuffle it.
   const tagline = useMemo(
-    () => (isLoading || isLoadingCharacters ? '' : selectTagline({ user, heroCampaign, characters })),
-    [isLoading, isLoadingCharacters, user, heroCampaign, characters]
+    () => (campaignData && characters ? selectTagline({ user, heroCampaign, characters }) : ''),
+    [campaignData, user, heroCampaign, characters]
   )
 
   return (
