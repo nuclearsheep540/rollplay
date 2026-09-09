@@ -3,9 +3,11 @@
 
 'use client'
 
+import { useMemo } from 'react'
 import { useCampaigns } from '@/app/dashboard/hooks/useCampaigns'
 import { useCharacters } from '@/app/dashboard/hooks/useCharacters'
 import { selectHeroCampaign, selectWorkingOnCampaign } from '@/app/dashboard/utils/homeRanking'
+import { selectTagline } from '@/app/dashboard/utils/tagline'
 import Spinner from '@/app/shared/components/Spinner'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import CharacterHand from './CharacterHand'
@@ -65,9 +67,16 @@ export default function HomeManager({ user }) {
     }
   }
 
+  // Blank until both queries have data (loading or failed), then picked once
+  // per situation rather than per render, so a refetch does not reshuffle it.
+  const tagline = useMemo(
+    () => (campaignData && characters ? selectTagline({ user, heroCampaign, characters }) : ''),
+    [campaignData, user, heroCampaign, characters]
+  )
+
   return (
     <div className="mx-auto w-full max-w-[1410px] pb-16">
-      <HomeGreeting user={user} />
+      <HomeGreeting user={user} tagline={tagline} />
 
       <section className="mt-[26px]">
         {isLoading ? (
