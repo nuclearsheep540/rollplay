@@ -1,5 +1,19 @@
 # Stage 3 — Scheduling (the next game)
 
+> **SHIPPED — PR #175 (2026-09-06), with 06 PRs 1–2 in the same commit. Not yet QA'd; the
+> acceptance script at the bottom is the QA plan.** Built as written except: the control is
+> a native `<input type="date">` plus a new `shared/components/TimeField.js` (typed or
+> picked, five-minute marks, nothing enforced — the browser's own time picker lists all
+> sixty minutes) instead of one `datetime-local` input; `dayjs` does the local↔ISO
+> conversion; the display rule lives in `dashboard/utils/gameStatusLine.js` (the sibling
+> option); tests are `modules/session/tests/test_session_scheduling.py`. The event copy is
+> `"{host} set the next {campaign} game for {local time}"` / `"{host} cleared the next
+> game for {campaign}"`.
+>
+> **Extended by [07-game-aggregate.md](07-game-aggregate.md) (decided 2026-09-06, not built):**
+> the Next Game modal gains a name field (`sessions.next_game_name`) beside the date; Start
+> moves it onto the Game row; the guard becomes "no open game" instead of "not INACTIVE".
+>
 > Part of the [Home landing page epic](00-epic.md). **Rewritten 2026-09-05** on top of
 > [06-game-lifecycle.md](06-game-lifecycle.md) — read that first; this is PR 3 of its
 > sequence and depends on its PR 1 (`PauseReason`) and PR 2 (hero/drawer vocabulary).

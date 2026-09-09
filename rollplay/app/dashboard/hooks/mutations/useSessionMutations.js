@@ -5,32 +5,38 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
- * The campaign's game, as the dashboard drives it.
+ * The campaign's games, as the dashboard drives them.
  *
- * Two verbs the GM sees — start and end — plus reset, the deliberate wipe.
- * There is no create: a campaign is born with its session and keeps it for
- * life, which is what carries token positions and the adventure log from one
- * game to the next. "Pause" survives only inside api-site, for the expiry
- * sweeper; nothing here should ever say it.
+ * Two verbs the GM sees — start and end — plus naming the night afterwards and
+ * planning the next one. There is no create and no reset: a campaign is born
+ * with its session and keeps it for life. Each game is its own thing, and
+ * starting one seeds it from the last one, which is what carries token
+ * positions and the adventure log from one evening to the next.
  */
 
 /**
- * Start the campaign's game.
+ * Start a game for the campaign's session.
+ *
+ * Returns the new game, whose id is the room id the client enters with.
  */
 export function useStartGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/start`, {
+      const response = await authFetch('/api/games/', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ session_id: sessionId }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to start the game')
       }
+
+      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })
@@ -39,17 +45,29 @@ export function useStartGame() {
 }
 
 /**
- * End the running game. The session survives — everything on the board and in
- * the log comes back the next time it starts.
+ * End the running game and wrap it up: what it was called, what happened, and
+ * when the next one is. Nothing is lost — the next game starts from where this
+ * one ends.
+ *
+ * Every field is optional: a GM who just wants the game to stop sends none.
+ * The next-game date travels with the end rather than through the schedule
+ * route because ending clears the old one, and a second call could fail and
+ * leave the table with no date at all.
  */
 export function useEndGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/end`, {
+    mutationFn: async ({ gameId, name = null, summary = null, nextScheduledAt = null }) => {
+      const response = await authFetch(`/api/games/${gameId}/end`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({
+          name,
+          summary,
+          next_scheduled_at: nextScheduledAt,
+        }),
       })
 
       if (!response.ok) {
@@ -64,27 +82,28 @@ export function useEndGame() {
 }
 
 /**
- * Say when the next game is, or clear it by passing null.
+ * Rename a past game or rewrite its summary (host only).
  *
- * Purely communicative — nothing starts on the date and nobody is reminded. The
- * value is sent as an ISO instant so every player reads it in their own zone.
+ * A field left out is unchanged; an empty string clears it.
  */
-export function useScheduleGame() {
+export function useUpdateGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ sessionId, scheduledAt }) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/schedule`, {
+    mutationFn: async ({ gameId, name = null, summary = null }) => {
+      const response = await authFetch(`/api/games/${gameId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ scheduled_at: scheduledAt }),
+        body: JSON.stringify({ name, summary }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to save the schedule')
+        throw new Error(errorData.detail || 'Failed to save the game')
       }
+
+      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })
@@ -93,28 +112,28 @@ export function useScheduleGame() {
 }
 
 /**
- * Reset the campaign's game — wipes play state by replacing the session.
+ * Say when the next game is and what it is called, or clear both with nulls.
  *
- * The response carries a NEW session with a new id, so the campaigns query is
- * invalidated rather than patched: every surface re-reads the campaign and
- * picks the replacement up.
+ * Purely communicative — nothing starts on the date and nobody is reminded. The
+ * date is sent as an ISO instant so every player reads it in their own zone;
+ * the name is taken by the next Start and belongs to that game from then on.
  */
-export function useResetGame() {
+export function useScheduleGame() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (sessionId) => {
-      const response = await authFetch(`/api/sessions/${sessionId}/reset`, {
-        method: 'POST',
+    mutationFn: async ({ sessionId, scheduledAt, nextGameName = null }) => {
+      const response = await authFetch(`/api/sessions/${sessionId}/schedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ scheduled_at: scheduledAt, next_game_name: nextGameName }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to reset the game')
+        throw new Error(errorData.detail || 'Failed to save the schedule')
       }
-
-      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })

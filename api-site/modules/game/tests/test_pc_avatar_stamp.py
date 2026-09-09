@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Unit tests for pc token avatar delivery at session start (tokens v3):
+"""Unit tests for pc token avatar delivery at game start (tokens v3):
 the roster re-stamp (decision 39) and the token_images union of board
 refs + rostered avatars (decision 30).
 
@@ -14,7 +14,7 @@ from uuid import uuid4
 from shared_contracts.character import PlayerCharacter, SessionUser
 
 from modules.library.domain.image_asset_aggregate import ImageAsset
-from modules.session.application.commands import StartSession
+from modules.game.application.commands import StartGame
 
 
 def make_session_user(user_id, avatar_asset_id=None, with_character=True):
@@ -82,19 +82,19 @@ class TestStampPcTokenAvatars:
     def test_stale_avatar_refreshes(self):
         boards = {"map-1": [pc_token("u1", image_asset_id="old-image")]}
         roster = [make_session_user("u1", avatar_asset_id="new-image")]
-        stamped = StartSession._stamp_pc_token_avatars(boards, roster)
+        stamped = StartGame._stamp_pc_token_avatars(boards, roster)
         assert stamped["map-1"][0]["image_asset_id"] == "new-image"
 
     def test_cleared_avatar_clears_token(self):
         boards = {"map-1": [pc_token("u1", image_asset_id="old-image")]}
         roster = [make_session_user("u1", avatar_asset_id=None)]
-        stamped = StartSession._stamp_pc_token_avatars(boards, roster)
+        stamped = StartGame._stamp_pc_token_avatars(boards, roster)
         assert stamped["map-1"][0]["image_asset_id"] is None
 
     def test_owner_missing_from_roster_left_untouched(self):
         boards = {"map-1": [pc_token("u-gone", image_asset_id="old-image")]}
         roster = [make_session_user("u1", avatar_asset_id="new-image")]
-        stamped = StartSession._stamp_pc_token_avatars(boards, roster)
+        stamped = StartGame._stamp_pc_token_avatars(boards, roster)
         assert stamped["map-1"][0]["image_asset_id"] == "old-image"
 
     def test_characterless_member_does_not_stamp(self):
@@ -102,13 +102,13 @@ class TestStampPcTokenAvatars:
         # not clear a token they somehow own (defensive; shouldn't occur).
         boards = {"map-1": [pc_token("u1", image_asset_id="old-image")]}
         roster = [make_session_user("u1", with_character=False)]
-        stamped = StartSession._stamp_pc_token_avatars(boards, roster)
+        stamped = StartGame._stamp_pc_token_avatars(boards, roster)
         assert stamped["map-1"][0]["image_asset_id"] == "old-image"
 
     def test_npc_tokens_never_stamped(self):
         boards = {"map-1": [npc_token(image_asset_id="workshop-image")]}
         roster = [make_session_user("u1", avatar_asset_id="new-image")]
-        stamped = StartSession._stamp_pc_token_avatars(boards, roster)
+        stamped = StartGame._stamp_pc_token_avatars(boards, roster)
         assert stamped["map-1"][0]["image_asset_id"] == "workshop-image"
 
 
@@ -133,7 +133,7 @@ def make_image_asset(owner_id=None, token_area=None):
 
 
 def make_start_session_with_assets(assets_by_id):
-    command = StartSession.__new__(StartSession)  # helper under test only needs these two
+    command = StartGame.__new__(StartGame)  # helper under test only needs these two
     command.asset_repo = FakeAssetRepository(assets_by_id)
     command.s3_service = None
     return command

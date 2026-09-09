@@ -15,12 +15,11 @@ import NotesWorkspace from '@/app/notes/components/NotesWorkspace'
 // Site chrome (header, auth gate, WebSocket subscription, Suspense for
 // useSearchParams) comes from the (authenticated) route group's layout —
 // this page is intentionally chrome-free, matching the workshop tools.
-// Statuses are lowercase off the wire, and "live" spans the ETL either side of
-// play; mirrors the predicate in CampaignManager.js:1385.
+// A table is "live" whenever it has an open game — which spans the ETL either
+// side of play, because the room exists for all of starting, active and ending.
+// Liveness is the presence of the game, never a field on the session.
 function findLiveSession(campaign) {
-  return campaign?.sessions?.find((session) =>
-    ['active', 'starting', 'stopping'].includes(session.status?.toLowerCase())
-  )
+  return campaign?.sessions?.find((session) => Boolean(session.game))
 }
 
 export default function NotesPage() {
@@ -63,12 +62,11 @@ export default function NotesPage() {
   // call invalidateCampaigns (useAuthenticatedEvents.js:108-122), so this
   // recomputes the moment a DM starts or ends a session — no polling, no latch.
   //
-  // Statuses are lowercase off the wire, and "live" spans the ETL either side of
-  // play; mirrors the predicate in CampaignManager.js:1385.
   const liveSession = findLiveSession(campaign)
 
   const handleOpenGame = useCallback(() => {
-    if (liveSession) router.push(`/game?room_id=${liveSession.id}`)
+    // The room id is the game's own id.
+    if (liveSession) router.push(`/game?room_id=${liveSession.game.id}`)
   }, [router, liveSession])
 
   // Selection rides the URL so a refresh or a pasted link lands on the same

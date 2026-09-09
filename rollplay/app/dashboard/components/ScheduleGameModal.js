@@ -27,16 +27,26 @@ const TIME_FORMAT = 'HH:mm'
  * gives the instant the GM meant. Every other player's browser renders that
  * instant in their own zone. No server timezone is involved anywhere.
  */
-export default function ScheduleGameModal({ campaign, currentValue, onSave, onCancel, isSaving }) {
+export default function ScheduleGameModal({ campaign, currentValue, currentName, onSave, onCancel, isSaving }) {
   const existing = currentValue ? dayjs(currentValue) : null
   const [date, setDate] = useState(existing ? existing.format(DATE_FORMAT) : '')
   const [time, setTime] = useState(existing ? existing.format(TIME_FORMAT) : '')
+  const [name, setName] = useState(currentName || '')
+
+  // Date and time are one value, so they travel together: both set, or neither.
+  // A name on its own is fine — a GM can know what the next game is before they
+  // know when it is.
+  const hasWholeDate = Boolean(date) && Boolean(time)
+  const hasHalfDate = Boolean(date) !== Boolean(time)
 
   // `toISOString()` throws a RangeError on an unparseable date, and neither
   // field can hand us one: a native date input sanitises anything typed into
   // it to `YYYY-MM-DD` or to empty, TimeField only ever reports `HH:mm` or
-  // empty, and Save is disabled while either is empty.
-  const save = () => onSave(new Date(`${date}T${time}`).toISOString())
+  // empty, and Save is disabled while exactly one is filled.
+  const save = () => onSave({
+    scheduledAt: hasWholeDate ? new Date(`${date}T${time}`).toISOString() : null,
+    nextGameName: name.trim() || null,
+  })
 
   return (
     <Modal open={!!campaign} onClose={isSaving ? () => {} : onCancel} size="sm">
@@ -45,9 +55,19 @@ export default function ScheduleGameModal({ campaign, currentValue, onSave, onCa
           Next Game
         </h3>
         <p className="text-sm mb-4 text-content-on-dark">
-          When is the next <strong>{campaign?.title}</strong> game? Everyone sees it
-          in their own timezone. Nothing starts automatically.
+          When is the next <strong>{campaign?.title}</strong> game, and what is it?
+          Everyone sees the time in their own timezone. Nothing starts automatically.
         </p>
+
+        <input
+          type="text"
+          value={name}
+          maxLength={100}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Name (optional) — e.g. The Siege of Kraghammer"
+          aria-label="Name of the next game"
+          className="w-full mb-3 px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
+        />
 
         <div className="flex gap-3">
           <input
@@ -70,14 +90,18 @@ export default function ScheduleGameModal({ campaign, currentValue, onSave, onCa
         </div>
 
         <div className="flex justify-between gap-3 mt-6">
-          <Button variant="ghost" onClick={() => onSave(null)} disabled={isSaving || !currentValue}>
+          <Button
+            variant="ghost"
+            onClick={() => onSave({ scheduledAt: null, nextGameName: null })}
+            disabled={isSaving || (!currentValue && !currentName)}
+          >
             Clear
           </Button>
           <div className="flex gap-3">
             <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
               Cancel
             </Button>
-            <Button variant="success" onClick={save} disabled={isSaving || !date || !time}>
+            <Button variant="success" onClick={save} disabled={isSaving || hasHalfDate || (!hasWholeDate && !name.trim())}>
               {isSaving ? (
                 <span className="flex items-center gap-2">
                   <Spinner size="sm" />

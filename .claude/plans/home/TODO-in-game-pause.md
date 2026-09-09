@@ -4,8 +4,9 @@
 > button — calling the *finish* endpoint, which is what lost player tokens (a FINISHED
 > session forces a fresh row; PC tokens only live on the paused board). Plan
 > [06-game-lifecycle.md](06-game-lifecycle.md) PR 2 re-points that button at **End game**
-> (backend pause) and retires FINISHED. Nothing below remains open; the file stays only as
-> the record of the ask until Matt prunes it.
+> (backend pause) and retires FINISHED. **Done in #175 (2026-09-06)** — the in-game button
+> is End game. Nothing below remains open; the file stays only as the record of the ask
+> until Matt prunes it.
 
 > Captured 2026-08-30, mid-QA on `feature/home-page-shell`, out of the session-lifecycle
 > failure-handling conversation (retry/abort_stop work, shipped that day). Placed in

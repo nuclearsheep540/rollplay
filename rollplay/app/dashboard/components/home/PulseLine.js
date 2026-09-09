@@ -10,7 +10,7 @@ import { useFriendships } from '@/app/dashboard/hooks/useFriendships'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import { getEventConfig } from '@/app/shared/config/eventConfig'
 import { MAX_PULSE_EVENTS } from '@/app/shared/hooks/usePulse'
-import { findCurrentSession } from '@/app/dashboard/utils/homeRanking'
+import { findOpenGame } from '@/app/dashboard/utils/homeRanking'
 import { nextScheduledGame } from '@/app/dashboard/utils/gameStatusLine'
 import { formatScheduledTime } from '@/app/shared/utils/formatTime'
 import { COLORS } from '@/app/styles/colorTheme'
@@ -65,9 +65,9 @@ export default function PulseLine({ campaigns = [], onOpenSocial }) {
 
   const liveCampaign = useMemo(() => {
     for (const campaign of campaigns) {
-      const session = findCurrentSession(campaign)
-      if (session?.status === 'active') {
-        return { campaign, session }
+      const game = findOpenGame(campaign)
+      if (game?.status === 'active') {
+        return { campaign, game }
       }
     }
     return null
@@ -165,7 +165,7 @@ export default function PulseLine({ campaigns = [], onOpenSocial }) {
           </span>
           <button
             type="button"
-            onClick={() => router.push(`/game?room_id=${liveCampaign.session.id}`)}
+            onClick={() => router.push(`/game?room_id=${liveCampaign.game.id}`)}
             className="pulse-join"
             style={{ transform: SKEW_LABEL }}
           >

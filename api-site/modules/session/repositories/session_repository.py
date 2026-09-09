@@ -2,21 +2,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Session Repository - Data access layer for Session aggregate
+Session Repository - Data access layer for the Session aggregate
 
 Ubiquitous Language:
-- Session = The scheduled/planned play instance (this repository)
-- Game = The live multiplayer experience (handled by api-game service)
+- Session = the campaign's table: who plays and when (this repository)
+- Game = one play, hot in api-game while it runs (modules/game)
+
+There are no status queries here. "Is this campaign live" is a question about
+games, and GameRepository answers it.
 """
 
-from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy import text
 
 from modules.session.model.session_model import Session as SessionModel, SessionJoinedUser
-from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
+from modules.session.domain.session_aggregate import SessionEntity
 
 
 class SessionRepository:
@@ -47,64 +49,9 @@ class SessionRepository:
         )
         return [self._model_to_aggregate(model) for model in models]
 
-    def get_active_session_for_campaign(self, campaign_id: UUID) -> Optional[SessionEntity]:
-        """The campaign's live (ACTIVE) session, or None.
-
-        The single source of truth for "does this campaign have an active session" — callers
-        across the campaign module previously hand-rolled this check. Filters in SQL (a campaign
-        has at most one ACTIVE session) rather than loading every session and scanning in Python.
-        """
-        model = (
-            self.db.query(SessionModel)
-            .filter_by(campaign_id=campaign_id, status=SessionStatus.ACTIVE.value)
-            .first()
-        )
-        return self._model_to_aggregate(model) if model else None
-
-    def get_stopping_sessions(self) -> List[SessionEntity]:
-        """Sessions stranded mid-ETL (STOPPING) — the boot reconciler's work list.
-
-        STOPPING is transient by design; a row still holding it when no ETL is
-        in flight means a process death interrupted a take-down.
-        """
-        models = (
-            self.db.query(SessionModel)
-            .filter(SessionModel.status == SessionStatus.STOPPING.value)
-            .all()
-        )
-        return [self._model_to_aggregate(model) for model in models]
-
-    def get_expired_sessions(self, now: datetime) -> List[SessionEntity]:
-        """ACTIVE sessions whose signed-URL lease has lapsed — the cleanup job's work list."""
-        models = (
-            self.db.query(SessionModel)
-            .filter(
-                SessionModel.status == SessionStatus.ACTIVE.value,
-                SessionModel.urls_expire_at.isnot(None),
-                SessionModel.urls_expire_at <= now,
-            )
-            .all()
-        )
-        return [self._model_to_aggregate(model) for model in models]
-
     def get_all(self) -> List[SessionEntity]:
         """Get all sessions (admin use)"""
         models = self.db.query(SessionModel).order_by(SessionModel.created_at.desc()).all()
-        return [self._model_to_aggregate(model) for model in models]
-
-    def get_active_sessions(self) -> List[SessionEntity]:
-        """All currently ACTIVE sessions — the admin command's work list.
-
-        started_at is always stamped by activate(), but Postgres sorts NULLs
-        first under DESC — nulls_last() plus the created_at tiebreak keeps any
-        legacy row from floating to the top of the list.
-        """
-        models = (
-            self.db.query(SessionModel)
-            .filter(SessionModel.status == SessionStatus.ACTIVE.value)
-            .order_by(SessionModel.started_at.desc().nulls_last(), SessionModel.created_at.desc())
-            .all()
-        )
         return [self._model_to_aggregate(model) for model in models]
 
     def save(self, aggregate: SessionEntity) -> UUID:
@@ -120,19 +67,8 @@ class SessionRepository:
                 raise ValueError(f"Session {aggregate.id} not found")
 
             # Update session fields
-            model.status = aggregate.status.value
-            model.started_at = aggregate.started_at
-            model.stopped_at = aggregate.stopped_at
-            model.urls_expire_at = aggregate.urls_expire_at
             model.scheduled_at = aggregate.scheduled_at
-            model.audio_config = aggregate.audio_config
-            model.spotify_config = aggregate.spotify_config
-            model.map_config = aggregate.map_config
-            model.image_config = aggregate.image_config
-            model.active_display = aggregate.active_display
-            model.adventure_log = aggregate.adventure_log
-            model.map_token_state = aggregate.map_token_state
-            model.map_token_seed = aggregate.map_token_seed
+            model.next_game_name = aggregate.next_game_name
 
             # Sync joined_users (session_joined_users table)
             self._sync_joined_users(model.id, aggregate.joined_users)
@@ -143,20 +79,9 @@ class SessionRepository:
                 id=aggregate.id,
                 campaign_id=aggregate.campaign_id,
                 host_id=aggregate.host_id,
-                status=aggregate.status.value,
                 created_at=aggregate.created_at,
-                started_at=aggregate.started_at,
-                stopped_at=aggregate.stopped_at,
-                urls_expire_at=aggregate.urls_expire_at,
                 scheduled_at=aggregate.scheduled_at,
-                audio_config=aggregate.audio_config,
-                spotify_config=aggregate.spotify_config,
-                map_config=aggregate.map_config,
-                image_config=aggregate.image_config,
-                active_display=aggregate.active_display,
-                adventure_log=aggregate.adventure_log,
-                map_token_state=aggregate.map_token_state,
-                map_token_seed=aggregate.map_token_seed
+                next_game_name=aggregate.next_game_name,
             )
             self.db.add(model)
             self.db.flush()  # Get ID before setting relationships
@@ -172,31 +97,6 @@ class SessionRepository:
             aggregate.id = model.id
 
         return model.id
-
-    def delete(self, session_id: UUID) -> bool:
-        """Delete session using SQLAlchemy ORM"""
-        model = (
-            self.db.query(SessionModel)
-            .filter_by(id=session_id)
-            .first()
-        )
-
-        if not model:
-            return False
-
-        # Business rule validation through aggregate
-        session = self._model_to_aggregate(model)
-        if not session.can_delete():
-            raise ValueError("Cannot delete session - the game must be ended first")
-
-        # Explicitly delete child records using SQLAlchemy ORM to avoid relationship conflicts
-        # Delete SessionJoinedUser records (prevents ORM trying to SET NULL on primary key)
-        self.db.query(SessionJoinedUser).filter_by(session_id=session_id).delete(synchronize_session=False)
-
-        # Now safe to delete the session
-        self.db.delete(model)
-        self.db.commit()
-        return True
 
     def _sync_joined_users(self, session_id: UUID, joined_user_ids: List[UUID]) -> None:
         """
@@ -242,19 +142,8 @@ class SessionRepository:
             id=model.id,
             campaign_id=model.campaign_id,
             host_id=model.host_id,
-            status=SessionStatus(model.status),
             created_at=model.created_at,
-            started_at=model.started_at,
-            stopped_at=model.stopped_at,
-            urls_expire_at=model.urls_expire_at,
             scheduled_at=model.scheduled_at,
+            next_game_name=model.next_game_name,
             joined_users=joined_user_ids,
-            audio_config=model.audio_config,
-            spotify_config=model.spotify_config,
-            map_config=model.map_config,
-            image_config=model.image_config,
-            active_display=model.active_display,
-            adventure_log=model.adventure_log,
-            map_token_state=model.map_token_state,
-            map_token_seed=model.map_token_seed
         )

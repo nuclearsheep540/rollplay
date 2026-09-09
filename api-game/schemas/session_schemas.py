@@ -13,5 +13,9 @@ from pydantic import BaseModel
 
 
 class SessionEndRequest(BaseModel):
-    """Request to end a game and return final state for session."""
-    session_id: str
+    """Request to end a game and return its final state.
+
+    game_id is the room id: api-site keys the game and the room by one
+    identifier, so there is nothing else to address it by.
+    """
+    game_id: str

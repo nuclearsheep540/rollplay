@@ -39,11 +39,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge, faAnglesLeft, faAnglesRight, faFlagCheckered } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
 import PerfOverlay from '@/app/shared/components/PerfOverlay';
-import ConfirmDialog from '@/app/shared/components/ConfirmDialog';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useMapSettings } from './hooks/useMapSettings';
 import { useEndGame } from './hooks/useEndGame';
+import EndGameModal from '@/app/shared/components/EndGameModal';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import { NotesPanel } from '../notes';
@@ -367,7 +367,14 @@ export default function GameContent() {
   // server closes the room, so every client (this one included) arrives at
   // the Session Ended modal above through the normal broadcast.
   const [showEndGameConfirm, setShowEndGameConfirm] = useState(false);
-  const { endGame, isEnding, error: endGameError, clearError: clearEndGameError } = useEndGame();
+  const {
+    endGame,
+    isEnding,
+    error: endGameError,
+    clearError: clearEndGameError,
+    game: currentGame,
+    loadGame: loadCurrentGame,
+  } = useEndGame();
 
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
@@ -677,6 +684,14 @@ export default function GameContent() {
 
     fetchCurrentUser();
   }, []);
+
+  // The cold record of the game being played: its name, its summary, and the
+  // campaign it belongs to. Read once the room is known rather than when the
+  // wrap-up opens, so that dialog is correct the instant it appears instead of
+  // flashing a fallback while a request is in flight.
+  useEffect(() => {
+    if (roomId) loadCurrentGame(roomId)
+  }, [roomId, loadCurrentGame]);
 
   // initialise the game lobby
   useEffect(() => {
@@ -2081,7 +2096,10 @@ export default function GameContent() {
                 handed to another player mid-game. */}
             {isHost && (
               <button
-                onClick={() => { clearEndGameError(); setShowEndGameConfirm(true); }}
+                onClick={() => {
+                  clearEndGameError();
+                  setShowEndGameConfirm(true);
+                }}
                 className="fullscreen-btn finish-session-btn"
                 title="End the game for everyone"
                 disabled={isEnding}
@@ -2769,22 +2787,23 @@ export default function GameContent() {
         );
       })()}
 
-      {/* End Game confirmation — same wording as the dashboard's, since it is
-          the same command and the same consequences. Nothing is lost: token
-          positions and the adventure log are written cold and come back on the
-          next start, so this carries no countdown and is not styled as danger. */}
-      <ConfirmDialog
-        show={showEndGameConfirm}
-        title="End Game"
-        message="This ends the game for everyone at the table. Token positions and the adventure log are kept."
-        description={endGameError || 'Everyone still in the game will be returned to their dashboard.'}
-        confirmText="End Game"
-        loadingText="Ending..."
-        variant="primary"
-        icon={faFlagCheckered}
-        isLoading={isEnding}
-        onConfirm={() => endGame(roomId)}
+      {/* The same wrap-up the campaign drawer offers, because it is the same
+          act with the same consequences: the night gets named and described,
+          the next one gets a date, and nothing is lost either way. Keyed on the
+          loaded game so the prefill lands once it arrives. */}
+      <EndGameModal
+        /* Keyed on the loaded record: the modal mounts before the read
+           returns, and initialises its fields from whatever `game` held at
+           mount. Remounting when the record lands is what makes the prefill
+           appear. It happens once, before the dialog is ever opened. */
+        key={currentGame?.id || 'pending'}
+        open={showEndGameConfirm}
+        campaignTitle={currentGame?.campaign_name}
+        game={currentGame}
+        error={endGameError}
+        onConfirm={(wrapUp) => endGame(roomId, wrapUp)}
         onCancel={() => { setShowEndGameConfirm(false); clearEndGameError(); }}
+        isEnding={isEnding}
       />
 
       {/* Session Ended Modal with Countdown */}
@@ -2842,7 +2861,7 @@ function SessionEndedModal({ message, reason }) {
           {message || `This game session has ended: ${reason}`}
         </p>
         <p className="text-slate-400 text-sm mb-4">
-          You will be redirected shortly
+          The game has ended for now. You will be redirected shortly
         </p>
 
         {/* Progress bar */}

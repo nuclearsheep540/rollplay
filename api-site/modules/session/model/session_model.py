@@ -5,12 +5,12 @@
 Session ORM Models - PostgreSQL persistence layer
 
 Ubiquitous Language:
-- Session = The scheduled/planned play instance (this model)
-- Game = The live multiplayer experience (handled by api-game/MongoDB)
+- Session = the campaign's table: who plays and when (this model)
+- Game = one play, hot in api-game while it runs (modules/game)
 """
 
 from sqlalchemy import Column, String, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 import uuid
@@ -38,36 +38,27 @@ class SessionJoinedUser(Base):
 
 class Session(Base):
     """
-    Session entity - the campaign's one and only play instance.
+    Session entity - the campaign's table: who plays and when.
 
-    Exactly one row per campaign, for the campaign's whole life. It carries the
-    play state that survives between games (token boards, adventure log, what was
-    on screen), which is why it is never replaced except by an explicit reset.
+    Exactly one row per campaign, for the campaign's whole life, never replaced.
+    It carries the party (session_joined_users) and the plan for the next game.
 
-    When status is ACTIVE, a live game exists in MongoDB (api-game service),
-    keyed by this session's id.
+    It deliberately has NO status and NO play state. The boards, the adventure
+    log and what was on screen belong to the game that produced them (see
+    modules/game), and whether this session is live is answered by asking
+    whether it has an open game.
     """
     __tablename__ = 'sessions'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey('campaigns.id'), nullable=False)
     host_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
-    status = Column(String(20), default='inactive', nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    started_at = Column(DateTime(timezone=True))
-    stopped_at = Column(DateTime(timezone=True))
-    urls_expire_at = Column(DateTime(timezone=True))  # Signed asset-URL lease deadline; expiry sweeper auto-pauses past-due sessions
-    # When the GM says the next game is. Cosmetic and communicative only —
-    # nothing starts, reminds or polices on it. Cleared when the host ends a game.
+    # The plan for the next game: when it is, and what it is called. Cosmetic and
+    # communicative only — nothing starts, reminds or polices on either. Start
+    # takes the name onto the game; the host ending a game clears the date.
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
-    audio_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted audio channel config from ETL
-    spotify_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted DM Spotify BGM block from ETL (track/context/level)
-    map_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active map config from ETL (just asset_id)
-    image_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active image config from ETL
-    active_display = Column(String(10), nullable=True)  # Which display was active: "map", "image", or null
-    adventure_log = Column(JSONB, nullable=True, server_default='[]')  # Persisted adventure log from ETL (LogEntry-shaped, ≤200 entries)
-    map_token_state = Column(JSONB, nullable=True, server_default='{}')  # Persisted token boards from ETL (asset_id -> list[MapToken])
-    map_token_seed = Column(JSONB, nullable=True, server_default='{}')  # Board-as-seeded snapshot per map (merge base for the three-way start merge, tokens v2 decision 24)
+    next_game_name = Column(String(100), nullable=True)
 
     # Relationships
     campaign = relationship("Campaign", back_populates="sessions")
@@ -77,4 +68,4 @@ class Session(Base):
     # Use repository methods to fetch joined_users list
 
     def __repr__(self):
-        return f"<Session(id={self.id}, campaign_id={self.campaign_id}, status='{self.status}')>"
+        return f"<Session(id={self.id}, campaign_id={self.campaign_id})>"

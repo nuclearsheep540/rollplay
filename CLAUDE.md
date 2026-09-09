@@ -110,12 +110,12 @@ api-site/
 │   │   │   └── campaign_member_model.py
 │   │   ├── repositories/campaign_repository.py
 │   │   └── dependencies/providers.py
-│   ├── session/                   # Game session lifecycle (start/end/reset)
+│   ├── session/                   # The campaign's table: who plays (the party) and when
 │   │   ├── api/
 │   │   │   ├── endpoints.py
 │   │   │   └── schemas.py
 │   │   ├── application/
-│   │   │   ├── commands.py        # CreateSession, StartSession, PauseSession, ResetSession
+│   │   │   ├── commands.py        # CreateSession, ScheduleSession, RemovePlayerFromSession
 │   │   │   └── queries.py
 │   │   ├── domain/
 │   │   │   ├── session_aggregate.py
@@ -123,6 +123,17 @@ api-site/
 │   │   ├── model/
 │   │   │   └── session_model.py   # Session + SessionJoinedUser
 │   │   ├── repositories/session_repository.py
+│   │   └── dependencies/providers.py
+│   ├── game/                      # ONE play, from Start to End — and the state it leaves
+│   │   ├── api/
+│   │   │   ├── endpoints.py            # POST /, POST /{id}/end, PATCH /{id}, internal disconnect
+│   │   │   └── schemas.py
+│   │   ├── application/
+│   │   │   ├── commands.py             # StartGame, EndGame, UpdateGame, DisconnectFromGame + the ETL
+│   │   │   └── expired_game_cleanup.py # Ends games whose signed-URL lease lapsed
+│   │   ├── domain/game_aggregate.py    # GameAggregate + GameStatus, EndReason, Attendee
+│   │   ├── model/game_model.py         # games; one OPEN game per session (partial unique index)
+│   │   ├── repositories/game_repository.py
 │   │   └── dependencies/providers.py
 │   ├── library/                   # Asset management (maps, music, SFX, images)
 │   │   ├── api/
@@ -286,7 +297,7 @@ When a DM creates a game session, all `campaign.player_ids` are automatically ad
 ### Session Access (no Sessions tab)
 There is no Sessions surface — the old read-only Sessions tab and its `SessionsManager.js` were removed 2026-08-30. Sessions are reached through:
 - **Home hero**: the ranked campaign shows live state; GM gets START/RESUME/ENTER in place, players get JOIN when live.
-- **Campaigns tab drawer**: Start game / End game / Reset game live in the expanded campaign card. There is no create — every campaign always has exactly one session.
+- **Campaigns tab drawer**: Start game / End game live in the expanded campaign card, which also lists the games played there. There is no create and no reset — every campaign always has exactly one session, for life.
 - **Social panel**: friends' live sessions in shared campaigns offer an Enter button.
 Character selection still gates entry where required (modal in the campaign drawer).
 
@@ -614,56 +625,89 @@ path (see Atomic State Updates above).
 
 ### "Game" vs "Session" — the vocabulary boundary
 
-**"Game" means hot runtime, and nothing else.** api-site builds and stores campaigns and
-sessions — cold domain data in PostgreSQL. The moment api-site hands a session to api-game
-and it goes hot in MongoDB, that is a *game*: the live runtime.
+Four nouns, and each owns something the others must not:
 
-The word is a boundary marker. Seeing `game` in api-site code means "something is running
-in api-game right now" — so it belongs only on calls that cross to api-game
-(`_sync_player_to_game`) or on ETL state moving between hot and cold
-(`_extract_and_sync_game_state`, `game_grid_config`). Cold-side code must never wear game
-vocabulary. Note the tables were renamed `games` → `sessions` in 2026; leftover `game`
-naming on cold-side code is that history, not a distinction.
+- **Campaign** — the authored story: assets, their workshop configuration, the seat count.
+  The baseline every game starts from. Cold, PostgreSQL.
+- **Session** — the campaign's table: **who and when**. The party (`session_joined_users`)
+  and the plan for the next game (`scheduled_at`, `next_game_name`). Cold, PostgreSQL.
+  **It has no status and no play state.**
+- **Game** — **ONE play, from Start to End** (`modules/game`). An aggregate with its own id
+  and lifecycle: STARTING → ACTIVE → ENDING → ENDED. While it is open a MongoDB room exists
+  in api-game keyed by that id; once ended the row is the record of the night — name, when,
+  who was there, a GM summary — **and the state the game left behind**.
+- **Party** — the session's people, one seat each with the character they brought. A value
+  inside the session, never an aggregate: no id, no lifecycle of its own.
 
-**One session, one game, one id.** api-game keys its hot document by the session's own id
-(`create_room(room_id=request.session_id)`), so `session.id` addresses the game and
-`status == ACTIVE` — set only after api-game confirms the game is up — records that a game
-exists. There is deliberately no second identifier: a `sessions.active_game_id` column was
-retired 2026-08-30 because it duplicated both facts.
+**"Game" is no longer a hot-only marker** (revised 2026-09-06). It names an aggregate that
+is hot while open and cold once ended, so cold-side code may say `game` when it means this
+aggregate — `GameRepository`, `games.adventure_log`, `EndGame`. What it must never mean is
+"the table": that is the session.
+
+**One game, one room, one id — the game's.** api-game keys its document by the game id it is
+sent (`create_room(room_id=request.game_id)`), the browser's `/game?room_id=` carries the same
+id, and Start asserts api-game echoes it back. There is deliberately no second identifier: a
+`sessions.active_game_id` column was retired 2026-08-30 because it duplicated the fact, and a
+`sessions.current_game_id` would be the same mistake renamed.
+
+**Liveness is a query, never a column.** A session is live iff it has an open game
+(`GameRepository.get_open_game_for_session`). A **partial unique index**
+(`ix_games_one_open_per_session`, `WHERE status <> 'ended'`) enforces at most one open game
+per session in the database rather than in application code — which is also what lets ended
+games accumulate freely under the same session.
+
+**Play state lives on the game that produced it.** Boards, seed, adventure log, active
+map/image/display, audio and Spotify config are `games` columns. A session cannot produce any
+of them; only a running game can. **Continuity is a seeding rule, not parked state**: Start
+merges the session's newest ENDED game (its seed and its final board) with the campaign's
+current workshop baseline, so the party's pieces come back without anything being stored on
+the table. A session's first game seeds from the baseline alone.
+
+**These state columns never reach the wire.** `GameResponse` carries identity, lifecycle and
+record only; the state exists for the next Start to read server-side.
+
+**`EndReason`** tells the two callers of End apart: `HOST` (the GM pressed the button;
+players get a toast and the schedule clears) and `SYSTEM` (the expiry sweeper or
+`admin.py end-game`, silent, schedule kept).
 
 **One campaign, one session, for life** (2026-09). A campaign is created with its session and
-keeps that row forever: it is what carries play state between games — token boards, the
-adventure log, what was on screen. Only an explicit **Reset game** replaces it (delete +
-create, `ResetSession`), and nothing else may create one. Reset is a fresh run for new
-players (2026-09-06): it also clears the table — every non-DM member removed through the
-same remove-player and cancel-invite commands the drawer uses, so locks release and people
-are told; their characters stay theirs. Assets, notes and authored npc baselines survive.
+keeps that row forever. Nothing replaces it and nothing else may create one. (A **Reset game**
+verb shipped briefly on `feature/home-page` and was pulled on 2026-09-06 before QA: "run the
+campaign again" is a *copy of the campaign* — the Market's acquire operation, done by the
+author — not a second life for the same session.) The data model is *capable* of several
+sessions per campaign, each with its own party and its own history; that capability is
+deliberately unused, and enabling it would need its own verb, never "Start game".
 
-The user-facing verbs are **Start game** and **End game**, and End game IS the backend's
-`PauseSession` — ACTIVE → STOPPING → INACTIVE with the full ETL. `PauseReason` tells the two
-callers apart: `HOST_ENDED` (the GM pressed the button; players get a toast, and from stage 3
-the schedule clears) and `SYSTEM` (the expiry sweeper or `admin.py pause-session`, silent).
-Never surface "pause" or "resume" to users — a system-paused game and an idle one are
-deliberately indistinguishable, and both offer START GAME.
+The user-facing verbs are **Start game** and **End game**. Never surface "pause" or "resume"
+to users — a game the system closed and one the GM ended are deliberately indistinguishable,
+and both leave the card reading START GAME.
 
-**FINISHED was retired** with this change. It was terminal, so the next game needed a NEW
-session row — and pc tokens live only on the previous board (`token_merge.py`), so every
-"finish" silently stranded the players' pieces while npcs re-seeded from the workshop
-baseline. There is now no terminal state: INACTIVE is the only resting one.
+**FINISHED was retired in 2026-09** and its lesson is why the model looks like this: it was a
+terminal state on the SESSION, so the next game needed a new session row — and pc tokens live
+only on the previous board (`token_merge.py`), so every "finish" silently stranded the
+players' pieces while npcs re-seeded from the workshop baseline. ENDED is terminal on a
+**game**, which is safe precisely because the next game seeds from it.
 
 **Seats are campaign settings** (`campaigns.max_players`), pushed hot in the start payload and
 never read back from a running game. A campaign stays editable while its game is live —
 deliberate: cold data, one editor, and the edit simply applies at the next start.
 
-**`sessions.scheduled_at` is cosmetic.** It records when the GM says the next game is, so the
-table can align — nothing starts on it, nobody is reminded, no rule is enforced by it. Host-set
-while idle; cleared by End game but never by a system pause and never by the clock (a past value
-is hidden by display rules, not deleted). Stored as an instant and rendered in each viewer's own
-timezone, so there is no user timezone setting and the server's zone never matters.
+**The plan for the next game is cosmetic.** `sessions.scheduled_at` records when the GM says
+the next game is and `sessions.next_game_name` what it is called, so the table can align —
+nothing starts on either, nobody is reminded, no rule is enforced by them. Host-set while no
+game is running; the date is cleared by a host's End game but never by a system take-down and
+never by the clock (a past value is hidden by display rules, not deleted). The name is
+**consumed by Start**: it moves onto the game, which is then the thing a GM renames. Stored as
+an instant and rendered in each viewer's own timezone, so there is no user timezone setting
+and the server's zone never matters.
 
-### HTTP-Based ETL (Session Lifecycle)
-**Game Start** (Cold→Hot): api-site gathers state from PostgreSQL → HTTP POST to api-game → MongoDB document created → game status set to ACTIVE
-**Game End** (Hot→Cold): api-site requests final state via HTTP → persists to PostgreSQL → sends delete to api-game → MongoDB document removed → session status set to INACTIVE
+### HTTP-Based ETL (Game Lifecycle)
+**Game Start** (Cold→Hot): api-site mints the Game row (STARTING) → seeds from the session's newest ENDED game merged with the campaign's current workshop baseline → HTTP POST to api-game with `game_id` → MongoDB room created under that id → game ACTIVE
+**Game End** (Hot→Cold): api-site requests final state via HTTP → writes it onto **the game** (its board, log, screen, audio, plus attendance) → sends delete to api-game → room removed → game ENDED
+
+The session is not written by either, except that a host's End clears
+`scheduled_at`. Continuity comes from the seeding step, not from state parked on
+the session — see the vocabulary boundary below.
 
 ## Docker Services
 - **rollplay**: Next.js frontend (single SPA)

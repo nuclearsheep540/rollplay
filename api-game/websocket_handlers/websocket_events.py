@@ -810,6 +810,21 @@ class WebsocketEvent():
             from_player=display_name
         )
 
+        # The log write above is an await, and a handler suspends at every one.
+        # If the player reconnected inside that window, room_users now points at
+        # their NEW socket — and everything below (the lobby move, the seat
+        # clear, the disconnect broadcast) would be applied to a player sitting
+        # right there. So re-read the decision instead of trusting the check
+        # made before the suspension: presence state is owned by the loop
+        # thread and must never be carried across an await.
+        if not manager.is_current_connection(websocket, client_id, user_id):
+            logger.info(
+                "MAPTOKENS user %s reconnected to room %s while their old socket "
+                "was closing — seat, party status and broadcast left alone",
+                user_id, client_id)
+            manager.remove_connection(websocket, client_id, user_id)
+            return WebsocketEventResult(broadcast_message=None)
+
         # Update party status to move disconnecting user to lobby before marking as disconnected
         print(f"🚪 Moving {user_id} from party to lobby on disconnect")
         manager.update_party_status(client_id, user_id, False)

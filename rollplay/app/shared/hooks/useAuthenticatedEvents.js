@@ -39,10 +39,16 @@ export function useAuthenticatedEvents(userId, showToast, addPulseEvent) {
   const toast = (eventType, message, bodyFactory) => {
     if (!message.show_toast) return
     const config = getEventConfig(eventType)
-    showToast({
-      type: config.toastType,
-      message: bodyFactory ? bodyFactory(config, message.data) : config.toastMessage,
-    })
+    // toastMessage is usually a constant string, but an event whose wording
+    // depends on its payload (a game that has a name, say) declares a function
+    // instead. Resolving it here keeps that choice in the config rather than
+    // making every caller pass a bodyFactory for the same reason.
+    const body = bodyFactory
+      ? bodyFactory(config, message.data)
+      : typeof config.toastMessage === 'function'
+        ? config.toastMessage(message.data)
+        : config.toastMessage
+    showToast({ type: config.toastType, message: body })
   }
 
   const handlers = {
@@ -149,18 +155,6 @@ export function useAuthenticatedEvents(userId, showToast, addPulseEvent) {
       toast('session_ended', m)
     },
     campaign_deleted: () => invalidation.invalidateCampaigns(),
-
-    // ── Legacy game event names (backward compatibility) ─────────────
-    game_created: () => invalidation.invalidateCampaigns(),
-    game_started: (m) => {
-      invalidation.invalidateCampaigns()
-      toast('game_started', m)
-    },
-    game_ended: (m) => {
-      invalidation.invalidateCampaigns()
-      toast('game_ended', m)
-    },
-    game_finished: () => invalidation.invalidateCampaigns(),
 
     // ── Character selection (silent — cache invalidation only) ───────
     campaign_character_selected: () => {

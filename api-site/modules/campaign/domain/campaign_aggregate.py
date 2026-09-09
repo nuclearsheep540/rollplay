@@ -26,7 +26,7 @@ class CampaignAggregate:
     session, for its whole life — its own aggregate, referenced by id, read from
     the sessions table's campaign_id foreign key and never stored on the campaign
     row. Settings that describe how the game runs (the seat count) live here, on
-    the durable thing, not on the session that a reset replaces.
+    the durable thing, and are read into the game at every start.
 
     Membership:
     - Each user has exactly one role per campaign (enforced by unique constraint).

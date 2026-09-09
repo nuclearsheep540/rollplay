@@ -25,6 +25,8 @@ from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
+from modules.game.dependencies.providers import get_game_repository
+from modules.game.repositories.game_repository import GameRepository
 from modules.campaign.application.commands import (
     CreateCampaign,
     UpdateCampaign,
@@ -197,7 +199,7 @@ async def create_campaign(
         )
 
         # A campaign is born with its session and keeps that one for life — this
-        # is the only place one is created (reset aside). Without it the campaign
+        # is the only place one is created. Without it the campaign
         # would have nothing to start, and every read surface assumes it exists.
         session_command = CreateSession(session_repo, campaign_repo, event_manager)
         await session_command.execute(
@@ -334,7 +336,7 @@ async def delete_campaign(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
     event_manager: EventManager = Depends(get_event_manager)
 ):
@@ -345,7 +347,7 @@ async def delete_campaign(
     cascade-deletes the campaign's session and members.
     """
     try:
-        command = DeleteCampaign(campaign_repo, session_repo, character_repo, event_manager)
+        command = DeleteCampaign(campaign_repo, game_repo, character_repo, event_manager)
         success = await command.execute(campaign_id, user_id)
 
         if success:
@@ -416,7 +418,8 @@ async def accept_campaign_invite(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository)
 ):
     """
     Accept a campaign invite (player only).
@@ -424,7 +427,7 @@ async def accept_campaign_invite(
     Automatically adds the player to any active sessions in the campaign.
     """
     try:
-        command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, session_repo)
+        command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, session_repo, game_repo)
         campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=user_id
@@ -558,7 +561,7 @@ async def select_character_for_campaign(
     character_repo: CharacterRepository = Depends(get_character_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    game_repo: GameRepository = Depends(get_game_repository)
 ):
     """
     Select a character for use in this campaign.
@@ -569,7 +572,7 @@ async def select_character_for_campaign(
     Domain Rule: A character can only be active in one campaign at a time.
     """
     try:
-        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager, session_repo)
+        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager, game_repo)
         character = await command.execute(
             campaign_id=campaign_id,
             user_id=user_id,
@@ -590,7 +593,7 @@ async def release_character_from_campaign(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
 ):
@@ -603,7 +606,7 @@ async def release_character_from_campaign(
     Domain Rule: Cannot release character while a session is active.
     """
     try:
-        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, session_repo, user_repo, event_manager)
+        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, game_repo, user_repo, event_manager)
         character = await command.execute(
             campaign_id=campaign_id,
             user_id=user_id
