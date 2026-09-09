@@ -27,7 +27,10 @@ export default function AccountNotificationFeed({ userId }) {
 
       // Navigate to relevant tab
       const tab = getNavigationTab(notification.event_type)
-      if (tab) {
+      if (tab === 'account') {
+        // Account is its own route, not a dashboard tab.
+        router.push('/account')
+      } else if (tab) {
         let url = `/dashboard?tab=${tab}`
         if (tab === 'campaigns' && notification.data?.campaign_id) {
           url += `&expand_campaign_id=${notification.data.campaign_id}`

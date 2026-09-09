@@ -63,7 +63,10 @@ export function useCreateDraft() {
       }),
     onSuccess: (data) => {
       queryClient.setQueryData(['character', data.id], data)
-      queryClient.invalidateQueries({ queryKey: ['characters', 'me'] })
+      // ['characters'] prefix-matches both roster caches: the dashboard's
+      // ['characters'] and this slice's ['characters', 'me']. Invalidating
+      // the longer key would miss the dashboard's.
+      queryClient.invalidateQueries({ queryKey: ['characters'] })
     },
   })
 }
@@ -89,7 +92,6 @@ export function useFinalizeDraft(characterId) {
       call(`/api/characters/draft/${characterId}/finalize`, { method: 'POST' }),
     onSuccess: (data) => {
       queryClient.setQueryData(['character', characterId], data)
-      queryClient.invalidateQueries({ queryKey: ['characters', 'me'] })
       queryClient.invalidateQueries({ queryKey: ['characters'] })
     },
   })
@@ -102,7 +104,7 @@ export function useDiscardDraft(characterId) {
       call(`/api/characters/draft/${characterId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ['character', characterId] })
-      queryClient.invalidateQueries({ queryKey: ['characters', 'me'] })
+      queryClient.invalidateQueries({ queryKey: ['characters'] })
     },
   })
 }

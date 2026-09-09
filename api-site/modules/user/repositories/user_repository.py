@@ -44,11 +44,13 @@ class UserRepository:
             screen_name=model.screen_name,
             created_at=model.created_at,
             last_login=model.last_login,
+            last_seen=model.last_seen,
+            pulse_events=model.pulse_events or [],
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
-            has_received_demo=model.has_received_demo,
-            color=model.color
+            color=model.color,
+            max_slots=model.max_slots
         )
 
     def get_by_email(self, email: str, include_deleted: bool = False) -> Optional[UserAggregate]:
@@ -69,11 +71,13 @@ class UserRepository:
             screen_name=model.screen_name,
             created_at=model.created_at,
             last_login=model.last_login,
+            last_seen=model.last_seen,
+            pulse_events=model.pulse_events or [],
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
-            has_received_demo=model.has_received_demo,
-            color=model.color
+            color=model.color,
+            max_slots=model.max_slots
         )
 
     def _get_existing_friend_code(self, user_id: UUID) -> Optional[str]:
@@ -145,11 +149,13 @@ class UserRepository:
             screen_name=model.screen_name,
             created_at=model.created_at,
             last_login=model.last_login,
+            last_seen=model.last_seen,
+            pulse_events=model.pulse_events or [],
             friend_code=friend_code,
             account_name=model.account_name,
             account_tag=model.account_tag,
-            has_received_demo=model.has_received_demo,
-            color=model.color
+            color=model.color,
+            max_slots=model.max_slots
         )
 
     def generate_unique_tag(self, account_name: str) -> str:
@@ -219,8 +225,10 @@ class UserRepository:
                 model.email = aggregate.email
                 model.screen_name = aggregate.screen_name
                 model.last_login = aggregate.last_login
-                model.has_received_demo = aggregate.has_received_demo
+                model.last_seen = aggregate.last_seen
+                model.pulse_events = aggregate.pulse_events
                 model.color = aggregate.color
+                model.max_slots = aggregate.max_slots
                 # Update account_name and account_tag if set on aggregate
                 if aggregate.account_name is not None:
                     model.account_name = aggregate.account_name
@@ -241,9 +249,10 @@ class UserRepository:
                     screen_name=aggregate.screen_name,
                     created_at=aggregate.created_at,
                     last_login=aggregate.last_login,
+                    last_seen=aggregate.last_seen,
+                    pulse_events=aggregate.pulse_events,
                     account_name=aggregate.account_name,
                     account_tag=aggregate.account_tag,
-                    has_received_demo=aggregate.has_received_demo
                 )
                 self.db.add(model)
 
@@ -353,7 +362,6 @@ class UserRepository:
         model.screen_name = aggregate.screen_name
         model.account_name = aggregate.account_name
         model.account_tag = aggregate.account_tag
-        model.has_received_demo = aggregate.has_received_demo
         model.last_login = aggregate.last_login
 
         # Generate a fresh account_tag for the reactivated user

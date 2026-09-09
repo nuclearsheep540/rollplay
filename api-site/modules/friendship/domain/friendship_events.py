@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from uuid import UUID
-from typing import Dict, Any
+from typing import Any, Dict, List
 
 from modules.events.domain.event_config import EventConfig
 
@@ -70,6 +70,77 @@ class FriendshipEvents:
             show_toast=True,
             save_notification=True
         )
+
+    @staticmethod
+    def friend_online(
+        friend_ids: List[UUID],
+        user_id: UUID,
+        screen_name: str,
+        announce: bool = True
+    ) -> List[EventConfig]:
+        """
+        Event: A user came online (their first live events-socket connection).
+
+        Sent only to that user's accepted friends — presence is never public.
+
+        The event ALWAYS goes out, because the client repaints presence by
+        refetching when it arrives; suppressing it would leave a friend's dot
+        stale. What `announce` controls is whether anyone is TOLD: a user
+        returning from a refresh needs the repaint but not the fanfare.
+
+        Args:
+            friend_ids: Accepted friends of the user who came online
+            user_id: The user who came online
+            screen_name: Their display name
+            announce: False for a reconnection inside the grace window —
+                delivers silently, with no toast and no pulse pill
+
+        Returns:
+            List[EventConfig] (one per friend)
+        """
+        events = []
+        for friend_id in friend_ids:
+            events.append(EventConfig(
+                user_id=friend_id,
+                event_type="friend_online",
+                data={
+                    "user_id": str(user_id),
+                    "screen_name": screen_name
+                },
+                show_toast=announce,
+                save_notification=False,  # Presence is a now-state, never a notification row
+                show_pulse=announce
+            ))
+        return events
+
+    @staticmethod
+    def friend_offline(friend_ids: List[UUID], user_id: UUID, screen_name: str) -> List[EventConfig]:
+        """
+        Event: A user went offline (their last events-socket connection closed).
+
+        Silent by design — a friend leaving repaints presence, it does not interrupt.
+
+        Args:
+            friend_ids: Accepted friends of the user who went offline
+            user_id: The user who went offline
+            screen_name: Their display name
+
+        Returns:
+            List[EventConfig] (one per friend)
+        """
+        events = []
+        for friend_id in friend_ids:
+            events.append(EventConfig(
+                user_id=friend_id,
+                event_type="friend_offline",
+                data={
+                    "user_id": str(user_id),
+                    "screen_name": screen_name
+                },
+                show_toast=False,
+                save_notification=False
+            ))
+        return events
 
     @staticmethod
     def friend_buzzed(recipient_id: UUID, buzzer_id: UUID, buzzer_screen_name: str) -> EventConfig:

@@ -20,7 +20,7 @@ class EventConnectionManager:
     def __init__(self):
         self.user_connections: Dict[str, Set[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: str):
+    async def connect(self, websocket: WebSocket, user_id: str) -> bool:
         """
         Register new WebSocket connection for user.
 
@@ -29,28 +29,46 @@ class EventConnectionManager:
         Args:
             websocket: FastAPI WebSocket instance (already accepted)
             user_id: User UUID as string
+
+        Returns:
+            True when this is the user's FIRST live connection — the moment they
+            became online. Extra tabs/devices return False, so presence fan-out
+            fires once per user rather than once per socket.
         """
         if user_id not in self.user_connections:
             self.user_connections[user_id] = set()
 
+        came_online = len(self.user_connections[user_id]) == 0
+
         self.user_connections[user_id].add(websocket)
         logger.info(f"User {user_id} connected (total connections: {len(self.user_connections[user_id])})")
 
-    async def disconnect(self, websocket: WebSocket, user_id: str):
+        return came_online
+
+    async def disconnect(self, websocket: WebSocket, user_id: str) -> bool:
         """
         Remove WebSocket connection for user.
 
         Args:
             websocket: FastAPI WebSocket instance
             user_id: User UUID as string
+
+        Returns:
+            True when this removed the user's LAST connection — the moment they
+            went offline. Closing one of several tabs returns False.
         """
-        if user_id in self.user_connections:
-            self.user_connections[user_id].discard(websocket)
+        if user_id not in self.user_connections:
+            return False
 
-            if not self.user_connections[user_id]:
-                del self.user_connections[user_id]
+        self.user_connections[user_id].discard(websocket)
 
-            logger.info(f"User {user_id} disconnected")
+        went_offline = not self.user_connections[user_id]
+        if went_offline:
+            del self.user_connections[user_id]
+
+        logger.info(f"User {user_id} disconnected")
+
+        return went_offline
 
     async def send_to_user(self, user_id: str, message: dict):
         """

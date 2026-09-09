@@ -224,7 +224,7 @@ export default function NotesWorkspace({
                     {!notesList.isLoading && notes.length === 0 && (
                       <li className="notes-workspace__empty">
                         No notes yet. They are private to you and stay with this
-                        campaign between sessions.
+                        campaign between games.
                       </li>
                     )}
                     {notes.map((note) => (
@@ -276,7 +276,7 @@ export default function NotesWorkspace({
             {lockedBySession && (
               <div className="notes-workspace__locked">
                 <span>
-                  A session is live for this campaign. Notes are read-only here so
+                  A game is running for this campaign. Notes are read-only here so
                   they can&apos;t be edited in two places at once. Continue editing them in the game.
                 </span>
                 {onOpenGame && (

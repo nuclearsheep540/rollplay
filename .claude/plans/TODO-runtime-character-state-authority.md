@@ -108,6 +108,21 @@ live "the fighter just took 12 damage" broadcast. Listed for completeness; proba
    exhaustion, AC. Those can go hot-only with a shared contract. Tier 3 is level-up and
    inventory/currency, which stay on the api-site path.
 
+   > **Tier 3 is temporary, not a design rule (decided 2026-09-07).** Level-up stays on api-site
+   > only because today's characters module *is* the SRD rules engine, and a D&D level-up is a
+   > computation (HP gain, proficiency, ASI/feat, features) the client cannot state as
+   > "change x to y". Rollplay is moving to system-agnostic characters: under
+   > `.claude/plans/home/05-campaign-create-and-publish.md` a character becomes a form of values
+   > the campaign author defines and "the sheet knows the shape" — the engine is superseded.
+   > Once that lands, levelling up is just changing values on the sheet, which is the same
+   > range-validated hot write as HP, and this carve-out dissolves. **Ship B with the carve-out,
+   > and build nothing that assumes it is permanent**: no second write path, no "structural vs
+   > runtime" split baked into the contract or the room document. When level-up does run through
+   > api-site, api-site pushes the resulting snapshot into the room via the existing
+   > `PUT /game/{id}/player/character` so both stores agree — the same push character selection
+   > already does. Character creation and level-up are to be re-evaluated as a whole; do not
+   > extend the D&D engine to unblock this.
+
    This framing rescues **`xp`**, which the earlier ephemeral/structural cut sent the wrong way:
    validating `xp` is just `ge=0`, and only *level-up* consults the registry. XP can sit hot.
 

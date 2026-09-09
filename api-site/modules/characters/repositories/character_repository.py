@@ -33,6 +33,7 @@ from modules.characters.model.character_choices_log_model import CharacterChoice
 from modules.characters.model.character_class_model import CharacterClassEntry
 from modules.characters.model.character_feat_model import CharacterFeatAcquisition
 from modules.characters.model.character_model import Character as CharacterModel
+from modules.user.model.user_model import User as UserModel
 from modules.characters.model.character_save_model import CharacterSaveProficiency
 from modules.characters.model.character_resource_model import CharacterResource
 from modules.characters.model.character_skill_model import CharacterSkillProficiency
@@ -214,6 +215,7 @@ class CharacterRepository:
             created_at=model.created_at,
             updated_at=model.updated_at,
             is_deleted=bool(model.is_deleted),
+            slot=model.slot,
             avatar_asset_id=model.avatar_asset_id,
             # Lifted off the eager-loaded MediaAsset so the API response
             # builder can presign a download URL without a second query.
@@ -245,11 +247,49 @@ class CharacterRepository:
         model = self._query().filter_by(id=character_id, is_deleted=False).first()
         return self._model_to_aggregate(model) if model else None
 
+    def get_occupied_slots(self, user_id: UUID) -> List[int]:
+        """Slot numbers a user's live characters hold, drafts included."""
+        rows = (
+            self.db.query(CharacterModel.slot)
+            .filter(
+                CharacterModel.user_id == user_id,
+                CharacterModel.is_deleted == False,  # noqa: E712
+                CharacterModel.slot.isnot(None),
+            )
+            .all()
+        )
+        return [row.slot for row in rows]
+
     def get_by_user_id(self, user_id: UUID) -> List[CharacterAggregate]:
+        """The user's visible roster: live characters in slots below their
+        max_slots. Characters above the limit (after a capacity decrease)
+        stay in the database but are not returned — nothing is deleted.
+        Ordering is updated_at, never slot: slots are capacity bookkeeping,
+        not position.
+        """
         models = (
             self._query()
-            .filter_by(user_id=user_id, is_deleted=False)
+            .join(UserModel, UserModel.id == CharacterModel.user_id)
+            .filter(
+                CharacterModel.user_id == user_id,
+                CharacterModel.is_deleted == False,  # noqa: E712
+                CharacterModel.slot < UserModel.max_slots,
+            )
             .order_by(CharacterModel.updated_at.desc())
+            .all()
+        )
+        return [self._model_to_aggregate(m) for m in models]
+
+    def get_by_slot_at_or_above(self, user_id: UUID, slot: int) -> List[CharacterAggregate]:
+        """Live characters at or above a slot number — SetMaxSlots' work list
+        when capacity decreases."""
+        models = (
+            self._query()
+            .filter(
+                CharacterModel.user_id == user_id,
+                CharacterModel.is_deleted == False,  # noqa: E712
+                CharacterModel.slot >= slot,
+            )
             .all()
         )
         return [self._model_to_aggregate(m) for m in models]
@@ -315,6 +355,7 @@ class CharacterRepository:
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
                 is_deleted=aggregate.is_deleted,
+                slot=aggregate.slot,
             )
             self.db.add(model)
             self.db.flush()
@@ -357,6 +398,7 @@ class CharacterRepository:
             model.species_sub_choices = dict(aggregate.species_sub_choices)
             model.updated_at = aggregate.updated_at
             model.is_deleted = aggregate.is_deleted
+            model.slot = aggregate.slot
             # Replace-style sync for all join tables — these are small and
             # rewriting them per save is simpler than diffing.
             for entry in list(model.class_entries):
@@ -485,6 +527,7 @@ class CharacterRepository:
             raise ValueError("Cannot delete character — it is locked to an active campaign")
         aggregate.soft_delete()
         model.is_deleted = aggregate.is_deleted
+        model.slot = aggregate.slot  # soft_delete freed it
         model.updated_at = aggregate.updated_at
         self.db.commit()
         return True

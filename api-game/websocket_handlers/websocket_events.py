@@ -592,34 +592,6 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def seat_count_change(websocket, data, event_data, user_id, client_id, manager):
-        """Handle seat count changes"""
-        display_name = await WebsocketEvent._display_name(client_id, user_id)
-
-        max_players = event_data.get("max_players")
-        displaced_players = event_data.get("displaced_players", [])
-
-        log_message = f"Seat count changed to {max_players} by {display_name}"
-        if displaced_players:
-            displaced_names = [p.get("playerName", p.get("userId", "unknown")) for p in displaced_players]
-            log_message += f". Moved to lobby: {', '.join(displaced_names)}"
-
-        await adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=display_name
-        )
-
-        broadcast_message = {
-            "event_type": "seat_count_change",
-            "data": event_data,
-            "user_id": user_id
-        }
-
-        return WebsocketEventResult(broadcast_message=broadcast_message)
-
-    @staticmethod
     async def player_displaced(websocket, data, event_data, user_id, client_id, manager):
         """Handle player displacement events"""
         displaced_player = event_data.get("player_name")
@@ -837,6 +809,21 @@ class WebsocketEvent():
             log_type=LogType.SYSTEM,
             from_player=display_name
         )
+
+        # The log write above is an await, and a handler suspends at every one.
+        # If the player reconnected inside that window, room_users now points at
+        # their NEW socket — and everything below (the lobby move, the seat
+        # clear, the disconnect broadcast) would be applied to a player sitting
+        # right there. So re-read the decision instead of trusting the check
+        # made before the suspension: presence state is owned by the loop
+        # thread and must never be carried across an await.
+        if not manager.is_current_connection(websocket, client_id, user_id):
+            logger.info(
+                "MAPTOKENS user %s reconnected to room %s while their old socket "
+                "was closing — seat, party status and broadcast left alone",
+                user_id, client_id)
+            manager.remove_connection(websocket, client_id, user_id)
+            return WebsocketEventResult(broadcast_message=None)
 
         # Update party status to move disconnecting user to lobby before marking as disconnected
         print(f"🚪 Moving {user_id} from party to lobby on disconnect")

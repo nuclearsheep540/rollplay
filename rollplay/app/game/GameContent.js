@@ -39,11 +39,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge, faAnglesLeft, faAnglesRight, faFlagCheckered } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
 import PerfOverlay from '@/app/shared/components/PerfOverlay';
-import ConfirmDialog from '@/app/shared/components/ConfirmDialog';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useMapSettings } from './hooks/useMapSettings';
-import { useFinishSession } from './hooks/useFinishSession';
+import { useEndGame } from './hooks/useEndGame';
+import EndGameModal from '@/app/shared/components/EndGameModal';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import { NotesPanel } from '../notes';
@@ -90,10 +90,10 @@ const LOADING_PHRASES = [
 const APP_TIPS = [
   'Press Shift to inspect grid cells and view coordinates.',
   'The DM can adjust reverb, filters, and effects per audio channel.',
-  'You can release your character between sessions to use them elsewhere.',
+  'You can release your character between games to use them elsewhere.',
   'Try fullscreen mode for the most immersive experience.',
   'The DM can present images in cinematic letterbox mode.',
-  'Use the adventure log to track key moments in your session.',
+  'Use the adventure log to track key moments in your game.',
   'The DM can set audio cues to transition multiple tracks at once.',
   'Characters can only be active in one campaign at a time.',
   'Moderators can assist the DM with map and image controls.',
@@ -366,8 +366,15 @@ export default function GameContent() {
   // Finish Session — the host ending the game from inside it. On success the
   // server closes the room, so every client (this one included) arrives at
   // the Session Ended modal above through the normal broadcast.
-  const [showFinishSessionConfirm, setShowFinishSessionConfirm] = useState(false);
-  const { finishSession, isFinishing, error: finishSessionError, clearError: clearFinishSessionError } = useFinishSession();
+  const [showEndGameConfirm, setShowEndGameConfirm] = useState(false);
+  const {
+    endGame,
+    isEnding,
+    error: endGameError,
+    clearError: clearEndGameError,
+    game: currentGame,
+    loadGame: loadCurrentGame,
+  } = useEndGame();
 
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
@@ -678,6 +685,14 @@ export default function GameContent() {
     fetchCurrentUser();
   }, []);
 
+  // The cold record of the game being played: its name, its summary, and the
+  // campaign it belongs to. Read once the room is known rather than when the
+  // wrap-up opens, so that dialog is correct the instant it appears instead of
+  // flashing a fallback while a request is in flight.
+  useEffect(() => {
+    if (roomId) loadCurrentGame(roomId)
+  }, [roomId, loadCurrentGame]);
+
   // initialise the game lobby
   useEffect(() => {
     const roomId = params.get('room_id')
@@ -835,77 +850,6 @@ export default function GameContent() {
     if (tuningMode) return { ...base, offset_x: grid.offset.x, offset_y: grid.offset.y };
     return base;
   }, [gridEditMode, grid.effectiveGridConfig, grid.offset, gridConfig, activeMap, tuningMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // UPDATED: Seat count management with displaced player handling
-  const setSeatCount = async (newSeatCount) => {
-    try {
-      console.log(`Updating seat count to: ${newSeatCount}`);
-      
-      // Identify displaced players if reducing seat count
-      const displacedPlayers = [];
-      if (newSeatCount < gameSeats.length) {
-        for (let i = newSeatCount; i < gameSeats.length; i++) {
-          if (gameSeats[i] && gameSeats[i].userId !== "empty") {
-            displacedPlayers.push({
-              userId: gameSeats[i].userId,
-              playerName: gameSeats[i].playerName,
-              seatId: i,
-              characterData: gameSeats[i].characterData
-            });
-          }
-        }
-      }
-      
-      // Create new seat array
-      const newSeats = [];
-      
-      // Copy existing seats up to the new count
-      for (let i = 0; i < newSeatCount; i++) {
-        if (i < gameSeats.length) {
-          // Keep existing seat
-          newSeats.push(gameSeats[i]);
-        } else {
-          // Add new empty seat
-          newSeats.push({
-            seatId: i,
-            userId: "empty",
-            playerName: "empty",
-            characterData: null,
-            isActive: false
-          });
-        }
-      }
-
-      // Update MongoDB via API with displaced players info
-      const response = await fetch(`/api/game/${roomId}/seats`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          max_players: newSeatCount,
-          updated_by: thisUserId,
-          displaced_players: displacedPlayers
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update seat count in database');
-      }
-
-      // Send websocket update using hook method
-      sendSeatCountChange(newSeatCount, newSeats);
-
-      // Note: Do NOT update local state here - let WebSocket broadcast handle it
-      // This prevents double state updates that cause adventure log to jump
-      
-      console.log(`Seat count change requested. Displaced players:`, displacedPlayers);
-
-    } catch (error) {
-      console.error('Error updating seat count:', error);
-      alert('Failed to update seat count. Please try again.');
-    }
-  };
 
   const loadAdventureLogs = async (roomId) => {
     try {
@@ -1296,7 +1240,6 @@ export default function GameContent() {
     webSocket,
     isConnected,
     sendSeatChange,
-    sendSeatCountChange,
     sendCombatStateChange,
     sendPlayerKick,
     sendDiceRoll,
@@ -2153,12 +2096,15 @@ export default function GameContent() {
                 handed to another player mid-game. */}
             {isHost && (
               <button
-                onClick={() => { clearFinishSessionError(); setShowFinishSessionConfirm(true); }}
+                onClick={() => {
+                  clearEndGameError();
+                  setShowEndGameConfirm(true);
+                }}
                 className="fullscreen-btn finish-session-btn"
-                title="End this session for everyone"
-                disabled={isFinishing}
+                title="End the game for everyone"
+                disabled={isEnding}
               >
-                Finish Session
+                End Game
                 <FontAwesomeIcon icon={faFlagCheckered} style={{ marginLeft: 'calc(6px * var(--ui-scale))' }} />
               </button>
             )}
@@ -2192,7 +2138,7 @@ export default function GameContent() {
               <div>
                 <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
                 <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
-                  You're watching this session. Select a character in your campaign to participate.
+                  You're watching this game. Select a character in your campaign to participate.
                 </p>
               </div>
             </div>
@@ -2366,7 +2312,6 @@ export default function GameContent() {
                   thisUserId={thisUserId}
                   currentUser={currentUser}
                   onRoleChange={handleRoleChange}
-                  setSeatCount={setSeatCount}
                   handleKickPlayer={handleKickPlayer}
                   handleClearSystemMessages={handleClearSystemMessages}
                   displayNameMap={displayNameMap}
@@ -2842,26 +2787,28 @@ export default function GameContent() {
         );
       })()}
 
-      {/* Finish Session confirmation — same wording as the dashboard's, since
-          it is the same command and the same consequences. */}
-      <ConfirmDialog
-        show={showFinishSessionConfirm}
-        title="Finish Session"
-        message="This will finish the session for everyone, ending this game. This saves all data for all players."
-        description={finishSessionError || 'Everyone still in the game will be returned to their dashboard.'}
-        confirmText="Finish Session"
-        loadingText="Finishing..."
-        variant="danger"
-        icon={faFlagCheckered}
-        isLoading={isFinishing}
-        confirmDelaySeconds={3}
-        onConfirm={() => finishSession(roomId)}
-        onCancel={() => { setShowFinishSessionConfirm(false); clearFinishSessionError(); }}
+      {/* The same wrap-up the campaign drawer offers, because it is the same
+          act with the same consequences: the night gets named and described,
+          the next one gets a date, and nothing is lost either way. Keyed on the
+          loaded game so the prefill lands once it arrives. */}
+      <EndGameModal
+        /* Keyed on the loaded record: the modal mounts before the read
+           returns, and initialises its fields from whatever `game` held at
+           mount. Remounting when the record lands is what makes the prefill
+           appear. It happens once, before the dialog is ever opened. */
+        key={currentGame?.id || 'pending'}
+        open={showEndGameConfirm}
+        campaignTitle={currentGame?.campaign_name}
+        game={currentGame}
+        error={endGameError}
+        onConfirm={(wrapUp) => endGame(roomId, wrapUp)}
+        onCancel={() => { setShowEndGameConfirm(false); clearEndGameError(); }}
+        isEnding={isEnding}
       />
 
-      {/* Session Ended Modal with Countdown */}
+      {/* Game Ended Modal with Countdown */}
       {sessionEndedData && (
-        <SessionEndedModal
+        <GameEndedModal
           message={sessionEndedData.message}
           reason={sessionEndedData.reason}
         />
@@ -2874,8 +2821,8 @@ export default function GameContent() {
   );
 }
 
-// Session Ended Modal Component with countdown progress bar
-function SessionEndedModal({ message, reason }) {
+// Game Ended Modal Component with countdown progress bar
+function GameEndedModal({ message, reason }) {
   const [progress, setProgress] = useState(0);
   const redirectDelay = 5000; // 5 seconds
 
@@ -2909,12 +2856,12 @@ function SessionEndedModal({ message, reason }) {
     >
       <div className="text-center">
         <div className="text-4xl mb-4">🎲</div>
-        <h2 className="text-xl font-bold text-white mb-2">Session Ended</h2>
+        <h2 className="text-xl font-bold text-white mb-2">Game Ended</h2>
         <p className="text-slate-300 mb-4">
-          {message || `This game session has ended: ${reason}`}
+          {message || `This game has ended: ${reason}`}
         </p>
         <p className="text-slate-400 text-sm mb-4">
-          You will be redirected shortly
+          The game has ended for now. You will be redirected shortly
         </p>
 
         {/* Progress bar */}

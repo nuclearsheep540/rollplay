@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import WorkshopToolNav from './WorkshopToolNav';
 
 // Route map for each tool
-const TOOL_ROUTES = {
+export const TOOL_ROUTES = {
   maps: '/workshop/map-config?from=map-config',
   images: '/workshop/image-config?from=image-config',
   audio: '/workshop/audio-workstation?from=audio-workstation',

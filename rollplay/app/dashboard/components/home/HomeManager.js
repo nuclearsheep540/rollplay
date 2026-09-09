@@ -1,0 +1,137 @@
+/* Copyright (C) 2025 Matthew Davey */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+'use client'
+
+import { useMemo } from 'react'
+import { useCampaigns } from '@/app/dashboard/hooks/useCampaigns'
+import { useCharacters } from '@/app/dashboard/hooks/useCharacters'
+import { selectHeroCampaign, selectWorkingOnCampaign } from '@/app/dashboard/utils/homeRanking'
+import { selectTagline } from '@/app/dashboard/utils/tagline'
+import Spinner from '@/app/shared/components/Spinner'
+import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
+import CharacterHand from './CharacterHand'
+import HomeGreeting from './HomeGreeting'
+import HomeHeroCard from './HomeHeroCard'
+import HomeOnboardingHero from './HomeOnboardingHero'
+import InviteDeck from './InviteDeck'
+import WorkingOnCard from './WorkingOnCard'
+import HomeUpdates from './HomeUpdates'
+import PulseLine from './PulseLine'
+import { FeaturedFromMarket } from './HomePlaceholders'
+import { PLATE_HEIGHT_PX } from '@/app/styles/plateGeometry'
+
+// Gold reads darker on the light page ground than it does on the plates.
+const SECTION_LABEL_GOLD = '#9A7526'
+
+function SectionHead({ children, className = 'mb-2.5' }) {
+  return (
+    <div className={`flex items-baseline justify-between px-0.5 ${className}`}>
+      <h3
+        className="text-[11.5px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: SECTION_LABEL_GOLD }}
+      >
+        {children}
+      </h3>
+    </div>
+  )
+}
+
+/**
+ * Home — what's next, what's changed, what needs me.
+ *
+ * Left column knows, right column does. Everything here reads from the same
+ * cached queries the tabs use, so landing on Home warms them rather than
+ * duplicating work.
+ */
+export default function HomeManager({ user }) {
+  // The social panel lives in the group layout's header; the pulse asks it to
+  // open rather than owning a second copy of it.
+  const { openSocialPanel } = useAuthenticated()
+  const { data: campaignData, isLoading } = useCampaigns(user?.id)
+  const { data: characters } = useCharacters()
+
+  const campaigns = campaignData?.campaigns || []
+  const invitedCampaigns = campaignData?.invitedCampaigns || []
+
+  const heroCampaign = selectHeroCampaign(campaigns)
+  const workingOnCampaign = selectWorkingOnCampaign(campaigns, user?.id)
+
+  let playerCharacter = null
+  if (heroCampaign) {
+    for (const character of characters || []) {
+      if (character.active_campaign === heroCampaign.id) {
+        playerCharacter = character
+        break
+      }
+    }
+  }
+
+  // Blank until both queries have data (loading or failed), then picked once
+  // per situation rather than per render, so a refetch does not reshuffle it.
+  const tagline = useMemo(
+    () => (campaignData && characters ? selectTagline({ user, heroCampaign, characters }) : ''),
+    [campaignData, user, heroCampaign, characters]
+  )
+
+  return (
+    <div className="mx-auto w-full max-w-[1410px] pb-16">
+      <HomeGreeting user={user} tagline={tagline} />
+
+      <section className="mt-[26px]">
+        {isLoading ? (
+          <div
+            className="flex items-center justify-center"
+            style={{ minHeight: PLATE_HEIGHT_PX }}
+          >
+            <Spinner size="lg" />
+          </div>
+        ) : (
+          <InviteDeck invites={invitedCampaigns}>
+            {heroCampaign ? (
+              <HomeHeroCard
+                campaign={heroCampaign}
+                user={user}
+                playerCharacter={playerCharacter}
+              />
+            ) : (
+              <HomeOnboardingHero />
+            )}
+          </InviteDeck>
+        )}
+      </section>
+
+      {/* Clears the invite's tucked slot, which stays reserved whether or not
+          an invite exists — toggling one never shifts the page. */}
+      <div className="mt-[54px]">
+        <PulseLine campaigns={campaigns} onOpenSocial={openSocialPanel} />
+      </div>
+
+      <div className="mt-[26px] grid grid-cols-1 gap-[26px] lg:grid-cols-[2fr_3fr]">
+        <div className="flex flex-col gap-[26px]">
+          <HomeUpdates sectionLabelColor={SECTION_LABEL_GOLD} />
+        </div>
+
+        <div className="flex flex-col gap-[26px]">
+          <div className="flex flex-col">
+            <SectionHead>Continue building</SectionHead>
+            <WorkingOnCard campaign={workingOnCampaign} />
+          </div>
+
+          {/* Pinned to the column foot, so the slack opens above it. */}
+          <div className="mt-auto flex flex-col">
+            <SectionHead>Featured from the Market</SectionHead>
+            <FeaturedFromMarket />
+          </div>
+        </div>
+      </div>
+
+      {/* The extra head gap absorbs the hand's card shadows, which reach
+          above the card tops and would otherwise eat the optical spacing. */}
+      <div className="mt-[52px]">
+        <SectionHead className="mb-[22px]">Your characters</SectionHead>
+        <CharacterHand characters={characters || []} maxSlots={user?.max_slots ?? 4} />
+      </div>
+    </div>
+  )
+}

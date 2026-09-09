@@ -21,14 +21,16 @@ from .schemas import (
     CampaignSetRoleResponse,
     HeroImageAssetInfo,
 )
-from modules.session.api.schemas import (
-    CreateSessionRequest, SessionResponse
-)
-from modules.session.application.queries import GetSessionById
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
+from modules.game.dependencies.providers import get_game_repository
+from modules.game.repositories.game_repository import GameRepository
+from modules.game.application.commands import EndGame
+from modules.game.domain.game_aggregate import EndReason
+from modules.library.dependencies.providers import get_asset_repository
+from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.campaign.application.commands import (
     CreateCampaign,
     UpdateCampaign,
@@ -109,8 +111,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
     username/character detail (same source the dashboard's member list uses).
     Without them, ``members`` is left empty.
     """
-    # Campaign now only stores session_ids, not full session objects
-    # Frontend should fetch sessions separately from /api/sessions/campaign/{id}
+    # Sessions are fetched separately from /api/sessions/campaign/{id}
 
     # Look up DM screen name if user_repo provided
     dm_id = campaign.dm_id
@@ -136,13 +137,14 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
+        last_played_at=campaign.last_played_at,
+        max_players=campaign.max_players,
         sessions=[],  # Sessions fetched separately via session module
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
         member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
         members=members,
         total_sessions=campaign.get_total_sessions(),
-        active_sessions=0,  # TODO: Query session module for active count
         invited_count=campaign.get_invited_count(),
         player_count=campaign.get_player_count()
     )
@@ -169,37 +171,14 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: Option
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
+        last_played_at=campaign.last_played_at,
+        max_players=campaign.max_players,
         total_sessions=campaign.get_total_sessions(),
-        active_sessions=0,  # TODO: Query session module for active count
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
         member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
         invited_count=campaign.get_invited_count()
     )
-
-# Session is a child of campaign so we'll define the POST here
-@router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(
-    request: CreateSessionRequest,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    campaign_repo: CampaignRepository = Depends(campaign_repository),
-    event_manager: EventManager = Depends(get_event_manager)
-):
-    """Create a new session within a campaign"""
-
-    try:
-        command = CreateSession(session_repo, campaign_repo, event_manager)
-        session = await command.execute(
-            name=request.name,
-            campaign_id=request.campaign_id,
-            host_id=user_id,
-            max_players=request.max_players
-        )
-        return GetSessionById(session_repo).execute(session.id)  # type: ignore[arg-type]
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
 
 # Campaign endpoints
 @router.post("/", response_model=CampaignResponse)
@@ -211,7 +190,7 @@ async def create_campaign(
     event_manager: EventManager = Depends(get_event_manager),
     s3_service: S3Service = Depends(get_s3_service)
 ):
-    """Create a new campaign, optionally with an initial session"""
+    """Create a new campaign, together with the session it plays through"""
     try:
         command = CreateCampaign(campaign_repo)
         campaign = command.execute(
@@ -219,17 +198,17 @@ async def create_campaign(
             title=request.title,
             description=request.description or "",
             hero_image=request.hero_image,
-            hero_image_asset_id=UUID(request.hero_image_asset_id) if request.hero_image_asset_id else None
+            hero_image_asset_id=UUID(request.hero_image_asset_id) if request.hero_image_asset_id else None,
+            max_players=request.max_players
         )
 
-        # Always create a session with the campaign
-        session_name = request.session_name.strip() if request.session_name else None
+        # A campaign is born with its session and keeps that one for life — this
+        # is the only place one is created. Without it the campaign
+        # would have nothing to start, and every read surface assumes it exists.
         session_command = CreateSession(session_repo, campaign_repo, event_manager)
         await session_command.execute(
-            name=session_name,
             campaign_id=campaign.id,
-            host_id=user_id,
-            max_players=8
+            host_id=user_id
         )
 
         # Re-fetch to populate hero_image_asset_meta from eager-loaded relationship
@@ -250,45 +229,10 @@ async def get_user_campaigns(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    event_manager: EventManager = Depends(get_event_manager),
     s3_service: S3Service = Depends(get_s3_service)
 ):
     """Get all campaigns where user is host or member"""
     try:
-        # Create demo campaign for first-time users (only once per account)
-        if not current_user.has_received_demo:
-            DEMO_CAMPAIGN_TEMPLATE = {
-                "title": "Shadows of the Astral Forge",
-                "description": "The world of Elyndor has been thrown off balance after a celestial fracture split the night sky, showering the land with star-shards—ancient cosmic fragments pulsing with unstable energy. These shards have awakened long-dormant ruins, warped creatures into monstrous forms, and drawn power-hungry factions into open conflict.\n\nAt the heart of the chaos lies the Astral Forge, an ancient floating sanctum said to predate the gods themselves. Legends speak of its power to reshape reality—or unmake it entirely. Now, with star-shards acting as keys to its gates, the race is on.\n\nYour party begins as a ragtag group of outcasts, each touched by the celestial event in strange and personal ways. As you delve into crumbling temples, forge uneasy alliances, and battle eldritch horrors, you'll uncover the true nature of the shards—and the terrible cost of wielding their power.",
-                "hero_image": "/floating-city.png",
-                "session_name": "Demo Session"
-            }
-            try:
-                command = CreateCampaign(campaign_repo)
-                campaign = command.execute(
-                    host_id=current_user.id,
-                    title=DEMO_CAMPAIGN_TEMPLATE["title"],
-                    description=DEMO_CAMPAIGN_TEMPLATE["description"],
-                    hero_image=DEMO_CAMPAIGN_TEMPLATE["hero_image"]
-                )
-
-                # Always create session with campaign
-                session_command = CreateSession(session_repo, campaign_repo, event_manager)
-                await session_command.execute(
-                    name=DEMO_CAMPAIGN_TEMPLATE["session_name"],
-                    campaign_id=campaign.id,
-                    host_id=current_user.id,
-                    max_players=8
-                )
-            except Exception:
-                # Don't fail the request if demo creation fails
-                pass
-
-            # Mark user as having received demo (even if creation failed, don't retry)
-            current_user.has_received_demo = True
-            user_repo.save(current_user)
-
         query = GetUserCampaigns(campaign_repo)
         campaigns = query.execute(current_user.id)
 
@@ -363,12 +307,11 @@ async def update_campaign(
     request: CampaignUpdateRequest,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ):
-    """Update campaign details and optionally current session name"""
+    """Update campaign details"""
     try:
-        command = UpdateCampaign(campaign_repo, session_repo)
+        command = UpdateCampaign(campaign_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
             host_id=user_id,
@@ -376,7 +319,7 @@ async def update_campaign(
             description=request.description,
             hero_image=request.hero_image,
             hero_image_asset_id=request.hero_image_asset_id if request.hero_image_asset_id is not None else "UNSET",
-            session_name=request.session_name
+            max_players=request.max_players
         )
 
         # Re-fetch to populate hero_image_asset_meta if asset changed
@@ -397,18 +340,41 @@ async def delete_campaign(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
+    asset_repo: MediaAssetRepository = Depends(get_asset_repository),
     event_manager: EventManager = Depends(get_event_manager)
 ):
     """
-    Delete campaign.
+    Delete campaign (host only).
 
-    Only allows deletion if there are no ACTIVE sessions.
-    Releases all character locks and cascade-deletes sessions/members.
+    A running game is a step on the way, not a refusal: it is ended first —
+    the real EndGame with EndReason.SYSTEM, so its ETL lands what outlives the
+    campaign (asset settings, character colours) and the room close sends
+    everyone home, with no "game has ended" toast (campaign_deleted is itself
+    silent: a cache invalidation, not a notification) — and then the campaign
+    is deleted, its session, party and games cascading with it. Two commands composed here, the way the create route
+    composes CreateCampaign and CreateSession.
+
+    The end acts as the CALLER, not as the game's host, so a member who may not
+    delete the campaign cannot end its game by asking for a delete: EndGame
+    refuses them before DeleteCampaign would. DeleteCampaign keeps its own
+    open-game refusal as the backstop — it now fires only for a game EndGame
+    could not close (STARTING, ENDING), which is a 400 rather than a cascade
+    under an open room.
     """
     try:
-        command = DeleteCampaign(campaign_repo, session_repo, character_repo, event_manager)
+        open_game = game_repo.get_open_game_for_campaign(campaign_id)
+        if open_game:
+            end_game = EndGame(
+                game_repo, session_repo, user_repo, character_repo,
+                campaign_repo, event_manager, asset_repo
+            )
+            await end_game.execute(open_game.id, host_id=user_id, reason=EndReason.SYSTEM)
+
+        command = DeleteCampaign(campaign_repo, game_repo, character_repo, event_manager)
         success = await command.execute(campaign_id, user_id)
 
         if success:
@@ -479,7 +445,8 @@ async def accept_campaign_invite(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository)
 ):
     """
     Accept a campaign invite (player only).
@@ -487,7 +454,7 @@ async def accept_campaign_invite(
     Automatically adds the player to any active sessions in the campaign.
     """
     try:
-        command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, session_repo)
+        command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, session_repo, game_repo)
         campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=user_id
@@ -621,7 +588,7 @@ async def select_character_for_campaign(
     character_repo: CharacterRepository = Depends(get_character_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    game_repo: GameRepository = Depends(get_game_repository)
 ):
     """
     Select a character for use in this campaign.
@@ -632,7 +599,7 @@ async def select_character_for_campaign(
     Domain Rule: A character can only be active in one campaign at a time.
     """
     try:
-        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager, session_repo)
+        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager, game_repo)
         character = await command.execute(
             campaign_id=campaign_id,
             user_id=user_id,
@@ -653,7 +620,7 @@ async def release_character_from_campaign(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
-    session_repo: SessionRepository = Depends(get_session_repository),
+    game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
 ):
@@ -666,7 +633,7 @@ async def release_character_from_campaign(
     Domain Rule: Cannot release character while a session is active.
     """
     try:
-        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, session_repo, user_repo, event_manager)
+        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, game_repo, user_repo, event_manager)
         character = await command.execute(
             campaign_id=campaign_id,
             user_id=user_id

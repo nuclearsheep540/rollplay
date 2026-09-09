@@ -24,16 +24,31 @@ import { getEventConfig } from '../config/eventConfig'
  * @param {({type, message}) => void} showToast - Toast dispatcher from
  *   the caller's toast provider.
  */
-export function useAuthenticatedEvents(userId, showToast) {
+export function useAuthenticatedEvents(userId, showToast, addPulseEvent) {
   const invalidation = useEventQueryInvalidation()
+
+  // Any event the server flagged reaches the pulse, whatever its type — the
+  // decision of what is pulse-worthy belongs to the event's factory, not to a
+  // list of types maintained here.
+  const pulse = (message) => {
+    if (message.show_pulse && addPulseEvent && message.pulse_entry) {
+      addPulseEvent(message.pulse_entry)
+    }
+  }
 
   const toast = (eventType, message, bodyFactory) => {
     if (!message.show_toast) return
     const config = getEventConfig(eventType)
-    showToast({
-      type: config.toastType,
-      message: bodyFactory ? bodyFactory(config, message.data) : config.toastMessage,
-    })
+    // toastMessage is usually a constant string, but an event whose wording
+    // depends on its payload (a game that has a name, say) declares a function
+    // instead. Resolving it here keeps that choice in the config rather than
+    // making every caller pass a bodyFactory for the same reason.
+    const body = bodyFactory
+      ? bodyFactory(config, message.data)
+      : typeof config.toastMessage === 'function'
+        ? config.toastMessage(message.data)
+        : config.toastMessage
+    showToast({ type: config.toastType, message: body })
   }
 
   const handlers = {
@@ -58,6 +73,15 @@ export function useAuthenticatedEvents(userId, showToast) {
       invalidation.invalidateNotifications()
       toast('friend_removed', m)
     },
+
+    // ── Presence events ──────────────────────────────────────────────
+    // is_online is computed on read, so a refetch is what repaints the dots.
+    friend_online: (m) => {
+      invalidation.invalidateFriendships()
+      toast('friend_online', m, (c, d) => c.panelMessage(d))
+      pulse(m)
+    },
+    friend_offline: () => invalidation.invalidateFriendships(),
 
     // ── Buzz events (fun notification, no state refresh) ─────────────
     friend_buzzed: (m) => toast('friend_buzzed', m, (c, d) => c.panelMessage(d)),
@@ -110,29 +134,27 @@ export function useAuthenticatedEvents(userId, showToast) {
       invalidation.invalidateNotifications()
       toast('session_started', m)
     },
-    session_paused: (m) => {
+    // The SYSTEM take-down (expiry sweeper, admin CLI) — repaint only, never
+    // a toast: from a player's side nothing happened.
+    session_paused: () => {
       invalidation.invalidateCampaigns()
       invalidation.invalidateNotifications()
-      toast('session_paused', m)
     },
-    session_finished: (m) => {
+    // The host said when the next game is (or cleared it). Non-hosts only.
+    session_scheduled: (m) => {
       invalidation.invalidateCampaigns()
       invalidation.invalidateNotifications()
-      toast('session_finished', m)
+      // Same sentence in the toast and the feed — the date has to be rendered
+      // from the payload either way, so there is nothing to say twice.
+      toast('session_scheduled', m, (config, data) => config.panelMessage(data))
+    },
+    // The host pressed End game. Only non-hosts receive this.
+    session_ended: (m) => {
+      invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
+      toast('session_ended', m)
     },
     campaign_deleted: () => invalidation.invalidateCampaigns(),
-
-    // ── Legacy game event names (backward compatibility) ─────────────
-    game_created: () => invalidation.invalidateCampaigns(),
-    game_started: (m) => {
-      invalidation.invalidateCampaigns()
-      toast('game_started', m)
-    },
-    game_ended: (m) => {
-      invalidation.invalidateCampaigns()
-      toast('game_ended', m)
-    },
-    game_finished: () => invalidation.invalidateCampaigns(),
 
     // ── Character selection (silent — cache invalidation only) ───────
     campaign_character_selected: () => {

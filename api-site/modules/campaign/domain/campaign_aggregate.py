@@ -22,8 +22,11 @@ class CampaignAggregate:
     """
     Campaign Aggregate Root
 
-    Campaigns organize sessions and manage players.
-    Session is now a separate aggregate - Campaign only stores session_ids.
+    Campaigns organize play and manage players. A campaign has exactly ONE
+    session, for its whole life — its own aggregate, referenced by id, read from
+    the sessions table's campaign_id foreign key and never stored on the campaign
+    row. Settings that describe how the game runs (the seat count) live here, on
+    the durable thing, and are read into the game at every start.
 
     Membership:
     - Each user has exactly one role per campaign (enforced by unique constraint).
@@ -39,6 +42,12 @@ class CampaignAggregate:
     updated_at: datetime
     hero_image_asset_id: Optional[UUID] = None
     hero_image_asset_meta: Optional[HeroImageAssetMeta] = None
+    # When this campaign was last played, stamped when a session goes live.
+    # Distinct from updated_at, which tracks edits to the campaign itself.
+    last_played_at: Optional[datetime] = None
+    # Seats at the table (1-8). Pushed into the game at every start, so an edit
+    # made while a game is running takes effect the next time it runs.
+    max_players: int = 8
     session_ids: List[UUID] = field(default_factory=list)
     members: Dict[UUID, CampaignRole] = field(default_factory=dict)
 
@@ -49,7 +58,8 @@ class CampaignAggregate:
         description: str,
         created_by: UUID,
         hero_image: Optional[str] = None,
-        hero_image_asset_id: Optional[UUID] = None
+        hero_image_asset_id: Optional[UUID] = None,
+        max_players: int = 8
         ):
         """Create new campaign with business rules validation"""
         if not title or not title.strip():
@@ -76,9 +86,23 @@ class CampaignAggregate:
             created_by=created_by,
             created_at=now,
             updated_at=now,
+            max_players=cls._validate_max_players(max_players),
             session_ids=[],
             members={created_by: CampaignRole.DM},
         )
+
+    @staticmethod
+    def _validate_max_players(max_players: int) -> int:
+        """Validate the seat count is within the range the game supports (1-8).
+
+        api-game builds its seat layout from this number, so anything outside
+        the range would produce a table the runtime cannot render.
+        """
+        if not isinstance(max_players, int):
+            raise ValueError("max_players must be an integer")
+        if max_players < 1 or max_players > 8:
+            raise ValueError("max_players must be between 1 and 8")
+        return max_players
 
     # --- Role Management ---
 
@@ -144,27 +168,26 @@ class CampaignAggregate:
 
     # --- Session Management ---
 
+    # session_ids is read-derived from the sessions table's campaign_id foreign
+    # key, so this method validates and adjusts the in-memory view only. It
+    # deliberately leaves updated_at alone: a session's lifecycle is not an edit
+    # to the campaign, and the card that reads updated_at means "last edited".
+
     def add_session(self, session_id: UUID) -> None:
-        """Add a session reference to this campaign."""
+        """Attach this campaign's session — the invariant is exactly one.
+
+        A second session would give the campaign two sets of token boards and
+        two adventure logs with no rule for which the game starts from.
+        """
         if session_id in self.session_ids:
             raise ValueError("Session already belongs to this campaign")
 
-        max_sessions_per_campaign = 20
-        if len(self.session_ids) >= max_sessions_per_campaign:
-            raise ValueError(f"Campaign cannot exceed {max_sessions_per_campaign} sessions")
+        if self.session_ids:
+            raise ValueError("Campaign already has a session")
 
         self.session_ids.append(session_id)
-        self.update_timestamp()
 
-    def remove_session(self, session_id: UUID) -> bool:
-        """Remove a session reference from this campaign."""
-        if session_id in self.session_ids:
-            self.session_ids.remove(session_id)
-            self.update_timestamp()
-            return True
-        return False
-
-    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET", hero_image_asset_id: str = "UNSET"):
+    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET", hero_image_asset_id: str = "UNSET", max_players: Optional[int] = None):
         """Update campaign details with business rules"""
         if title is not None:
             normalized_title = title.strip()
@@ -190,19 +213,25 @@ class CampaignAggregate:
             if self.hero_image:
                 self.hero_image_asset_id = None
 
+        if max_players is not None:
+            self.max_players = self._validate_max_players(max_players)
+
         self.update_timestamp()
 
     def update_timestamp(self):
         """Update the last modified timestamp"""
         self.updated_at = datetime.utcnow()
 
+    def mark_played(self):
+        """Stamp the campaign as played (a session went live).
+
+        Deliberately does not touch updated_at: playing is not editing.
+        """
+        self.last_played_at = datetime.utcnow()
+
     def get_total_sessions(self) -> int:
         """Get total number of sessions in campaign"""
         return len(self.session_ids)
-
-    def can_be_deleted(self) -> bool:
-        """Business rule: Campaign can only be deleted if no sessions exist."""
-        return len(self.session_ids) == 0
 
     # --- Membership Management ---
 

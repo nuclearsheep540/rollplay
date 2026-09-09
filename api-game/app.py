@@ -323,101 +323,6 @@ async def update_map_config_scoped(room_id: str, request: dict):
 
     return {"success": True, "pc_token_scale": pc_token_scale}
 
-@app.put("/game/{room_id}/seats")
-async def update_seat_count(room_id: str, request: dict):
-    """Update the maximum number of seats for a game room and handle displaced players"""
-    try:
-        check_room = await GameService.get_room(id=room_id)
-        max_players = request.get("max_players")
-        updated_by = request.get("updated_by")
-        displaced_players = request.get("displaced_players", [])
-        
-        # Validate seat count
-        if not isinstance(max_players, int) or max_players < 1 or max_players > 8:
-            raise HTTPException(status_code=400, detail="Seat count must be between 1 and 8")
-        
-        # Update seat count in database
-        await GameService.update_seat_count(room_id, max_players)
-        
-        # Handle displaced players - move them back to lobby
-        for displaced_player in displaced_players:
-            displaced_user_id = displaced_player.get("userId")
-            if displaced_user_id:
-                try:
-                    logger.info(f"Moving {displaced_user_id} from seat {displaced_player.get('seatId')} to lobby")
-
-                    # Update player's party status in ConnectionManager
-                    await connection_manager.remove_player_from_party(room_id, displaced_user_id)
-
-                    # Send displacement notification to the player
-                    displacement_message = {
-                        "event_type": "player_displaced",
-                        "data": {
-                            "user_id": displaced_user_id,
-                            "reason": "seat_reduction",
-                            "message": "You have been moved to the lobby due to seat count reduction",
-                            "former_seat": displaced_player.get("seatId", "unknown")
-                        }
-                    }
-                    await connection_manager.send_to_player(room_id, displaced_user_id, displacement_message)
-
-                    # Log displacement to adventure log
-                    log_message = f"{displaced_user_id} was moved to lobby due to seat reduction"
-                    await adventure_log.add_log_entry(
-                        room_id=room_id,
-                        message=log_message,
-                        log_type=LogType.SYSTEM,
-                        from_player="System"
-                    )
-
-                except Exception as e:
-                    logger.error(f"Error handling displaced player {displaced_user_id}: {str(e)}")
-                    # Continue processing other players even if one fails
-        
-        # Get current seat layout from database after displacement
-        try:
-            # Get updated room data to get actual seat layout
-            updated_room = await GameService.get_room(id=room_id)
-            current_seats = updated_room.get("seat_layout", [])
-            
-            # Create new_seats array matching the new max_players count
-            new_seats = []
-            for i in range(max_players):
-                if i < len(current_seats):
-                    # Keep existing player if they weren't displaced
-                    player_in_seat = current_seats[i]
-                    # Check if this player was displaced
-                    was_displaced = any(dp.get("userId") == player_in_seat for dp in displaced_players)
-                    new_seats.append("empty" if was_displaced else player_in_seat)
-                else:
-                    new_seats.append("empty")
-            
-            seat_change_message = {
-                "event_type": "seat_count_change", 
-                "data": {
-                    "max_players": max_players,
-                    "new_seats": new_seats,
-                    "updated_by": updated_by,
-                    "displaced_players": displaced_players
-                }
-            }
-            await connection_manager.update_room_data(room_id, seat_change_message)
-            logger.info(f"Seat count updated successfully to {max_players}, displaced {len(displaced_players)} players")
-        except Exception as e:
-            logger.warning(f"Error broadcasting seat count change: {str(e)}")
-            # Don't fail the entire operation if broadcast fails
-        
-        return {
-            "success": True,
-            "room_id": room_id,
-            "max_players": max_players,
-            "updated_by": updated_by,
-            "displaced_players": displaced_players
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get("/game/{room_id}")
 async def gameservice_get(room_id):
     check_room = await GameService.get_room(id=room_id)
@@ -628,7 +533,7 @@ async def create_session(request: SessionStartPayload):
 
     Request:
     {
-        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "game_id": "550e8400-e29b-41d4-a716-446655440000",
         "dm_user_id": "uuid-of-dm",
         "max_players": 8
     }
@@ -636,13 +541,13 @@ async def create_session(request: SessionStartPayload):
     Response:
     {
         "success": true,
-        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "game_id": "550e8400-e29b-41d4-a716-446655440000",
         "message": "Game created successfully for session"
     }
     """
     try:
         # Check if game already exists for this session
-        existing = await GameService.get_room(request.session_id)
+        existing = await GameService.get_room(request.game_id)
         if existing:
             raise HTTPException(
                 status_code=409,
@@ -702,22 +607,22 @@ async def create_session(request: SessionStartPayload):
             urls_expire_at=request.urls_expire_at or ""
         )
 
-        # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
-        game_id = await GameService.create_room(settings, room_id=request.session_id)
+        # The game id IS the MongoDB _id — one identifier for the game and its room
+        game_id = await GameService.create_room(settings, room_id=request.game_id)
 
-        logger.info(f"Created game {game_id} for session {request.session_id} with {len(request.joined_user_ids)} joined players")
+        logger.info(f"Created room for game {game_id} with {len(request.joined_user_ids)} joined players")
 
         # Restore map from previous session if available
         if request.map_config and request.map_config.filename:
             try:
                 map_config = request.map_config
                 restored_map = MapSettings(
-                    room_id=request.session_id,
+                    room_id=request.game_id,
                     uploaded_by="system",
                     map_config=map_config,
                 )
-                await map_service.set_active_map(request.session_id, restored_map)
-                logger.info(f"Restored map '{map_config.filename}' for session {request.session_id}")
+                await map_service.set_active_map(request.game_id, restored_map)
+                logger.info(f"Restored map '{map_config.filename}' for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"Map restoration failed (non-fatal): {e}")
 
@@ -726,20 +631,20 @@ async def create_session(request: SessionStartPayload):
             try:
                 image_config = request.image_config
                 restored_image = ImageSettings(
-                    room_id=request.session_id,
+                    room_id=request.game_id,
                     loaded_by="system",
                     image_config=image_config,
                 )
-                await image_service.set_active_image(request.session_id, restored_image)
-                logger.info(f"Restored image '{image_config.filename}' for session {request.session_id}")
+                await image_service.set_active_image(request.game_id, restored_image)
+                logger.info(f"Restored image '{image_config.filename}' for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"Image restoration failed (non-fatal): {e}")
 
         # Restore active_display from previous session
         if request.active_display:
             try:
-                await GameService.set_active_display(request.session_id, request.active_display)
-                logger.info(f"Restored active_display '{request.active_display}' for session {request.session_id}")
+                await GameService.set_active_display(request.game_id, request.active_display)
+                logger.info(f"Restored active_display '{request.active_display}' for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"active_display restoration failed (non-fatal): {e}")
 
@@ -747,16 +652,16 @@ async def create_session(request: SessionStartPayload):
         if request.adventure_log:
             try:
                 restored_count = await adventure_log.restore_room_logs(
-                    request.session_id,
+                    request.game_id,
                     [entry.model_dump() for entry in request.adventure_log],
                 )
-                logger.info(f"Restored {restored_count} adventure log entries for session {request.session_id}")
+                logger.info(f"Restored {restored_count} adventure log entries for game {request.game_id}")
             except Exception as e:
                 logger.warning(f"Adventure log restoration failed (non-fatal): {e}")
 
         return SessionStartResponse(
             success=True,
-            session_id=game_id,  # Return MongoDB document ID as session_id for api-site
+            game_id=game_id,  # The MongoDB document id, echoed so api-site can assert it matches
             message="Game created successfully for session"
         )
     except HTTPException:
@@ -772,9 +677,9 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
     Return final game state from MongoDB.
 
     If validate_only=True: Fetch state but DO NOT delete game (Phase 1 of fail-safe pattern)
-    If validate_only=False: Deprecated - use DELETE /game/session/{session_id} instead
+    If validate_only=False: Deprecated - use DELETE /game/session/{game_id} instead
 
-    This endpoint is called by api-site when pausing/finishing a session.
+    This endpoint is called by api-site when ending a game.
     The validate_only parameter allows for fail-safe two-phase commit:
     1. Fetch state (this endpoint with validate_only=True)
     2. Write to PostgreSQL
@@ -782,7 +687,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
     Request:
     {
-        "session_id": "550e8400-e29b-41d4-a716-446655440000"
+        "game_id": "550e8400-e29b-41d4-a716-446655440000"
     }
 
     Response:
@@ -795,8 +700,8 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
     }
     """
     try:
-        # Get game room from MongoDB using session_id (which maps to MongoDB _id)
-        room = await GameService.get_room(request.session_id)
+        # Get the room from MongoDB by the game id (which is the document _id)
+        room = await GameService.get_room(request.game_id)
         if not room:
             raise HTTPException(status_code=404, detail="Game not found for session")
 
@@ -829,12 +734,12 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 duration_minutes = int(duration.total_seconds() / 60)
 
         # Get adventure log count
-        log_count = await adventure_log.get_room_log_count(request.session_id)
+        log_count = await adventure_log.get_room_log_count(request.game_id)
 
         # Full adventure log for cold storage, chronological (oldest first).
         # Bounded by the service's 200-per-room cap; timestamps go out as
         # ISO-8601 with explicit UTC offset (stored naive-UTC in Mongo).
-        raw_logs = await adventure_log.get_room_logs(request.session_id, limit=200)
+        raw_logs = await adventure_log.get_room_logs(request.game_id, limit=200)
         log_entries = []
         for log_doc in sorted(raw_logs, key=lambda log_doc: log_doc.get("log_id") or 0):
             log_timestamp = log_doc.get("timestamp")
@@ -872,19 +777,19 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                     token_boards[board_asset_id] = salvaged_tokens
 
         # Get active map state for ETL — contract data is nested under map_config
-        active_map = await map_service.get_active_map(request.session_id)
+        active_map = await map_service.get_active_map(request.game_id)
         map_state = None
         if active_map and active_map.get("map_config", {}).get("filename"):
             map_state = MapConfig(**active_map["map_config"])
 
         # Get active image state for ETL — contract data is nested under image_config
-        active_image = await image_service.get_active_image(request.session_id)
+        active_image = await image_service.get_active_image(request.game_id)
         image_state = None
         if active_image and active_image.get("image_config", {}).get("filename"):
             image_state = ImageConfig(**active_image["image_config"])
 
         # Get active_display from game session
-        active_display = await image_service.get_active_display(request.session_id)
+        active_display = await image_service.get_active_display(request.game_id)
 
         # Build final state — extract __master_volume from audio_state (it's a float,
         # not an AudioChannelState) before passing to the typed contract
@@ -913,7 +818,6 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
             session_stats=SessionStats(
                 duration_minutes=duration_minutes,
                 total_logs=log_count,
-                max_players=room.get("max_players", 0),
             ),
             audio_state=raw_audio_state,
             audio_track_config=room.get("audio_track_config", {}),
@@ -928,10 +832,10 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
         # If not validate_only, delete the game (deprecated flow)
         if not validate_only:
-            logger.warning(f"Using deprecated delete flow for session {request.session_id}")
-            await GameService.delete_room(request.session_id)
+            logger.warning(f"Using deprecated delete flow for game {request.game_id}")
+            await GameService.delete_room(request.game_id)
 
-        logger.info(f"Returned final state for session {request.session_id} (validate_only={validate_only})")
+        logger.info(f"Returned final state for game {request.game_id} (validate_only={validate_only})")
 
         return SessionEndResponse(
             success=True,

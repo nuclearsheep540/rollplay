@@ -20,7 +20,6 @@ import {
   handleColorChange,
   handleAdventureLogRemoved,
   handleRoleChange,
-  handleSeatCountChange,
   handlePlayerDisplaced,
   handleSystemMessage,
   handleSessionEnded,
@@ -109,9 +108,6 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
             break;
           case 'seat_change':
             handleSeatChange(data, handlers);
-            break;
-          case 'seat_count_change':
-            handleSeatCountChange(data, handlers);
             break;
           case 'player_character_changed':
             handlePlayerCharacterChanged(data, handlers);
@@ -213,7 +209,7 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
   const sendFunctions = webSocket && isConnected
     ? createSendFunctions(webSocket, isConnected, roomId, thisUserId)
     : {
-        sendSeatChange: noop, sendSeatCountChange: noop, sendCombatStateChange: noop,
+        sendSeatChange: noop, sendCombatStateChange: noop,
         sendPlayerKick: noop, sendDiceRoll: noop, sendClearSystemMessages: noop,
         sendClearAllMessages: noop, sendDicePrompt: noop, sendDicePromptClear: noop,
         sendInitiativePromptAll: noop, sendColorChange: noop,

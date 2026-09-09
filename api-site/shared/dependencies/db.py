@@ -38,7 +38,7 @@ def configure_mappers():
     from modules.characters.model.character_feat_model import CharacterFeatAcquisition
     from modules.characters.model.character_choices_log_model import CharacterChoiceLog
     from modules.campaign.model.campaign_model import Campaign
-    from modules.campaign.model.session_model import Session
+    from modules.session.model.session_model import Session
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.friendship.model.friend_request_model import FriendRequestModel
     from modules.library.model.asset_model import MediaAsset

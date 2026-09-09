@@ -16,6 +16,8 @@ import { createContext, useContext } from 'react'
  *   showScreenNameModal, setShowScreenNameModal
  *   handleLogout, setError
  *   toasts, showToast, dismissToast
+ *   openSocialPanel — asks the header's social panel to open
+ *   pulseEvents — live events the server flagged for Home's pulse line
  *
  * Pages should not call `useAuth()` / `useToast()` / `useEvents()`
  * directly — the layout owns one instance of each so the WebSocket

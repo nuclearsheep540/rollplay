@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 
-from shared.dependencies.auth import get_current_user_from_token, get_current_user_id
+from shared.dependencies.auth import get_current_user_from_token, get_current_user_id, is_admin_email
 from shared.jwt_helper import JWTHelper
 from .schemas import (
     UserEmailRequest,
@@ -31,14 +31,22 @@ from shared.services.s3_service import get_s3_service
 
 
 class ScreenNameUpdateRequest(BaseModel):
-    screen_name: str
+    # Mirrors UserAggregate.update_screen_name's rule, rejected at the boundary
+    # rather than only in the domain.
+    screen_name: str = Field(..., min_length=1, max_length=30)
 
 
 router = APIRouter()
 
 
 def _to_user_response(user: UserAggregate) -> UserResponse:
-    """Helper to convert UserAggregate to UserResponse"""
+    """Convert UserAggregate to UserResponse.
+
+    `is_admin` is enrichment at the response boundary, not domain state: the
+    aggregate never carries it and nothing persists it. The frontend uses it to
+    decide what to SHOW; every admin route still checks require_admin, so a
+    forged client flag grants nothing.
+    """
     return UserResponse(
         id=str(user.id),
         email=user.email,
@@ -50,6 +58,9 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
         created_at=user.created_at,
         last_login=user.last_login,
         color=user.color,
+        max_slots=user.max_slots,
+        is_admin=is_admin_email(user.email),
+        pulse_events=user.active_pulse_events(),
     )
 
 
@@ -64,6 +75,7 @@ def _to_public_user_response(user: UserAggregate) -> PublicUserResponse:
         account_identifier=user.account_identifier,
         created_at=user.created_at,
         color=user.color,
+        max_slots=user.max_slots,
     )
 
 
@@ -559,8 +571,7 @@ async def get_user_dashboard(
                 {
                     "id": str(campaign.id),
                     "name": campaign.title,
-                    "total_sessions": campaign.get_total_sessions(),
-                    "active_sessions": 0  # TODO: Query session module for active session count
+                    "total_sessions": campaign.get_total_sessions()
                 }
                 for campaign in dashboard_data['campaigns']
             ],

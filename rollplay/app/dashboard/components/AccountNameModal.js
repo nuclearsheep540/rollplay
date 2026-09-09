@@ -244,10 +244,14 @@ export default function AccountNameModal({ show, user, onComplete }) {
                   onChange={(e) => { setScreenName(e.target.value); setError(null) }}
                   onKeyDown={handleKeyPress}
                   placeholder="Enter your screen name..."
+                  maxLength={30}
                   className="w-full px-3 py-2 border rounded-sm focus:outline-none focus:ring-2 bg-surface-elevated border-border text-content-on-dark focus:ring-border-active focus:border-border-active"
                   disabled={submitting}
                   autoFocus={!needsAccountName}
                 />
+                <div className="text-xs mt-1 text-content-secondary">
+                  {screenName.length}/30 characters
+                </div>
                 <p className="text-xs text-content-secondary mt-1">
                   This is the name other players will see. You can change it later.
                 </p>

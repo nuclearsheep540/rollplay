@@ -5,166 +5,86 @@
 Session Aggregate - DDD Domain Model
 
 Ubiquitous Language:
-- Session = The scheduled/planned play instance (this aggregate)
-- Game = The live multiplayer experience (handled by api-game service)
+- Campaign = the authored story and its assets: the baseline every game starts from
+- Session  = who and when (this aggregate): the party and the plan for the next game
+- Game     = ONE play, from Start to End — its own aggregate, in modules/game
+- Party    = the session's people; a value inside this aggregate, never its own
 
-A Session is created, started, paused, and finished.
-When a Session is ACTIVE, a Game exists in MongoDB (api-game).
+Every campaign has exactly one session, for its whole life: created with the
+campaign, never replaced, never absent. It is the gatekeeper between a campaign,
+its people and its games.
+
+**It has no status and no play state.** A session cannot produce a token board,
+an adventure log or a screen — only a running game can, and every one of those
+now lives on the game that produced it. Liveness is likewise not stored here: a
+session is live exactly when it has an open game, which is a question for the
+game repository. A cached answer would be a second place asserting one fact.
+
+What it does own is the plan for the next game: when it is (`scheduled_at`) and
+what it is called (`next_game_name`). Both are intent about a game that has not
+happened, which is why they sit here and not on any game. Start takes the name;
+the date is cleared when the host ends the game it described.
 """
 
 from datetime import datetime
-from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
 
-class SessionStatus(str, Enum):
-    """
-    Session lifecycle status enumeration.
-
-    Sessions will need to have their state moved from
-    cold storage (PostgreSQL) into an active_session in the game service (MongoDB)
-    via an ETL to synchronize session/game state data.
-
-    We use these states to understand the session's lifecycle:
-
-    INACTIVE - Session has no current active game (can be resumed)
-    ACTIVE - Session has an active game running
-    STARTING - ETL pipeline has started, waiting for ACTIVE state
-    STOPPING - ETL pipeline has started, waiting for INACTIVE state
-    FINISHED - Session is permanently complete (cannot be resumed, preserved in history)
-    """
-
-    INACTIVE = "inactive"
-    ACTIVE = "active"
-    STARTING = "starting"
-    STOPPING = "stopping"
-    FINISHED = "finished"
-
-    def __str__(self) -> str:
-        return self.value
-
-    @classmethod
-    def from_string(cls, value: str) -> 'SessionStatus':
-        """Create SessionStatus from string value."""
-        for status in cls:
-            if status.value == value:
-                return status
-        raise ValueError(f"Invalid session status: {value}")
+MAX_NEXT_GAME_NAME_LENGTH = 100
 
 
 class SessionEntity:
     """
-    Session Entity - Complex Entity within Campaign Aggregate
+    Session Entity — the campaign's table.
 
-    Represents a scheduled play session. When ACTIVE, a live game exists
-    in MongoDB (api-game service) where players interact in real-time.
-
-    Note: Session is an entity owned by Campaign (ORM in campaign module),
-    but has enough behavior to warrant its own application layer module.
-
-    Roster Flow:
-    - Users are added to joined_users when session is created (auto-enrolled from campaign)
-    - User selects Character → character association tracked in session_joined_users table
-    - User enters game → character added to active_session (MongoDB)
-
-    Key Concepts:
-    - joined_users: Users in session roster (auto-enrolled from campaign)
-    - Character association: Tracked separately in session_joined_users table
-    - Active game: Handled by api-game service (MongoDB) when session is ACTIVE
+    Roster flow:
+    - Users are enrolled in joined_users when the session is created (from the campaign)
+    - A user selects a character → tracked in session_joined_users
+    - A user enters a game → their character reaches api-game through the start payload
     """
 
     def __init__(
         self,
         id: Optional[UUID] = None,
-        name: Optional[str] = None,
         campaign_id: Optional[UUID] = None,
         host_id: Optional[UUID] = None,
-        status: SessionStatus = SessionStatus.INACTIVE,
         created_at: Optional[datetime] = None,
-        started_at: Optional[datetime] = None,  # time ETL successfully started the session
-        stopped_at: Optional[datetime] = None,  # time ETL successfully stopped the session
-        urls_expire_at: Optional[datetime] = None,  # signed asset-URL lease deadline, stamped at signing time in StartSession
-        active_game_id: Optional[str] = None,  # MongoDB active_session objectID (when game is running)
+        scheduled_at: Optional[datetime] = None,  # when the next game is — cosmetic, see schedule()
+        next_game_name: Optional[str] = None,  # what the next game is called — consumed by Start
         joined_users: Optional[List[UUID]] = None,  # User IDs in roster (auto-enrolled from campaign)
-        max_players: int = 8,  # Seat count in active game (1-8)
-        audio_config: Optional[dict] = None,  # Persisted audio channel config (tracks, volume, looping)
-        spotify_config: Optional[dict] = None,  # Persisted DM Spotify BGM block (track/context/level) for ETL restoration
-        map_config: Optional[dict] = None,  # Persisted active map config (just asset_id for ETL restoration)
-        image_config: Optional[dict] = None,  # Persisted active image config (asset_id for ETL restoration)
-        active_display: Optional[str] = None,  # Which display was active: "map", "image", or None
-        adventure_log: Optional[list] = None,  # Persisted adventure log (LogEntry-shaped dicts, ≤200) for ETL restoration
-        map_token_state: Optional[dict] = None,  # Persisted token boards (asset_id -> list[MapToken dicts]) for ETL restoration
-        map_token_seed: Optional[dict] = None,  # Board-as-seeded snapshot per map — the start merge's diff base (decision 24)
     ):
         self.id = id
-        self.name = name if name else "Session 1"
         self.campaign_id = campaign_id
         self.host_id = host_id
-        self.status = status
         self.created_at = created_at
-        self.started_at = started_at
-        self.stopped_at = stopped_at
-        self.urls_expire_at = urls_expire_at
-        self.active_game_id = active_game_id
+        self.scheduled_at = scheduled_at
+        self.next_game_name = next_game_name
         self.joined_users = joined_users if joined_users is not None else []
-        self.max_players = self._validate_max_players(max_players)
-        self.audio_config = audio_config
-        self.spotify_config = spotify_config
-        self.map_config = map_config
-        self.image_config = image_config
-        self.active_display = active_display
-        self.adventure_log = adventure_log
-        self.map_token_state = map_token_state
-        self.map_token_seed = map_token_seed
-
-    @property
-    def is_locked(self) -> bool:
-        """
-        A session is locked if it has an active game or
-        is in a transitioning state.
-        """
-        return self.status in {
-            SessionStatus.ACTIVE,
-            SessionStatus.STARTING,
-            SessionStatus.STOPPING
-        }
-
-    @staticmethod
-    def _validate_max_players(max_players: int) -> int:
-        """Validate max_players is within allowed range (1-8)"""
-        if not isinstance(max_players, int):
-            raise ValueError("max_players must be an integer")
-        if max_players < 1 or max_players > 8:
-            raise ValueError("max_players must be between 1 and 8")
-        return max_players
 
     @classmethod
-    def create(cls, name: str, campaign_id: UUID, host_id: UUID, max_players: int = 8):
-        """Create new session with business rules validation"""
+    def create(cls, campaign_id: UUID, host_id: UUID):
+        """Create the campaign's session with business rules validation.
+
+        Unnamed and seatless by design: a campaign has exactly one session, so a
+        name would distinguish nothing, and the seat count is a campaign setting
+        (campaigns.max_players) read into every start payload.
+        """
 
         if not campaign_id:
             raise ValueError("Session must belong to a campaign")
         if not host_id:
             raise ValueError("Session must have a host")
 
-        # Session name defaults to "Session 1" if not provided
-        normalized_name = name.strip() if name else "Session 1"
-        if normalized_name and len(normalized_name) > 100:
-            raise ValueError("Session name too long (max 100 characters)")
-
         return cls(
             id=None,  # Will be set by repository
-            name=normalized_name,
             campaign_id=campaign_id,  # The campaign that spawned this session
             host_id=host_id,  # User ID (inherited from campaign host)
-            status=SessionStatus.INACTIVE,
             created_at=datetime.utcnow(),
             joined_users=[],
-            max_players=max_players
         )
 
-    # --- Roster Management ---
+    # --- Roster Management (the party) ---
 
     def remove_user(self, user_id: UUID) -> None:
         """
@@ -184,164 +104,59 @@ class SessionEntity:
         """Check if user is in the session roster."""
         return user_id in self.joined_users
 
-    # --- Status Queries ---
+    # --- The plan for the next game ---
 
-    def is_active(self) -> bool:
-        """Check if session currently has an active game running"""
-        return self.status == SessionStatus.ACTIVE
+    def schedule(self, scheduled_at: Optional[datetime], next_game_name: Optional[str] = None) -> None:
+        """Set or clear when the next game is and what it is called.
 
-    def can_delete(self) -> bool:
-        """Business rule: Session can only be deleted if INACTIVE or FINISHED"""
-        return self.status in [SessionStatus.INACTIVE, SessionStatus.FINISHED]
+        Cosmetic and communicative ONLY: nothing starts on this date, nobody is
+        reminded, and no rule is enforced by it. It records the table's intent so
+        players can align — facilitate, don't enforce, applied to coordination.
 
-    # --- Asset Reference Management ---
+        Whether a game is running is not this aggregate's to know, so the
+        idle-only rule is enforced by the command, which can ask the game
+        repository. What stays here is the shape of the data.
 
-    def remove_asset_references(self, asset_id_str: str) -> bool:
-        """Remove all references to a deleted asset from session configs.
-        Returns True if any references were removed."""
-        changed = False
-
-        # Audio config: remove channels referencing this asset
-        if self.audio_config:
-            channels_to_remove = [
-                ch_id for ch_id, ch in self.audio_config.items()
-                if ch.get("asset_id") == asset_id_str
-            ]
-            for ch_id in channels_to_remove:
-                del self.audio_config[ch_id]
-                changed = True
-
-        # Map config: clear if it references this asset
-        if self.map_config and self.map_config.get("asset_id") == asset_id_str:
-            self.map_config = {}
-            if self.active_display == "map":
-                self.active_display = None
-            changed = True
-
-        # Image config: clear if it references this asset
-        if self.image_config and self.image_config.get("asset_id") == asset_id_str:
-            self.image_config = {}
-            if self.active_display == "image":
-                self.active_display = None
-            changed = True
-
-        return changed
-
-    # --- Session Lifecycle Methods ---
-
-    def update_name(self, name: str) -> None:
-        """Update session name with validation"""
-        normalized_name = name.strip()
-        if not normalized_name:
-            raise ValueError("Session name cannot be empty")
-        if len(normalized_name) > 100:
-            raise ValueError("Session name too long (max 100 characters)")
-        self.name = normalized_name
-
-    def start(self) -> None:
+        Raises:
+            ValueError: the datetime is naive, or the name is too long. Naive
+                values are refused rather than assumed UTC — the whole point is
+                that everyone reads the same instant in their own zone.
         """
-        Begin session start process.
-        Sets status to STARTING - ETL pipeline will move to ACTIVE.
+        if scheduled_at is not None and scheduled_at.tzinfo is None:
+            raise ValueError("scheduled_at must be timezone-aware")
+
+        self.scheduled_at = scheduled_at
+        self.name_next_game(next_game_name)
+
+    def name_next_game(self, next_game_name: Optional[str]) -> None:
+        """Name the game the GM is planning. Blank clears it."""
+        if next_game_name is None:
+            self.next_game_name = None
+            return
+
+        trimmed = next_game_name.strip()
+        if len(trimmed) > MAX_NEXT_GAME_NAME_LENGTH:
+            raise ValueError(f"Game name must be {MAX_NEXT_GAME_NAME_LENGTH} characters or fewer")
+
+        self.next_game_name = trimmed or None
+
+    def consume_next_game_name(self) -> Optional[str]:
+        """Hand the planned name to the game that is starting, and forget it.
+
+        Called by StartGame once the game is live. The name belongs to that game
+        from then on: leaving it here would re-apply it to the following game
+        too, and a GM editing it afterwards would be editing the plan rather
+        than the night that happened.
         """
-        if self.status != SessionStatus.INACTIVE:
-            raise ValueError("Can only start sessions that are INACTIVE")
+        name = self.next_game_name
+        self.next_game_name = None
+        return name
 
-        # Validation removed - Host counts as participant
-        # Session can start with just host (0 player characters + 1 DM = valid)
-        # Will re-add proper validation when invite system is implemented
+    def clear_schedule(self) -> None:
+        """Forget the declared next game — the host has ended the one it named.
 
-        self.status = SessionStatus.STARTING
-
-    def activate(self, active_game_id: str, urls_expire_at: Optional[datetime] = None) -> None:
-        """Mark session as ACTIVE with its MongoDB game ID (called after successful start).
-
-        urls_expire_at is the signed asset-URL lease deadline, computed at signing time
-        (a few seconds before this call) — the expiry sweeper auto-pauses past it.
+        Deliberately unguarded: this runs inside the take-down, so the clear
+        lands while the game it described is being closed. Only the date is
+        cleared; the name left with the game at Start.
         """
-        if self.status != SessionStatus.STARTING:
-            raise ValueError("Can only activate STARTING sessions")
-
-        self.status = SessionStatus.ACTIVE
-        self.active_game_id = active_game_id
-        self.started_at = datetime.utcnow()
-        self.urls_expire_at = urls_expire_at
-
-    def pause(self) -> None:
-        """
-        Begin session pause process.
-        Sets status to STOPPING - ETL pipeline will move to INACTIVE.
-        """
-        if self.status != SessionStatus.ACTIVE:
-            raise ValueError("Can only pause sessions that are ACTIVE")
-
-        self.status = SessionStatus.STOPPING
-
-    def deactivate(self) -> None:
-        """Mark session as INACTIVE (called by ETL after successful pause)"""
-        if self.status != SessionStatus.STOPPING:
-            raise ValueError("Can only deactivate STOPPING sessions")
-
-        self.status = SessionStatus.INACTIVE
-        self.stopped_at = datetime.utcnow()
-        self.active_game_id = None  # Clear MongoDB game reference
-        self.urls_expire_at = None  # Lease ends with the game; re-stamped on next start
-
-    def finish(self) -> None:
-        """
-        Finish session permanently.
-        Can only be called on INACTIVE sessions (must pause first if active).
-        Sets status to FINISHED - session cannot be resumed.
-        """
-        if self.status != SessionStatus.INACTIVE:
-            raise ValueError("Can only finish INACTIVE sessions. Pause the session first.")
-
-        self.status = SessionStatus.FINISHED
-
-    def finish_from_active(self) -> None:
-        """
-        Begin finish process from ACTIVE state.
-        Sets status to STOPPING - ETL pipeline will call mark_finished().
-        Alternative flow: ACTIVE → finish_from_active() → STOPPING → mark_finished() → FINISHED
-        """
-        if self.status != SessionStatus.ACTIVE:
-            raise ValueError("Can only finish_from_active on ACTIVE sessions")
-
-        self.status = SessionStatus.STOPPING
-
-    def mark_finished(self) -> None:
-        """
-        Mark session as FINISHED (called by ETL after successful finish from ACTIVE state).
-        """
-        if self.status != SessionStatus.STOPPING:
-            raise ValueError("Can only mark STOPPING sessions as FINISHED")
-
-        self.status = SessionStatus.FINISHED
-        self.stopped_at = datetime.utcnow()
-        self.active_game_id = None  # Clear MongoDB game reference
-        self.urls_expire_at = None  # Lease ends with the game
-
-    # --- Error Recovery Methods ---
-
-    def abort_start(self) -> None:
-        """
-        Abort a failed start process. Reverts STARTING → INACTIVE.
-
-        Called when an error occurs after setting STARTING but before ACTIVE.
-        This prevents sessions from getting stuck in STARTING state.
-        """
-        if self.status != SessionStatus.STARTING:
-            raise ValueError("Can only abort_start sessions that are STARTING")
-
-        self.status = SessionStatus.INACTIVE
-
-    def abort_stop(self) -> None:
-        """
-        Abort a failed stop/pause process. Reverts STOPPING → ACTIVE.
-
-        Called when an error occurs after setting STOPPING but before INACTIVE/FINISHED.
-        This prevents sessions from getting stuck in STOPPING state.
-        """
-        if self.status != SessionStatus.STOPPING:
-            raise ValueError("Can only abort_stop sessions that are STOPPING")
-
-        self.status = SessionStatus.ACTIVE
+        self.scheduled_at = None

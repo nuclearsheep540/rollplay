@@ -33,7 +33,6 @@ export function useSetCharacterAvatar(characterId) {
     },
     onSuccess: (fresh) => {
       queryClient.setQueryData(['character', characterId], fresh)
-      queryClient.invalidateQueries({ queryKey: ['characters', 'me'] })
       queryClient.invalidateQueries({ queryKey: ['characters'] })
     },
   })

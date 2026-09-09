@@ -6,25 +6,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import gsap from 'gsap'
-import { useGSAP } from '@gsap/react'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { useAvatarImage } from '@/app/shared/hooks/useAvatarImage'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faTrash,
-  faLock,
-  faPlus,
-  faPenToSquare,
-} from '@fortawesome/free-solid-svg-icons'
+import { faPlus } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
-import Modal from '@/app/shared/components/Modal'
-import Spinner from '@/app/shared/components/Spinner'
-import { Button } from './shared/Button'
-import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
-import CharacterAvatarPane from '@/app/(authenticated)/character/components/CharacterAvatarPane'
-import CharacterSheet from '@/app/(authenticated)/character/components/CharacterSheet'
 
 // Parallelogram strip (tokens v3, decision 37) — the workshop tiles'
 // slant promoted to a true tiling. Each card's SHELL is the visible band
@@ -77,7 +64,7 @@ const STRIP_SEAM_SHADOW = `linear-gradient(${90 + STRIP_ANGLE_DEGREES}deg, rgba(
 
 // Strip card — a real component (not a render helper) because the focal
 // bias is a hook (decision 36). Greyscale-at-rest lives on the image layer
-// only, so the name and In Game badge stay crisp while the art desaturates.
+// only, so the name stays crisp while the art desaturates.
 function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = false }) {
   // Blob-cached by asset id rather than the presigned URL, so the strip
   // survives a characters refetch without re-downloading. Geometry here is a
@@ -119,7 +106,7 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
             saturate-0 at rest is the strip's greyscale skin; hover
             restores color (decision 37). THIS is the element the hover
             zoom scales: the art grows inside the fixed parallelogram
-            frame, so the title, badge, and seams never move. Focal bias
+            frame, so the title and seams never move. Focal bias
             (decision 36) rides backgroundPosition; absent ⇒ bg-center. */}
         <div
           className="absolute inset-0 bg-cover bg-center pointer-events-none saturate-0 group-hover:saturate-100 group-focus-visible:saturate-100 group-hover:scale-[1.05] group-focus-visible:scale-[1.05]"
@@ -146,8 +133,7 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
         {/* Name only (decision 37) — no meta line, no backplate. Bare text
             first per the plan; QA fallback is a whisper of text-shadow or
             a thin top scrim, never the band. Left offset clears the top
-            edge's slant start (derived from the strip angle); right offset
-            leaves the badge room when present. */}
+            edge's slant start (derived from the strip angle). */}
         {/* The title lives beside the scaling image layer, not inside it —
             it cannot move or resize during the hover zoom. */}
         <h3
@@ -155,52 +141,34 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
           style={{
             top: '2rem',
             left: `calc(${STRIP_TOP_INSET_PERCENT}% + 1rem)`,
-            right: char.active_game ? '7.5rem' : '1rem',
+            right: '1rem',
             color: THEME.textOnDark,
           }}
         >
           {char.character_name || 'Unnamed'}
         </h3>
-
-        {char.active_game && (
-          <div className="absolute top-3 right-3 z-10">
-            <span
-              className="px-3 py-1.5 text-sm font-semibold rounded-sm border flex items-center gap-1.5"
-              style={{ backgroundColor: '#16a34a', borderColor: '#22c55e', color: 'white' }}
-            >
-              <FontAwesomeIcon icon={faLock} className="text-sm" />
-              In Game
-            </span>
-          </div>
-        )}
       </button>
     </div>
   )
 }
 
-export default function CharacterManager({
-  user,
-  onExpandedChange,
-  expandCharacterId,
-  clearExpandCharacterId,
-}) {
+/**
+ * The characters index — the strip and nothing else. Clicking a card
+ * navigates to /character/{id}, the single canonical character view (with
+ * its Edit/Delete chrome); this component owns no drawer, no selection
+ * state, no per-character actions.
+ */
+export default function CharacterManager({ user }) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [characterToDelete, setCharacterToDelete] = useState(null)
-  const [deleteError, setDeleteError] = useState(null)
-  const deleteCharacterMutation = useDeleteCharacter()
 
   // Lead shift (decision 37 QA tuning): measured px the strip pulls left
   // so the first card's cap doesn't dominate. Derived from the row's
   // rendered height, so it re-measures alongside the resize handling.
   const [leadShiftPx, setLeadShiftPx] = useState(0)
 
-  // Selection and resize state for horizontal scroll layout
-  const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [isResizing, setIsResizing] = useState(false)
 
   // Native wheel listener (React's onWheel is passive, so preventDefault
@@ -218,7 +186,7 @@ export default function CharacterManager({
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [loading, error, selectedCharacter])
+  }, [loading, error])
 
   // Measure the lead shift from the row's rendered height (shift =
   // fraction × slant run, i.e. tan(STRIP_ANGLE_DEGREES) × card height).
@@ -232,32 +200,7 @@ export default function CharacterManager({
     measureLeadShift()
     window.addEventListener('resize', measureLeadShift)
     return () => window.removeEventListener('resize', measureLeadShift)
-  }, [loading, error, selectedCharacter])
-
-  // Edit mode state
-  const [isEditing, setIsEditing] = useState(false)
-  const [isCloneMode, setIsCloneMode] = useState(false)
-
-  // Index→view choreography (tokens v3, decision 38): the hero pane enters
-  // sliding LEFT to its seat while the stats panel drawers out to the
-  // RIGHT from behind it. Same-tree state swap (like campaigns), so GSAP
-  // animates freely — no route change involved. The overlay's existing CSS
-  // opacity fade underneath is untouched; this choreographs the children.
-  const expandedViewRef = useRef(null)
-  useGSAP(() => {
-    if (!selectedCharacter || isResizing) return
-    const scope = expandedViewRef.current
-    if (!scope) return
-    const heroPane = scope.querySelector('[data-character-hero]')
-    const statsPanel = scope.querySelector('[data-character-stats]')
-    if (!heroPane || !statsPanel) return
-    gsap.fromTo(heroPane,
-      { x: 140, autoAlpha: 0 },
-      { x: 0, autoAlpha: 1, duration: 0.38, ease: 'power3.out' })
-    gsap.fromTo(statsPanel,
-      { x: -90, autoAlpha: 0 },
-      { x: 0, autoAlpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.08 })
-  }, { dependencies: [selectedCharacter?.id], scope: expandedViewRef })
+  }, [loading, error])
 
   // Fetch characters from API
   const fetchCharacters = async () => {
@@ -293,25 +236,6 @@ export default function CharacterManager({
     }
   }, [user])
 
-  // Sync edit mode from URL parameter
-  useEffect(() => {
-    const editParam = searchParams.get('edit')
-    if (editParam && characters.length > 0) {
-      const charToEdit = characters.find(c => c.id === editParam)
-      if (charToEdit) {
-        setSelectedCharacter(charToEdit)
-        setIsEditing(true)
-        setIsCloneMode(false)
-      }
-      return
-    }
-
-    // Keep local edit mode in sync when URL edit param is cleared.
-    if (!editParam && !isCloneMode) {
-      setIsEditing(false)
-    }
-  }, [searchParams, characters, isCloneMode])
-
   // Resize handler - disable transitions during window resize
   useEffect(() => {
     let resizeTimer
@@ -327,127 +251,6 @@ export default function CharacterManager({
       clearTimeout(resizeTimer)
     }
   }, [])
-
-  // Notify parent when expanded state changes and cleanup on unmount
-  useEffect(() => {
-    onExpandedChange?.(!!selectedCharacter)
-  }, [selectedCharacter, onExpandedChange])
-
-  // Auto-expand character from URL param (mirrors CampaignManager's
-  // expandCampaignId pattern). Fires once characters have loaded so the
-  // freshly-created character (set via /dashboard?expand_character_id=...)
-  // surfaces in its drawer instead of the tile row.
-  useEffect(() => {
-    if (expandCharacterId && !loading) {
-      const character = characters.find((c) => c.id === expandCharacterId)
-      if (character && selectedCharacter?.id !== character.id) {
-        setSelectedCharacter(character)
-      }
-      clearExpandCharacterId?.()
-    }
-  }, [expandCharacterId, characters, loading])
-
-  // Reset expanded state on unmount
-  useEffect(() => {
-    return () => {
-      onExpandedChange?.(false)
-    }
-  }, [])
-
-  // Toggle character selection for drawer
-  const toggleCharacterDetails = (character) => {
-    setSelectedCharacter(prev =>
-      prev?.id === character.id ? null : character
-    )
-    // Exit edit mode when toggling selection
-    setIsEditing(false)
-    setIsCloneMode(false)
-    // Parent notification handled by useEffect watching selectedCharacter
-  }
-
-  // Enter edit mode with URL update
-  const enterEditMode = () => {
-    if (!selectedCharacter) return
-    setIsEditing(true)
-    setIsCloneMode(false)
-
-    // Update URL with edit parameter
-    const current = new URLSearchParams(Array.from(searchParams.entries()))
-    current.set('edit', selectedCharacter.id)
-    router.push(`/dashboard?${current.toString()}`)
-  }
-
-  // Enter clone mode (edit panel in create mode)
-  const enterCloneMode = () => {
-    if (!selectedCharacter) return
-    setIsEditing(true)
-    setIsCloneMode(true)
-    // Don't add URL param for clone mode - it's not bookmarkable
-  }
-
-  // Exit edit mode and clean URL
-  const exitEditMode = () => {
-    setIsEditing(false)
-    setIsCloneMode(false)
-
-    // Remove edit parameter from URL
-    const current = new URLSearchParams(Array.from(searchParams.entries()))
-    current.delete('edit')
-    const query = current.toString()
-    router.push(`/dashboard${query ? `?${query}` : ''}`)
-  }
-
-  // Handle save from edit panel
-  const handleEditSave = (updatedCharacter) => {
-    if (isCloneMode) {
-      // Clone creates a new character - add to list and select it
-      setCharacters(prev => [...prev, updatedCharacter])
-      setSelectedCharacter(updatedCharacter)
-    } else {
-      // Edit updates existing character
-      setCharacters(prev => prev.map(c =>
-        c.id === updatedCharacter.id ? updatedCharacter : c
-      ))
-      setSelectedCharacter(updatedCharacter)
-    }
-    exitEditMode()
-  }
-
-  // Handle delete button click - show confirmation modal
-  const handleDeleteClick = (character) => {
-    setCharacterToDelete(character)
-    setShowDeleteModal(true)
-    setDeleteError(null)
-  }
-
-  // Handle confirmed delete action
-  const handleConfirmDelete = async () => {
-    if (!characterToDelete) return
-
-    try {
-      setDeleteError(null)
-      await deleteCharacterMutation.mutateAsync({
-        id: characterToDelete.id,
-        isDraft: Boolean(characterToDelete.is_draft),
-      })
-      // Remove from local state for immediate UI feedback
-      setCharacters(characters.filter(c => c.id !== characterToDelete.id))
-      if (selectedCharacter?.id === characterToDelete.id) {
-        setSelectedCharacter(null)
-      }
-      setShowDeleteModal(false)
-      setCharacterToDelete(null)
-    } catch (err) {
-      setDeleteError(err.message)
-    }
-  }
-
-  // Handle cancel delete
-  const handleCancelDelete = () => {
-    setShowDeleteModal(false)
-    setCharacterToDelete(null)
-    setDeleteError(null)
-  }
 
   // Render loading state
   const renderLoading = () => (
@@ -517,103 +320,6 @@ export default function CharacterManager({
     </div>
   )
 
-  // Render stats panel — shares CharacterSheet with the /character/[id]
-  // read-only route so both surfaces show the exact same data. Drawer chrome
-  // (Close, Delete) lives here; sheet body is delegated.
-  const renderStatsPanel = () => {
-    if (!selectedCharacter) return null
-
-    return (
-      // Transparent — the drawer overlay paints the page colour. Avoids a
-      // double-painted layer (carbon under graphite) that previously made
-      // this surface read darker than the wizard. No left border either:
-      // the wedge avatar pane provides the visual division on its own.
-      <div data-character-stats className="flex-1 p-6 overflow-y-auto">
-        {/* Drawer chrome — Close on the right, Edit + Delete on the left.
-            Edit reuses the wizard via ?id=… (same surface as create); the
-            backend's lock check (active_campaign) gates whether the PATCHes
-            land, so we disable the button locally for the same condition
-            to avoid a click-then-error round-trip. */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="primary"
-              onClick={() => router.push(`/character/create?id=${selectedCharacter.id}`)}
-              disabled={Boolean(selectedCharacter.active_campaign)}
-            >
-              <FontAwesomeIcon icon={faPenToSquare} className="mr-2" />
-              Edit
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => handleDeleteClick(selectedCharacter)}
-              disabled={Boolean(selectedCharacter.active_campaign)}
-            >
-              <FontAwesomeIcon icon={faTrash} className="mr-2" />
-              Delete
-            </Button>
-          </div>
-          <button
-            onClick={() => {
-              setSelectedCharacter(null)
-              onExpandedChange?.(false)
-            }}
-            className="px-3 py-1 rounded-sm border hover:opacity-80 transition-opacity"
-            style={{
-              color: THEME.textSecondary,
-              borderColor: THEME.borderSubtle,
-              backgroundColor: THEME.bgSecondary,
-            }}
-          >
-            Close
-          </button>
-        </div>
-
-        <CharacterSheet character={selectedCharacter} />
-      </div>
-    )
-  }
-
-  // Render the avatar pane on the left side of the expanded drawer — uses
-  // the same wedge-clipped pane as the wizard + read-only sheet, in
-  // ``readOnly`` mode (no edit affordances). The In-Game badge stays as a
-  // local overlay since it's drawer-specific context.
-  const renderSelectedCard = () => {
-    if (!selectedCharacter) return null
-
-    const char = selectedCharacter
-    return (
-      <div
-        data-character-hero
-        className="relative flex flex-col"
-        style={{
-          width: 'clamp(320px, 30vw, 800px)',
-          minWidth: 'clamp(320px, 30vw, 800px)',
-          height: '100%',
-        }}
-      >
-        <CharacterAvatarPane
-          avatarUrl={char.avatar_url}
-          avatarAssetId={char.avatar_asset_id}
-          focalArea={char.avatar_focal_area}
-          readOnly
-        />
-
-        {char.active_game && (
-          <div className="absolute top-4 right-8 z-10">
-            <span
-              className="px-3 py-1.5 text-sm font-semibold rounded-sm border flex items-center gap-1.5"
-              style={{ backgroundColor: '#16a34a', borderColor: '#22c55e', color: 'white' }}
-            >
-              <FontAwesomeIcon icon={faLock} className="text-sm" />
-              In Game
-            </span>
-          </div>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col h-full">
       {/* Loading/Error states */}
@@ -621,9 +327,7 @@ export default function CharacterManager({
       {!loading && error && renderError()}
 
       {/* Content area - flex-1 min-h-0 to fill remaining space */}
-      {/* Pattern: separate tile view and expanded view as siblings (like CampaignManager) */}
       <div className="flex-1 min-h-0 relative">
-        {/* Tile scroll area - hidden when expanded */}
         {!loading && !error && (
           <div
             ref={scrollRowRef}
@@ -635,9 +339,6 @@ export default function CharacterManager({
               // hidden stays as the structural guard against anything
               // painting over the nav.
               WebkitOverflowScrolling: 'touch',
-              opacity: selectedCharacter ? 0 : 1,
-              pointerEvents: selectedCharacter ? 'none' : 'auto',
-              transition: isResizing ? 'none' : 'opacity 200ms ease-in-out'
             }}
           >
             {/* Character Cards — parallelogram strip (decision 37; angle
@@ -654,90 +355,14 @@ export default function CharacterManager({
                   : CARD_STYLE}
                 isResizing={isResizing}
                 isFirst={cardIndex === 0}
-                onSelect={() => toggleCharacterDetails(char)}
+                onSelect={() => router.push(`/character/${char.id}`)}
               />
             ))}
-            {/* Create New Character Card */}
-            {renderCreateCard()}
+            {/* Create New Character Card — hidden at the account cap */}
+            {characters.length < (user?.max_slots ?? 4) && renderCreateCard()}
           </div>
         )}
-
-        {/* Expanded view - separate full-width overlay (like CampaignManager's drawer).
-            Background matches the wizard / read-only sheet so the "view a
-            finalised character" surface reads as one consistent page colour
-            no matter which entry point the player came from. */}
-        <div
-          ref={expandedViewRef}
-          className="absolute top-0 bottom-0 flex"
-          style={{
-            left: selectedCharacter ? 'calc(50% - 50vw)' : '0',
-            width: selectedCharacter ? '100vw' : '100%',
-            backgroundColor: COLORS.graphite,
-            opacity: selectedCharacter ? 1 : 0,
-            pointerEvents: selectedCharacter ? 'auto' : 'none',
-            transition: isResizing
-              ? 'none'
-              : selectedCharacter
-                ? 'opacity 200ms ease-in-out, left 200ms ease-in-out, width 200ms ease-in-out'
-                : 'opacity 200ms ease-in-out 50ms, left 200ms ease-in-out, width 200ms ease-in-out'
-          }}
-        >
-          {/* Inner content constrained to max-width for consistency with campaigns */}
-          <div className="flex h-full" style={{ maxWidth: '1600px', width: '100%' }}>
-            {/* Left side: Selected character hero card */}
-            {selectedCharacter && renderSelectedCard()}
-            {/* Right side: Stats panel. Inline edit was removed with the
-                v1 schema rewrite — finalised characters now redirect to
-                the read-only /character/{id} sheet, drafts resume in the
-                wizard at /character/create?id=… */}
-            {selectedCharacter && renderStatsPanel()}
-          </div>
-        </div>
       </div>
-
-      {/* Delete Confirmation Modal */}
-      <Modal open={showDeleteModal} onClose={deleteCharacterMutation.isPending ? () => {} : handleCancelDelete} size="md">
-        <div className="p-6">
-          <h3 className="text-xl font-bold mb-2 text-content-accent">Delete Character</h3>
-          <p className="mb-1 text-content-on-dark">
-            Are you sure you want to delete <strong className="text-content-accent">{characterToDelete?.character_name}</strong>?
-          </p>
-          <p className="text-sm mb-4 text-content-secondary">This action cannot be undone.</p>
-
-          {deleteError && (
-            <div className="mb-4 border px-4 py-3 rounded-sm bg-feedback-error/15 border-feedback-error text-feedback-error">
-              {deleteError}
-            </div>
-          )}
-
-          <div className="flex gap-3 justify-end">
-            <Button
-              variant="ghost"
-              onClick={handleCancelDelete}
-              disabled={deleteCharacterMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleConfirmDelete}
-              disabled={deleteCharacterMutation.isPending}
-            >
-              {deleteCharacterMutation.isPending ? (
-                <>
-                  <Spinner size="sm" className="border-white mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faTrash} className="mr-2" />
-                  Delete
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   )
 }

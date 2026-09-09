@@ -54,6 +54,7 @@ module.exports = {
           sfx: 'var(--asset-sfx)',
           image: 'var(--asset-image)',
         },
+        gold: 'var(--gold)',
         favorite: 'var(--favorite)',
       },
     },

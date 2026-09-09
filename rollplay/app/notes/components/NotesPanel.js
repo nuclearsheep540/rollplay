@@ -144,7 +144,7 @@ export default function NotesPanel({ campaignId }) {
       <EmptyState
         icon={<FontAwesomeIcon icon={faNoteSticky} />}
         title="No notes yet"
-        description="Notes are private to you and stay with this campaign between sessions."
+        description="Notes are private to you and stay with this campaign between games."
         action={
           <button
             type="button"

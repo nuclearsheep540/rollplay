@@ -61,11 +61,13 @@ from modules.events.model.notification_model import Notification as _Notificatio
 from modules.notes.model.note_model import Note as _Note  # noqa: F401
 from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
+from modules.game.repositories.game_repository import GameRepository
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.user.domain.user_aggregate import UserAggregate
-from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
+from modules.session.domain.session_aggregate import SessionEntity
+from modules.game.domain.game_aggregate import GameAggregate, GameStatus
 from modules.characters.domain.character_aggregate import (
     AbilityScores,
     CharacterAggregate,
@@ -222,9 +224,15 @@ def user_repo(db_session: Session):
 
 
 @pytest.fixture
+def session_repo(db_session: Session):
+    """Session repository with test database"""
+    return SessionRepository(db_session)
+
+
+@pytest.fixture
 def game_repo(db_session: Session):
     """Game repository with test database"""
-    return SessionRepository(db_session)
+    return GameRepository(db_session)
 
 
 @pytest.fixture
@@ -298,20 +306,61 @@ def create_campaign(campaign_repo: CampaignRepository):
 
 
 @pytest.fixture
-def create_game(game_repo: SessionRepository):
+def create_session(session_repo: SessionRepository):
+    """
+    Factory fixture to create test sessions.
+
+    Sessions are unnamed and seatless — a campaign has exactly one, and the seat
+    count is a campaign setting.
+
+    Usage:
+        session = create_session(campaign_id=campaign.id, host_id=user.id)
+    """
+    def _create_session(campaign_id: uuid.UUID, host_id: uuid.UUID):
+        session = SessionEntity.create(
+            campaign_id=campaign_id,
+            host_id=host_id
+        )
+        session_repo.save(session)
+        return session
+
+    return _create_session
+
+
+@pytest.fixture
+def create_game(game_repo: GameRepository):
     """
     Factory fixture to create test games.
 
+    A game is minted STARTING, exactly as StartGame does. Pass ``status`` to
+    place it further along its lifecycle, and the state fields to stand in for
+    a night that has already been played.
+
     Usage:
-        game = create_game(campaign_id=campaign.id, host_id=user.id, name="Test Game")
+        game = create_game(session_id=session.id, campaign_id=campaign.id, host_id=user.id)
+        ended = create_game(..., status=GameStatus.ENDED, map_token_state={...})
     """
-    def _create_game(campaign_id: uuid.UUID, host_id: uuid.UUID, name: str = "Test Game", max_players: int = 6):
-        game = SessionEntity.create(
-            name=name,
+    def _create_game(
+        session_id: uuid.UUID,
+        campaign_id: uuid.UUID,
+        host_id: uuid.UUID,
+        status: GameStatus = GameStatus.STARTING,
+        name=None,
+        **state_fields,
+    ):
+        game = GameAggregate.create(
+            session_id=session_id,
             campaign_id=campaign_id,
             host_id=host_id,
-            max_players=max_players
+            name=name,
         )
+        game.status = status
+        if status is not GameStatus.STARTING:
+            game.started_at = datetime.utcnow()
+        if status is GameStatus.ENDED:
+            game.ended_at = datetime.utcnow()
+        for field_name, value in state_fields.items():
+            setattr(game, field_name, value)
         game_repo.save(game)
         return game
 
@@ -403,16 +452,71 @@ def create_friendship(friendship_repo: FriendshipRepository, friend_request_repo
 
         # User A sends request to User B
         send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
-        asyncio.get_event_loop().run_until_complete(
+        # asyncio.run, not get_event_loop(): each call owns its loop, so this
+        # works whatever an earlier test (asyncio.run, TestClient) left behind.
+        asyncio.run(
             send_cmd.execute(user_id=user_a_id, friend_identifier=str(user_b_id))
         )
 
         # User B accepts the request
         accept_cmd = AcceptFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
-        friendship = asyncio.get_event_loop().run_until_complete(
+        friendship = asyncio.run(
             accept_cmd.execute(user_id=user_b_id, requester_id=user_a_id)
         )
 
         return friendship
 
     return _create_friendship
+
+
+# === API harness — TestClient + the two dependency overrides every endpoint test wants ===
+#
+# Promoted here from identical copies in characters/tests/api and game/tests/api
+# when a third suite (campaign/tests/api) needed the same thing. Those copies
+# also carried a session-scoped, autouse fixture that booted the RulesetRegistry
+# singleton for the whole run. It is not carried over: `TestClient(app)` below
+# runs the app's lifespan, which initializes the registry itself, so every API
+# test gets a booted registry through the real path — and nothing shared and
+# mutable is left standing across tests that never asked for it.
+
+from typing import Iterator  # noqa: E402
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from shared.dependencies.auth import get_current_user_id  # noqa: E402
+from shared.dependencies.db import get_db  # noqa: E402
+
+
+@pytest.fixture
+def client(db_session, seed_default_edition) -> Iterator[TestClient]:
+    """FastAPI TestClient wired to the shared in-memory SQLite session.
+
+    Entering the client runs the app's lifespan, which boots the RulesetRegistry.
+    Authentication is overridden per-request by ``auth_as``.
+    """
+    # Avoid importing app at module level so the test session doesn't pay the
+    # FastAPI boot cost when not needed.
+    from main import app
+
+    def _db_override():
+        # Yield the test session without closing it (the db_session fixture owns lifecycle).
+        yield db_session
+
+    app.dependency_overrides[get_db] = _db_override
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def auth_as(client: TestClient):
+    """Override the current_user dependency to return the given UUID."""
+    from main import app
+
+    def _set(user_id: uuid.UUID):
+        app.dependency_overrides[get_current_user_id] = lambda: user_id
+
+    yield _set
+    # Cleared in the client fixture's teardown.

@@ -22,7 +22,6 @@ from modules.library.application.commands import (
 )
 from modules.library.domain.map_asset_aggregate import MapAsset, TOKEN_BASELINE_MAX
 from modules.library.domain.media_asset_type import MediaAssetType
-from modules.session.domain.session_aggregate import SessionStatus
 
 
 def make_map_asset(owner_id=None, campaign_ids=None):
@@ -114,16 +113,26 @@ class TestUpdateTokenConfigAggregate:
         assert baseline[0]["label"] == "Goblin"
 
 
-def make_session(status, boards=None, seeds=None):
-    return SimpleNamespace(status=status, map_token_state=boards or {}, map_token_seed=seeds or {})
+def make_ended_game(boards=None, seeds=None):
+    """The last game a campaign played — the only board an edit could conflict with."""
+    return SimpleNamespace(
+        status="ended",
+        map_token_state=boards or {},
+        map_token_seed=seeds or {},
+    )
 
 
-class FakeSessionRepository:
-    def __init__(self, sessions):
-        self.sessions = sessions
+class FakeGameRepository:
+    """Stands in for GameRepository: no open game, one ended game to check."""
 
-    def get_by_campaign_id(self, campaign_id):
-        return self.sessions
+    def __init__(self, ended_game):
+        self.ended_game = ended_game
+
+    def get_open_game_for_campaign(self, campaign_id):
+        return None
+
+    def get_newest_ended_game_for_campaign(self, campaign_id):
+        return self.ended_game
 
 
 class TestBoardInPlayGuard:
@@ -132,75 +141,69 @@ class TestBoardInPlayGuard:
     def test_preseed_board_blocks(self):
         # Pre-migration paused row: board with no seed — preserve, never destroy.
         asset_id = uuid4()
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.INACTIVE, {str(asset_id): [make_baseline_token()]}),
-        ])
+        game_repo = FakeGameRepository(
+            make_ended_game({str(asset_id): [make_baseline_token()]}),
+        )
         with pytest.raises(BoardInPlayError):
-            check_map_boards_in_play(asset_id, [uuid4()], session_repo)
+            check_map_boards_in_play(asset_id, [uuid4()], game_repo)
 
     def test_board_matching_seed_does_not_block(self):
         # Seeded, never touched (updated_at drift ignored): workshop stays open.
         asset_id = uuid4()
         seeded_token = make_baseline_token()
         board_copy = dict(seeded_token, updated_at="2026-07-23T10:00:00+00:00")
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.INACTIVE,
-                         boards={str(asset_id): [board_copy]},
-                         seeds={str(asset_id): [seeded_token]}),
-        ])
-        check_map_boards_in_play(asset_id, [uuid4()], session_repo)
+        game_repo = FakeGameRepository(
+            make_ended_game(
+                boards={str(asset_id): [board_copy]},
+                seeds={str(asset_id): [seeded_token]},
+            ),
+        )
+        check_map_boards_in_play(asset_id, [uuid4()], game_repo)
 
     def test_play_moved_token_blocks(self):
         asset_id = uuid4()
         seeded_token = make_baseline_token()
         moved_copy = dict(seeded_token, x=999.0)
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.INACTIVE,
-                         boards={str(asset_id): [moved_copy]},
-                         seeds={str(asset_id): [seeded_token]}),
-        ])
+        game_repo = FakeGameRepository(
+            make_ended_game(
+                boards={str(asset_id): [moved_copy]},
+                seeds={str(asset_id): [seeded_token]},
+            ),
+        )
         with pytest.raises(BoardInPlayError):
-            check_map_boards_in_play(asset_id, [uuid4()], session_repo)
+            check_map_boards_in_play(asset_id, [uuid4()], game_repo)
 
     def test_reverted_board_does_not_block(self):
         # A pc token placed then removed leaves board == seed — not in play.
         asset_id = uuid4()
         seeded_token = make_baseline_token()
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.INACTIVE,
-                         boards={str(asset_id): [dict(seeded_token)]},
-                         seeds={str(asset_id): [seeded_token]}),
-        ])
-        check_map_boards_in_play(asset_id, [uuid4()], session_repo)
+        game_repo = FakeGameRepository(
+            make_ended_game(
+                boards={str(asset_id): [dict(seeded_token)]},
+                seeds={str(asset_id): [seeded_token]},
+            ),
+        )
+        check_map_boards_in_play(asset_id, [uuid4()], game_repo)
 
     def test_force_proceeds(self):
         asset_id = uuid4()
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.INACTIVE, {str(asset_id): [make_baseline_token()]}),
-        ])
-        check_map_boards_in_play(asset_id, [uuid4()], session_repo, force=True)
-
-    def test_finished_sessions_never_block(self):
-        asset_id = uuid4()
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.FINISHED, {str(asset_id): [make_baseline_token()]}),
-        ])
-        check_map_boards_in_play(asset_id, [uuid4()], session_repo)
+        game_repo = FakeGameRepository(
+            make_ended_game({str(asset_id): [make_baseline_token()]}),
+        )
+        check_map_boards_in_play(asset_id, [uuid4()], game_repo, force=True)
 
     def test_empty_or_absent_board_never_blocks(self):
         asset_id = uuid4()
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.INACTIVE, {str(asset_id): []}),
-            make_session(SessionStatus.INACTIVE, {}),
-        ])
-        check_map_boards_in_play(asset_id, [uuid4()], session_repo)
+        for boards in ({str(asset_id): []}, {}):
+            game_repo = FakeGameRepository(make_ended_game(boards))
+            check_map_boards_in_play(asset_id, [uuid4()], game_repo)
 
     def test_other_maps_boards_never_block(self):
         asset_id = uuid4()
-        session_repo = FakeSessionRepository([
-            make_session(SessionStatus.INACTIVE, {str(uuid4()): [make_baseline_token()]}),
-        ])
-        check_map_boards_in_play(asset_id, [uuid4()], session_repo)
+        game_repo = FakeGameRepository(
+            make_ended_game({str(uuid4()): [make_baseline_token()]}),
+        )
+        check_map_boards_in_play(asset_id, [uuid4()], game_repo)
 
 
 class FakeAssetRepository:
@@ -221,7 +224,7 @@ class TestUpdateTokenConfigCommand:
         asset = make_map_asset(owner_id=owner_id)
         repository = FakeAssetRepository(asset)
 
-        command = UpdateTokenConfig(repository, session_repository=None)
+        command = UpdateTokenConfig(repository, game_repository=None)
         wire_token = make_baseline_token(created_by="spoofed-user")
         updated = command.execute(asset_id=asset.id, user_id=owner_id, tokens=[wire_token])
 
@@ -236,6 +239,6 @@ class TestUpdateTokenConfigCommand:
             is_owned_by=lambda user_id: True,
         )
         repository = FakeAssetRepository(wrong_asset)
-        command = UpdateTokenConfig(repository, session_repository=None)
+        command = UpdateTokenConfig(repository, game_repository=None)
         with pytest.raises(ValueError, match="map assets"):
             command.execute(asset_id=wrong_asset.id, user_id=owner_id, tokens=[make_baseline_token()])

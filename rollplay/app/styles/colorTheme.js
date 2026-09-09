@@ -11,7 +11,8 @@ export const COLORS = {
   smoke: '#F7F4F3',    // Light text, borders, accents
   onyx: '#0B0A09',    // Mid-dark backgrounds, panels
   graphite: '#37322F',   // Secondary text, subtle borders
-  silver: '#B5ADA6'  // Lightest accent, highlights
+  silver: '#B5ADA6',  // Lightest accent, highlights
+  gold: '#D9A441'  // Highlight accent - primary CTAs, live state, favorites
 }
 
 // =============================================================================
@@ -61,7 +62,7 @@ export const ASSET_TYPE_COLORS = {
 }
 
 // Library favorite star - mirrors --favorite in globals.css
-export const FAVORITE_COLOR = '#D9A441'
+export const FAVORITE_COLOR = COLORS.gold
 
 // =============================================================================
 // COMMON STYLE OBJECTS (for inline styles)

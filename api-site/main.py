@@ -24,10 +24,12 @@ from modules.campaign.api.endpoints import router as campaign_router
 from modules.characters.api.endpoints import router as characters_router
 from modules.characters.api.edition_endpoints import router as editions_router
 from modules.session.api.endpoints import router as session_router
+from modules.game.api.endpoints import router as game_router
 from modules.friendship.api.endpoints import router as friendship_router
 from modules.events.api.notification_endpoints import router as notification_router
 from modules.library.api.endpoints import router as library_router
 from modules.notes.api.endpoints import router as notes_router
+from modules.news.api.endpoints import router as news_router
 from modules.stream.api.endpoints import router as stream_router
 
 # Import integration routers (external-service ACLs, not core aggregates)
@@ -36,8 +38,8 @@ from integrations.spotify.endpoints import router as spotify_router
 # Import WebSocket endpoint
 from modules.events.api.websocket_endpoint import websocket_events_endpoint
 
-# Background task: auto-pauses sessions whose signed-URL lease has lapsed
-from modules.session.application.expired_session_cleanup import run_expired_session_cleanup
+# Background task: auto-ends games whose signed-URL lease has lapsed
+from modules.game.application.expired_game_cleanup import run_expired_game_cleanup
 
 # Configure logging from settings
 settings = Settings()
@@ -56,7 +58,7 @@ async def lifespan(app: FastAPI):
     # Expired-session cleanup — stateless loop; deadlines live in PostgreSQL,
     # so restarts lose nothing and the first pass catches anything past due.
     cleanup_stop = asyncio.Event()
-    cleanup_task = asyncio.create_task(run_expired_session_cleanup(cleanup_stop))
+    cleanup_task = asyncio.create_task(run_expired_game_cleanup(cleanup_stop))
 
     yield
 
@@ -90,10 +92,12 @@ app.include_router(campaign_router, prefix="/api/campaigns")
 app.include_router(characters_router, prefix="/api/characters")
 app.include_router(editions_router, prefix="/api/editions", tags=["editions"])
 app.include_router(session_router, prefix="/api/sessions")
+app.include_router(game_router, prefix="/api/games", tags=["games"])
 app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")
 app.include_router(library_router, prefix="/api/library", tags=["library"])
 app.include_router(notes_router, prefix="/api/notes", tags=["notes"])
+app.include_router(news_router, prefix="/api/news", tags=["news"])
 app.include_router(stream_router, prefix="/api/stream", tags=["stream"])
 app.include_router(spotify_router, prefix="/api/spotify", tags=["spotify"])
 

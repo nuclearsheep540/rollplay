@@ -1,10 +1,11 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 import boto3
 from botocore.config import Config
@@ -185,6 +186,152 @@ class S3Service:
                 return False
             logger.error(f"Error checking object existence: {e}")
             raise
+
+    def list_objects(self, prefix: str) -> List[dict]:
+        """
+        List the first page of objects under a prefix.
+
+        Only the news module lists S3 at all — library media are enumerated
+        from PostgreSQL, because they have rows; news images deliberately have
+        none. Three callers: the editor's per-scope image browser, the folder
+        delete behind DeleteNewsPost, and RestoreNewsFromBackup.
+
+        THE FIRST PAGE, not the listing. list_objects_v2 returns at most 1000
+        keys per call and reports more via IsTruncated; this reads one page and
+        stops, so past 1000 objects the result is a prefix of the truth. Two of
+        the three callers are scoped to a single folder and cannot approach it.
+        The third walks the whole news prefix, so it is the one that eventually
+        will — accepted deliberately (Matt, 2026-09-01) because S3 holds the
+        durable copy either way: a truncated restore recovers an incomplete
+        set, it does not destroy the documents it did not reach.
+
+        Truncation is LOGGED rather than paginated, so the day it starts
+        happening is a line in the logs and not a silent surprise.
+
+        Args:
+            prefix: Key prefix to list under (e.g. 'news_media/shared_images/')
+
+        Returns:
+            List of {key, size, last_modified}, excluding directory-marker
+            objects (keys ending in '/'), newest first. Capped at one page.
+
+        Raises:
+            ClientError: If the listing fails. Deliberately unhandled — a
+                caller must not mistake a failed listing for an empty one.
+        """
+        try:
+            response = self.client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix
+            )
+        except ClientError as e:
+            logger.error(f"Failed to list objects under {prefix}: {e}")
+            raise
+
+        if response.get('IsTruncated'):
+            # The whole point of not paginating is that this never fires. When
+            # it does, every caller above is now working from a partial view.
+            logger.error(
+                f"Listing of {prefix} was truncated at {response.get('KeyCount')} keys — "
+                f"callers are seeing a partial view and list_objects now needs pagination"
+            )
+
+        objects = []
+        for item in response.get('Contents', []):
+            if item['Key'].endswith('/'):
+                continue
+            objects.append({
+                'key': item['Key'],
+                'size': item['Size'],
+                'last_modified': item['LastModified'],
+            })
+
+        objects.sort(key=lambda item: item['last_modified'], reverse=True)
+        return objects
+
+    def copy_object(self, source_key: str, destination_key: str) -> None:
+        """
+        Copy an object within the bucket.
+
+        S3 has no move, so relocating an object is a copy followed by a delete
+        — and the copy comes first deliberately, so a failure between the two
+        leaves a duplicate rather than a dangling reference.
+
+        Note this OVERWRITES silently: S3 reports no conflict when the
+        destination already exists. Callers that must not clobber check
+        `object_exists` first; nothing here can do it for them, because an
+        overwrite is legitimate for some callers and catastrophic for others.
+
+        Args:
+            source_key: The object to copy
+            destination_key: Where to put the copy
+
+        Raises:
+            ClientError: If S3 refuses. Deliberately unhandled — a caller must
+                not go on to delete the source of a copy that never landed.
+        """
+        try:
+            self.client.copy_object(
+                Bucket=self.bucket_name,
+                CopySource={'Bucket': self.bucket_name, 'Key': source_key},
+                Key=destination_key,
+            )
+            logger.info(f"Copied object: {source_key} -> {destination_key}")
+        except ClientError as e:
+            logger.error(f"Failed to copy {source_key} to {destination_key}: {e}")
+            raise
+
+    def put_object_json(self, key: str, payload: dict) -> None:
+        """
+        Write a JSON document to S3.
+
+        The news module's durability path: PostgreSQL serves reads, and this
+        keeps a complete copy of every post so a dropped dev database can be
+        restored rather than mourned.
+
+        Args:
+            key: Destination object key
+            payload: JSON-serializable document
+
+        Raises:
+            ClientError: If the write fails. Callers log and continue — a failed
+                backup must not fail the user's save; `restore-news` re-syncs.
+        """
+        try:
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(payload, default=str).encode('utf-8'),
+                ContentType='application/json',
+                CacheControl='no-cache',
+            )
+            logger.info(f"Wrote JSON document: {key}")
+        except ClientError as e:
+            logger.error(f"Failed to write JSON document {key}: {e}")
+            raise
+
+    def get_object_json(self, key: str) -> dict:
+        """
+        Read a JSON document from S3.
+
+        Args:
+            key: Object key to read
+
+        Returns:
+            The parsed document
+
+        Raises:
+            ClientError: If the object is missing or unreadable.
+            json.JSONDecodeError: If the object is not valid JSON — a corrupt
+                backup should stop a restore loudly, not import garbage.
+        """
+        try:
+            response = self.client.get_object(Bucket=self.bucket_name, Key=key)
+        except ClientError as e:
+            logger.error(f"Failed to read JSON document {key}: {e}")
+            raise
+
+        return json.loads(response['Body'].read().decode('utf-8'))
 
     @staticmethod
     def generate_key(user_id: str, filename: str, asset_type: str = "map") -> str:
