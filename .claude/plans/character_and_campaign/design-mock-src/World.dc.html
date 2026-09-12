@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>Campaign · World</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Metamorphous&family=Inter:wght@400;500;600;700&display=swap');
+    body { margin: 0; background: #F7F4F3; color: #1F1F1F; font-family: Inter, 'Segoe UI', Tahoma, sans-serif; font-size: 14px; }
+    a { color: #9A7526; } a:hover { color: #6E5319; }
+    .display { font-family: Metamorphous, Georgia, serif; font-weight: 400; }
+    .eyebrow { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: #9A7526; }
+    .skew { transform: skewX(-8deg); }
+    .unskew { display: inline-block; transform: skewX(8deg); }
+    .plate-gold { background: #D9A441; color: #241C08; border: 2px solid transparent; }
+    .plate-ghost { background: rgba(20,18,16,0.35); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.35); }
+    .plate-outline { background: rgba(247,244,243,0.06); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.28); }
+    .plate-light { background: transparent; color: #37322F; border: 1px solid #37322F; }
+    .btn { border-radius: 8px; font-weight: 600; letter-spacing: 0.05em; font-size: 13px; padding: 12px 22px; display: inline-flex; align-items: center; justify-content: center; }
+    .btn-sm { padding: 10px 12px; font-size: 12px; }
+    .card { background: #FFFFFF; border: 1px solid #E5DECF; border-radius: 6px; }
+    .parchment { background: #FBF7EF; border: 1px solid #E5DECF; border-radius: 12px; }
+    .input { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 2px; border: 1px solid #37322F; background: #F7F4F3; color: #1F1F1F; font: inherit; font-size: 14px; }
+    .label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: #37322F; }
+    .hint { font-size: 12.5px; color: #6B655E; line-height: 1.45; }
+    .nav-tab { border-radius: 8px; padding: 14px 20px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    .subtab { padding: 8px 16px; font-size: 12px; font-weight: 500; border-radius: 4px; color: #0B0A09; }
+    .subtab-active { background: #1F1F1F; color: #F7F4F3; }
+    .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 2px; border: 1px solid rgba(31,31,31,0.35); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+    .version { display: inline-flex; padding: 2.5px 8px; border-radius: 4px; background: #D9A441; color: #241C08; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; }
+    table.ref { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.ref th { text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E; padding: 8px 10px; border-bottom: 1px solid #E5DECF; }
+    table.ref td { padding: 8px 10px; border-bottom: 1px solid #F0EBE1; }
+    table.ref tr:nth-child(even) td { background: #F6F1E6; }
+
+  </style>
+</helmet>
+<div style="width: 1440px; min-height: 900px; background: #F7F4F3; display: flex; flex-direction: column;">
+  
+<div style="height: 64px; box-sizing: border-box; background: #1F1F1F; border-bottom: 1px solid #37322F40; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <div style="width: 32px; height: 32px; border-radius: 6px; background: #37322F; display: flex; align-items: center; justify-content: center; color: #D9A441;" class="display">T</div>
+    <div class="display" style="color: #F7F4F3; font-size: 18px;">Tabletop Tavern</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 28px;">
+    
+    <div style="height: 36px; display: inline-flex; align-items: stretch; border-radius: 8px; overflow: hidden; background: #37322F;">
+      <div style="width: 36px; background: #B5ADA6;"></div>
+      <div style="display: flex; align-items: center; padding: 0 12px; color: #F7F4F3; font-size: 14px;">Matt</div>
+    </div>
+    <div style="height: 36px; width: 32px; display: flex; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="#B5ADA6"><g transform="rotate(45 12 12)">
+<rect x="3.2" y="3.2" width="3.6" height="3.6"/><rect x="10.2" y="3.2" width="3.6" height="3.6"/><rect x="17.2" y="3.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="10.2" width="3.6" height="3.6"/><rect x="10.2" y="10.2" width="3.6" height="3.6"/><rect x="17.2" y="10.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="17.2" width="3.6" height="3.6"/><rect x="10.2" y="17.2" width="3.6" height="3.6"/><rect x="17.2" y="17.2" width="3.6" height="3.6"/></g></svg></div>
+  </div>
+</div>
+  <div style="display: flex; flex-grow: 1; min-height: 836px;">
+    
+<div style="width: 92px; box-sizing: border-box; background: #1F1F1F; padding: 36px 20px 24px 20px; display: flex; flex-direction: column; gap: 22px; flex-shrink: 0; align-items: center;">
+    <div class="plate-outline" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">Overview</span></div>
+    <div class="plate-gold" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">World</span></div>
+    <div class="plate-outline" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">Character</span></div>
+</div>
+    <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+      
+<div style="height: 96px; box-sizing: border-box; background: #F7F4F3; border-bottom: 1px solid #E5DECF; padding: 0 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px;">
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="eyebrow">Campaign</div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div class="display" style="color: #0B0A09; font-size: 26px; line-height: 1.1;">Secret to Bear</div>
+      <span class="chip skew" style="border-color: #37322F; color: #37322F;"><span class="unskew">Draft</span></span>
+      <span class="version skew"><span class="unskew">v1.0.0</span></span>
+      <span class="hint">unsaved changes</span>
+    </div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px;">
+    <div class="btn btn-sm skew plate-light"><span class="unskew">Back to campaigns</span></div>
+    <div class="btn skew plate-gold"><span class="unskew">Save campaign</span></div>
+  </div>
+</div>
+      
+<div style="height: 44px; box-sizing: border-box; background: #B5ADA6; border-bottom: 1px solid #37322F; padding: 0 28px; display: flex; align-items: center; gap: 6px;">
+  <div class="subtab skew subtab-active"><span class="unskew">Tables</span></div><div class="subtab skew"><span class="unskew">Reference</span></div>
+</div>
+      <div style="padding: 36px 40px 56px 40px;">
+
+<div style="display: flex; flex-direction: column; gap: 26px; max-width: 1040px;">
+  <div class="card" style="padding: 26px 28px; border-style: dashed; display: flex; align-items: center; justify-content: space-between; gap: 24px;">
+    <div>
+      <div class="eyebrow" style="margin-bottom: 8px;">World</div>
+      <div class="display" style="font-size: 22px; color: #0B0A09; margin-bottom: 6px;">Reference tables for your world</div>
+      <div class="hint" style="max-width: 560px;">Travel pace, mounts, prices, light sources. Whatever your table needs to look up mid-game. Display-only, never enforced. Not part of the first release.</div>
+    </div>
+    <span class="version skew"><span class="unskew">Not in v1</span></span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; opacity: 0.55;">
+    <div class="parchment" style="padding: 22px 24px;">
+      <div class="eyebrow" style="margin-bottom: 12px;">Travel pace</div>
+      <table class="ref">
+        <tr><th>Pace</th><th>Per day</th><th>Effect</th></tr>
+        <tr><td>Hurried</td><td>Far</td><td>Harder to notice things</td></tr>
+        <tr><td>Steady</td><td>Usual</td><td>-</td></tr>
+        <tr><td>Careful</td><td>Short</td><td>Able to move quietly</td></tr>
+      </table>
+    </div>
+    <div class="parchment" style="padding: 22px 24px;">
+      <div class="eyebrow" style="margin-bottom: 12px;">Mounts</div>
+      <table class="ref">
+        <tr><th>Mount</th><th>Cost</th><th>Pace</th></tr>
+        <tr><td>Riding horse</td><td>Dear</td><td>Fast</td></tr>
+        <tr><td>Horse and cart</td><td>Dear</td><td>Steady</td></tr>
+        <tr><td>Rowboat</td><td>Modest</td><td>Slow on water</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="btn btn-sm skew plate-light" style="align-self: flex-start; opacity: 0.55;"><span class="unskew">+ Add table</span></div>
+</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

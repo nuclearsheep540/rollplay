@@ -1,0 +1,314 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>Campaign · Character</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Metamorphous&family=Inter:wght@400;500;600;700&display=swap');
+    body { margin: 0; background: #F7F4F3; color: #1F1F1F; font-family: Inter, 'Segoe UI', Tahoma, sans-serif; font-size: 14px; }
+    a { color: #9A7526; } a:hover { color: #6E5319; }
+    .display { font-family: Metamorphous, Georgia, serif; font-weight: 400; }
+    .eyebrow { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: #9A7526; }
+    .skew { transform: skewX(-8deg); }
+    .unskew { display: inline-block; transform: skewX(8deg); }
+    .plate-gold { background: #D9A441; color: #241C08; border: 2px solid transparent; }
+    .plate-ghost { background: rgba(20,18,16,0.35); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.35); }
+    .plate-outline { background: rgba(247,244,243,0.06); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.28); }
+    .plate-light { background: transparent; color: #37322F; border: 1px solid #37322F; }
+    .btn { border-radius: 8px; font-weight: 600; letter-spacing: 0.05em; font-size: 13px; padding: 12px 22px; display: inline-flex; align-items: center; justify-content: center; }
+    .btn-sm { padding: 10px 12px; font-size: 12px; }
+    .card { background: #FFFFFF; border: 1px solid #E5DECF; border-radius: 6px; }
+    .parchment { background: #FBF7EF; border: 1px solid #E5DECF; border-radius: 12px; }
+    .input { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 2px; border: 1px solid #37322F; background: #F7F4F3; color: #1F1F1F; font: inherit; font-size: 14px; }
+    .label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: #37322F; }
+    .hint { font-size: 12.5px; color: #6B655E; line-height: 1.45; }
+    .nav-tab { border-radius: 8px; padding: 14px 20px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    .subtab { padding: 8px 16px; font-size: 12px; font-weight: 500; border-radius: 4px; color: #0B0A09; }
+    .subtab-active { background: #1F1F1F; color: #F7F4F3; }
+    .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 2px; border: 1px solid rgba(31,31,31,0.35); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+    .version { display: inline-flex; padding: 2.5px 8px; border-radius: 4px; background: #D9A441; color: #241C08; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; }
+    table.ref { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.ref th { text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E; padding: 8px 10px; border-bottom: 1px solid #E5DECF; }
+    table.ref td { padding: 8px 10px; border-bottom: 1px solid #F0EBE1; }
+    table.ref tr:nth-child(even) td { background: #F6F1E6; }
+
+  </style>
+</helmet>
+<div style="width: 1440px; min-height: 900px; background: #F7F4F3; display: flex; flex-direction: column;">
+  
+<div style="height: 64px; box-sizing: border-box; background: #1F1F1F; border-bottom: 1px solid #37322F40; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <div style="width: 32px; height: 32px; border-radius: 6px; background: #37322F; display: flex; align-items: center; justify-content: center; color: #D9A441;" class="display">T</div>
+    <div class="display" style="color: #F7F4F3; font-size: 18px;">Tabletop Tavern</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 28px;">
+    
+    <div style="height: 36px; display: inline-flex; align-items: stretch; border-radius: 8px; overflow: hidden; background: #37322F;">
+      <div style="width: 36px; background: #B5ADA6;"></div>
+      <div style="display: flex; align-items: center; padding: 0 12px; color: #F7F4F3; font-size: 14px;">Matt</div>
+    </div>
+    <div style="height: 36px; width: 32px; display: flex; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="#B5ADA6"><g transform="rotate(45 12 12)">
+<rect x="3.2" y="3.2" width="3.6" height="3.6"/><rect x="10.2" y="3.2" width="3.6" height="3.6"/><rect x="17.2" y="3.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="10.2" width="3.6" height="3.6"/><rect x="10.2" y="10.2" width="3.6" height="3.6"/><rect x="17.2" y="10.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="17.2" width="3.6" height="3.6"/><rect x="10.2" y="17.2" width="3.6" height="3.6"/><rect x="17.2" y="17.2" width="3.6" height="3.6"/></g></svg></div>
+  </div>
+</div>
+  <div style="display: flex; flex-grow: 1; min-height: 836px;">
+    
+<div style="width: 92px; box-sizing: border-box; background: #1F1F1F; padding: 36px 20px 24px 20px; display: flex; flex-direction: column; gap: 22px; flex-shrink: 0; align-items: center;">
+    <div class="plate-outline" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">Overview</span></div>
+    <div class="plate-outline" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">World</span></div>
+    <div class="plate-gold" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">Character</span></div>
+</div>
+    <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+      
+<div style="height: 96px; box-sizing: border-box; background: #F7F4F3; border-bottom: 1px solid #E5DECF; padding: 0 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px;">
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="eyebrow">Campaign</div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div class="display" style="color: #0B0A09; font-size: 26px; line-height: 1.1;">Secret to Bear</div>
+      <span class="chip skew" style="border-color: #37322F; color: #37322F;"><span class="unskew">Draft</span></span>
+      <span class="version skew"><span class="unskew">v1.0.0</span></span>
+      <span class="hint">unsaved changes</span>
+    </div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px;">
+    <div class="btn btn-sm skew plate-light"><span class="unskew">Back to campaigns</span></div>
+    <div class="btn skew plate-gold"><span class="unskew">Save campaign</span></div>
+  </div>
+</div>
+      
+<div style="height: 44px; box-sizing: border-box; background: #B5ADA6; border-bottom: 1px solid #37322F; padding: 0 28px; display: flex; align-items: center; gap: 6px;">
+  <div class="subtab skew subtab-active"><span class="unskew">Components</span></div><div class="subtab skew"><span class="unskew">Versions</span></div>
+</div>
+      <div style="padding: 36px 40px 56px 40px;">
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start;">
+
+  <div style="display: flex; flex-direction: column; gap: 18px;">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 6px;">
+      <div>
+        <div class="eyebrow" style="margin-bottom: 8px;">Character config</div>
+        <div class="display" style="font-size: 28px; color: #0B0A09;">What a character is made of</div>
+        <div class="hint" style="margin-top: 6px; max-width: 620px;">Players build against this when they take a seat. Order here is the order they see. Nothing is required except what you mark required.</div>
+      </div>
+    </div>
+
+    
+<div class="card" style="display: flex; gap: 0; overflow: hidden;">
+  <div style="width: 36px; background: #F6F1E6; border-right: 1px solid #E5DECF; display: flex; align-items: center; justify-content: center;"><svg width="14" height="16" viewBox="0 0 14 16" fill="#B5ADA6"><circle cx="4" cy="3" r="1.4"/><circle cx="10" cy="3" r="1.4"/><circle cx="4" cy="8" r="1.4"/><circle cx="10" cy="8" r="1.4"/><circle cx="4" cy="13" r="1.4"/><circle cx="10" cy="13" r="1.4"/></svg></div>
+  <div style="flex-grow: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="chip skew" style="background: #1F1F1F; color: #F7F4F3; border-color: #1F1F1F;"><span class="unskew">Name</span></span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E;">Label</span>
+          <input class="input" value="Name" style="width: 240px; font-weight: 600; font-size: 15px;">
+        </div>
+        
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; color: #6B655E;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #37322F;"><input type="checkbox"> Secret</label>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg>
+      </div>
+    </div>
+    
+<div style="display: grid; grid-template-columns: 200px 140px; gap: 16px; align-items: end;">
+  <div><label class="label">Maximum length</label><input class="input" value="60"></div>
+  <div style="display: flex; align-items: center; gap: 8px; padding-bottom: 10px;"><input type="checkbox" checked><span style="font-size: 13px; color: #37322F;">Required</span></div>
+</div>
+
+  </div>
+</div>
+    
+<div class="card" style="display: flex; gap: 0; overflow: hidden;">
+  <div style="width: 36px; background: #F6F1E6; border-right: 1px solid #E5DECF; display: flex; align-items: center; justify-content: center;"><svg width="14" height="16" viewBox="0 0 14 16" fill="#B5ADA6"><circle cx="4" cy="3" r="1.4"/><circle cx="10" cy="3" r="1.4"/><circle cx="4" cy="8" r="1.4"/><circle cx="10" cy="8" r="1.4"/><circle cx="4" cy="13" r="1.4"/><circle cx="10" cy="13" r="1.4"/></svg></div>
+  <div style="flex-grow: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="chip skew" style="background: #1F1F1F; color: #F7F4F3; border-color: #1F1F1F;"><span class="unskew">Hit points</span></span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E;">Label</span>
+          <input class="input" value="Vitality" style="width: 240px; font-weight: 600; font-size: 15px;">
+        </div>
+        
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; color: #6B655E;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #37322F;"><input type="checkbox"> Secret</label>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg>
+      </div>
+    </div>
+    
+<div style="display: grid; grid-template-columns: 200px repeat(3, 140px); gap: 16px; align-items: end;">
+  <div>
+    <label class="label">Representation</label>
+    <select class="input"><option>Number</option></select>
+  </div>
+  <div><label class="label">Minimum</label><input class="input" value="0"></div>
+  <div><label class="label">Maximum</label><input class="input" value="20"></div>
+  <div><label class="label">Starting value</label><input class="input" value="10"></div>
+</div>
+<div class="hint">A number between minimum and maximum. Reaching the minimum is the zero point.</div>
+
+  </div>
+</div>
+    
+<div class="card" style="display: flex; gap: 0; overflow: hidden;">
+  <div style="width: 36px; background: #F6F1E6; border-right: 1px solid #E5DECF; display: flex; align-items: center; justify-content: center;"><svg width="14" height="16" viewBox="0 0 14 16" fill="#B5ADA6"><circle cx="4" cy="3" r="1.4"/><circle cx="10" cy="3" r="1.4"/><circle cx="4" cy="8" r="1.4"/><circle cx="10" cy="8" r="1.4"/><circle cx="4" cy="13" r="1.4"/><circle cx="10" cy="13" r="1.4"/></svg></div>
+  <div style="flex-grow: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="chip skew" style="background: #1F1F1F; color: #F7F4F3; border-color: #1F1F1F;"><span class="unskew">Hit points</span></span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E;">Label</span>
+          <input class="input" value="Resolve" style="width: 240px; font-weight: 600; font-size: 15px;">
+        </div>
+        
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; color: #6B655E;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #37322F;"><input type="checkbox"> Secret</label>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg>
+      </div>
+    </div>
+    
+<div style="display: grid; grid-template-columns: 200px 1fr; gap: 16px; align-items: start;">
+  <div style="display: flex; flex-direction: column; gap: 16px;">
+    <div>
+      <label class="label">Representation</label>
+      <select class="input"><option>Weighted scale</option></select>
+    </div>
+    <div>
+      <label class="label">Starting step</label>
+      <select class="input"><option>Full</option></select>
+    </div>
+  </div>
+  <div>
+    <label class="label">Scale, best to worst</label>
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="display: grid; grid-template-columns: 80px 1fr 28px; gap: 8px; align-items: center;"><input class="input" value="1.0"><input class="input" value="Full"><span style="color: #6B655E;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></span></div>
+      <div style="display: grid; grid-template-columns: 80px 1fr 28px; gap: 8px; align-items: center;"><input class="input" value="0.8"><input class="input" value="High"><span style="color: #6B655E;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></span></div>
+      <div style="display: grid; grid-template-columns: 80px 1fr 28px; gap: 8px; align-items: center;"><input class="input" value="0.6"><input class="input" value="Mid"><span style="color: #6B655E;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></span></div>
+      <div style="display: grid; grid-template-columns: 80px 1fr 28px; gap: 8px; align-items: center;"><input class="input" value="0.3"><input class="input" value="Low"><span style="color: #6B655E;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></span></div>
+      <div style="display: grid; grid-template-columns: 80px 1fr 28px; gap: 8px; align-items: center;"><input class="input" value="0.0"><input class="input" value="Zero"><span style="color: #6B655E;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></span></div>
+      <div class="btn btn-sm skew plate-light" style="align-self: flex-start; margin-top: 4px;"><span class="unskew">+ Add step</span></div>
+    </div>
+  </div>
+</div>
+<div class="hint">An ordered scale. Damage moves a character down it. The last step is the zero point.</div>
+
+  </div>
+</div>
+    
+<div class="card" style="display: flex; gap: 0; overflow: hidden;">
+  <div style="width: 36px; background: #F6F1E6; border-right: 1px solid #E5DECF; display: flex; align-items: center; justify-content: center;"><svg width="14" height="16" viewBox="0 0 14 16" fill="#B5ADA6"><circle cx="4" cy="3" r="1.4"/><circle cx="10" cy="3" r="1.4"/><circle cx="4" cy="8" r="1.4"/><circle cx="10" cy="8" r="1.4"/><circle cx="4" cy="13" r="1.4"/><circle cx="10" cy="13" r="1.4"/></svg></div>
+  <div style="flex-grow: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="chip skew" style="background: #1F1F1F; color: #F7F4F3; border-color: #1F1F1F;"><span class="unskew">Attribute</span></span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E;">Label</span>
+          <input class="input" value="Strength" style="width: 240px; font-weight: 600; font-size: 15px;">
+        </div>
+        
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; color: #6B655E;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #37322F;"><input type="checkbox"> Secret</label>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg>
+      </div>
+    </div>
+    
+<div style="display: grid; grid-template-columns: repeat(3, 140px); gap: 16px; align-items: end;">
+  <div><label class="label">Minimum</label><input class="input" value="1"></div>
+  <div><label class="label">Maximum</label><input class="input" value="20"></div>
+  <div><label class="label">Default</label><input class="input" value="10"></div>
+</div>
+
+  </div>
+</div>
+    
+<div class="card" style="display: flex; gap: 0; overflow: hidden;">
+  <div style="width: 36px; background: #F6F1E6; border-right: 1px solid #E5DECF; display: flex; align-items: center; justify-content: center;"><svg width="14" height="16" viewBox="0 0 14 16" fill="#B5ADA6"><circle cx="4" cy="3" r="1.4"/><circle cx="10" cy="3" r="1.4"/><circle cx="4" cy="8" r="1.4"/><circle cx="10" cy="8" r="1.4"/><circle cx="4" cy="13" r="1.4"/><circle cx="10" cy="13" r="1.4"/></svg></div>
+  <div style="flex-grow: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="chip skew" style="background: #1F1F1F; color: #F7F4F3; border-color: #1F1F1F;"><span class="unskew">Attribute</span></span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E;">Label</span>
+          <input class="input" value="Agility" style="width: 240px; font-weight: 600; font-size: 15px;">
+        </div>
+        
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; color: #6B655E;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #37322F;"><input type="checkbox"> Secret</label>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg>
+      </div>
+    </div>
+    
+<div style="display: grid; grid-template-columns: repeat(3, 140px); gap: 16px; align-items: end;">
+  <div><label class="label">Minimum</label><input class="input" value="1"></div>
+  <div><label class="label">Maximum</label><input class="input" value="20"></div>
+  <div><label class="label">Default</label><input class="input" value="10"></div>
+</div>
+
+  </div>
+</div>
+    
+<div class="card" style="display: flex; gap: 0; overflow: hidden;">
+  <div style="width: 36px; background: #F6F1E6; border-right: 1px solid #E5DECF; display: flex; align-items: center; justify-content: center;"><svg width="14" height="16" viewBox="0 0 14 16" fill="#B5ADA6"><circle cx="4" cy="3" r="1.4"/><circle cx="10" cy="3" r="1.4"/><circle cx="4" cy="8" r="1.4"/><circle cx="10" cy="8" r="1.4"/><circle cx="4" cy="13" r="1.4"/><circle cx="10" cy="13" r="1.4"/></svg></div>
+  <div style="flex-grow: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="chip skew" style="background: #1F1F1F; color: #F7F4F3; border-color: #1F1F1F;"><span class="unskew">Attribute</span></span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E;">Label</span>
+          <input class="input" value="Wits" style="width: 240px; font-weight: 600; font-size: 15px;">
+        </div>
+        
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; color: #6B655E;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #37322F;"><input type="checkbox"> Secret</label>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg>
+      </div>
+    </div>
+    
+<div style="display: grid; grid-template-columns: repeat(3, 140px); gap: 16px; align-items: end;">
+  <div><label class="label">Minimum</label><input class="input" value="1"></div>
+  <div><label class="label">Maximum</label><input class="input" value="20"></div>
+  <div><label class="label">Default</label><input class="input" value="10"></div>
+</div>
+
+  </div>
+</div>
+
+    <div class="card" style="border-style: dashed; padding: 22px 24px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #6B655E; font-size: 13.5px;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg> Drop a component here, or pick one from the palette
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 26px; position: sticky; top: 24px;">
+    <div style="background: #1F1F1F; border-radius: 6px; padding: 22px 22px 24px 22px; display: flex; flex-direction: column; gap: 14px;">
+      <div class="eyebrow" style="color: #D9A441;">Components</div>
+      <div class="hint" style="color: #B5ADA6;">Ours to define, yours to configure. Add as many of each as your game needs, or none. Secret components are seen only by their player and the GM.</div>
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+        <div class="skew plate-outline" style="border-radius: 6px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;"><span class="unskew" style="font-size: 13px; font-weight: 600; color: #F7F4F3;">Name</span><span class="unskew" style="color: #D9A441;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></span></div>
+        <div class="skew plate-outline" style="border-radius: 6px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;"><span class="unskew" style="font-size: 13px; font-weight: 600; color: #F7F4F3;">Hit points</span><span class="unskew" style="color: #D9A441;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></span></div>
+        <div class="skew plate-outline" style="border-radius: 6px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;"><span class="unskew" style="font-size: 13px; font-weight: 600; color: #F7F4F3;">Attribute</span><span class="unskew" style="color: #D9A441;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></span></div>
+      </div>
+      <div class="hint" style="color: #B5ADA6; margin-top: 6px;">Number, Text and Choice arrive with the framework preset.</div>
+    </div>
+
+  </div>
+</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>Character create flow</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Metamorphous&family=Inter:wght@400;500;600;700&display=swap');
+    body { margin: 0; background: #F7F4F3; color: #1F1F1F; font-family: Inter, 'Segoe UI', Tahoma, sans-serif; font-size: 14px; }
+    a { color: #9A7526; } a:hover { color: #6E5319; }
+    .display { font-family: Metamorphous, Georgia, serif; font-weight: 400; }
+    .eyebrow { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: #9A7526; }
+    .skew { transform: skewX(-8deg); }
+    .unskew { display: inline-block; transform: skewX(8deg); }
+    .plate-gold { background: #D9A441; color: #241C08; border: 2px solid transparent; }
+    .plate-ghost { background: rgba(20,18,16,0.35); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.35); }
+    .plate-outline { background: rgba(247,244,243,0.06); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.28); }
+    .plate-light { background: transparent; color: #37322F; border: 1px solid #37322F; }
+    .btn { border-radius: 8px; font-weight: 600; letter-spacing: 0.05em; font-size: 13px; padding: 12px 22px; display: inline-flex; align-items: center; justify-content: center; }
+    .btn-sm { padding: 10px 12px; font-size: 12px; }
+    .card { background: #FFFFFF; border: 1px solid #E5DECF; border-radius: 6px; }
+    .parchment { background: #FBF7EF; border: 1px solid #E5DECF; border-radius: 12px; }
+    .input { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 2px; border: 1px solid #37322F; background: #F7F4F3; color: #1F1F1F; font: inherit; font-size: 14px; }
+    .label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: #37322F; }
+    .hint { font-size: 12.5px; color: #6B655E; line-height: 1.45; }
+    .nav-tab { border-radius: 8px; padding: 14px 20px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    .subtab { padding: 8px 16px; font-size: 12px; font-weight: 500; border-radius: 4px; color: #0B0A09; }
+    .subtab-active { background: #1F1F1F; color: #F7F4F3; }
+    .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 2px; border: 1px solid rgba(31,31,31,0.35); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+    .version { display: inline-flex; padding: 2.5px 8px; border-radius: 4px; background: #D9A441; color: #241C08; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; }
+    table.ref { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.ref th { text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E; padding: 8px 10px; border-bottom: 1px solid #E5DECF; }
+    table.ref td { padding: 8px 10px; border-bottom: 1px solid #F0EBE1; }
+    table.ref tr:nth-child(even) td { background: #F6F1E6; }
+
+  </style>
+</helmet>
+<div style="width: 1440px; min-height: 900px; background: #F7F4F3; display: flex; flex-direction: column;">
+  
+<div style="height: 64px; box-sizing: border-box; background: #1F1F1F; border-bottom: 1px solid #37322F40; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <div style="width: 32px; height: 32px; border-radius: 6px; background: #37322F; display: flex; align-items: center; justify-content: center; color: #D9A441;" class="display">T</div>
+    <div class="display" style="color: #F7F4F3; font-size: 18px;">Tabletop Tavern</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 28px;">
+    
+    <div style="height: 36px; display: inline-flex; align-items: stretch; border-radius: 8px; overflow: hidden; background: #37322F;">
+      <div style="width: 36px; background: #B5ADA6;"></div>
+      <div style="display: flex; align-items: center; padding: 0 12px; color: #F7F4F3; font-size: 14px;">Matt</div>
+    </div>
+    <div style="height: 36px; width: 32px; display: flex; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="#B5ADA6"><g transform="rotate(45 12 12)">
+<rect x="3.2" y="3.2" width="3.6" height="3.6"/><rect x="10.2" y="3.2" width="3.6" height="3.6"/><rect x="17.2" y="3.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="10.2" width="3.6" height="3.6"/><rect x="10.2" y="10.2" width="3.6" height="3.6"/><rect x="17.2" y="10.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="17.2" width="3.6" height="3.6"/><rect x="10.2" y="17.2" width="3.6" height="3.6"/><rect x="17.2" y="17.2" width="3.6" height="3.6"/></g></svg></div>
+  </div>
+</div>
+  <div style="padding: 40px 40px 64px 40px;">
+
+<div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px;">
+
+  <div style="position: relative; border-radius: 6px; overflow: hidden; background: radial-gradient(120% 90% at 78% 8%, #6B4A2E 0%, rgba(107,74,46,0) 34%), radial-gradient(90% 70% at 85% 30%, #24344F 0%, rgba(36,52,79,0) 55%), linear-gradient(115deg,#0A0D16 20%,#131B2E 55%,#0C1020 100%); clip-path: polygon(0 0, 100% 0, calc(100% - 41px) calc(100% - 5px), calc(100% - 43px) calc(100% - 1px), calc(100% - 47px) 100%, 0 100%); padding: 32px 42px 30px 42px; display: flex; flex-direction: column; gap: 10px;">
+    <div class="eyebrow" style="color: #D9A441;">Take a seat</div>
+    <div class="display" style="color: #F7F4F3; font-size: 36px; line-height: 1.1; text-shadow: 0 2px 10px rgba(5,4,3,.85);">Secret to Bear</div>
+    <div style="display: flex; align-items: center; gap: 10px; color: #CFC9C2; font-size: 13.5px;">
+      <span>Built against</span><span class="version skew"><span class="unskew">v1.0.0</span></span><span>run by Matt</span>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 26px 28px; display: flex; flex-direction: column; gap: 22px;">
+
+    <div>
+      <label class="label">Name <span style="color: #9A7526;">required</span></label>
+      <input class="input" value="Brannoc Vell" style="font-size: 16px;">
+    </div>
+
+    <div style="height: 1px; background: #E5DECF;"></div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px;">
+      <div>
+        <label class="label">Vitality</label>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <input class="input" value="10" style="width: 90px; text-align: center; font-size: 18px; font-weight: 600;">
+          <div class="hint">0 to 20. Starts at 10.</div>
+        </div>
+      </div>
+      <div>
+        <label class="label">Resolve</label>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <span class="chip skew plate-gold" style="border-color: #D9A441;"><span class="unskew">Full</span></span>
+          <span class="chip skew"><span class="unskew">High</span></span>
+          <span class="chip skew"><span class="unskew">Mid</span></span>
+          <span class="chip skew"><span class="unskew">Low</span></span>
+          <span class="chip skew"><span class="unskew">Zero</span></span>
+        </div>
+        <div class="hint" style="margin-top: 8px;">Starts at Full.</div>
+      </div>
+    </div>
+
+    <div style="height: 1px; background: #E5DECF;"></div>
+
+    <div>
+      <div class="eyebrow" style="margin-bottom: 12px;">Attributes</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+        <div class="parchment" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-weight: 600; font-size: 13.5px; color: #141210;">Strength</div>
+          <input class="input" value="14" style="text-align: center; font-size: 18px; font-weight: 600;">
+          <div class="hint">1 to 20, default 10</div>
+        </div>
+        <div class="parchment" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-weight: 600; font-size: 13.5px; color: #141210;">Agility</div>
+          <input class="input" value="10" style="text-align: center; font-size: 18px; font-weight: 600;">
+          <div class="hint">1 to 20, default 10</div>
+        </div>
+        <div class="parchment" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-weight: 600; font-size: 13.5px; color: #141210;">Wits</div>
+          <input class="input" value="8" style="text-align: center; font-size: 18px; font-weight: 600;">
+          <div class="hint">1 to 20, default 10</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px;">
+      <div class="hint">Nothing here is checked against a rulebook. Your table decides what is fair.</div>
+      <div class="btn skew plate-gold"><span class="unskew">Take a seat</span></div>
+    </div>
+  </div>
+</div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

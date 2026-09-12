@@ -2,6 +2,12 @@
 
 > **Status: DRAFT, 2026-09-12.** High-level shape only. Detail is extracted per stage when
 > its turn comes. Existing plans this supersedes are collected in `existing_plans/`.
+>
+> **Design mock: `design-mock.html`** (open in a browser; live copy at
+> https://claude.ai/code/artifact/79318b50-2835-4b53-9675-30d0dd3bb30b). Four artboards:
+> Overview, World stub, GM character config, player character create flow. It is the
+> structure and interaction contract; pixels defer to the app's token pipeline. Source
+> artboards and the build script are in `design-mock-src/`.
 
 ## Context
 
@@ -29,6 +35,18 @@ Decisions locked (2026-09-12):
 - Characters **survive campaign deletion as keepsakes** — readable, unplayable.
 - **Character config is versioned.** A GM edit produces a new version. Characters record the version that built them and keep playing. Difference is information for the GM, never a gate — *the app has no notion of an incompatible character.*
 - **Create eligibility.** A character is created by a session member against that session's campaign config. Zero eligible sessions = nothing to create against; that empty state is designed, not hidden.
+
+Decisions added later on 2026-09-12 (after the mock and the schema discussion):
+- **Version is an integer**, monotonic per campaign, printed as `v3`. No GM-typed label beside it.
+- **Save ≠ Publish.** Save writes the campaign's config *draft*, as often as the GM likes. Publish mints the next version from the draft; the diff shown is draft versus the last published version.
+- **Display name** is every Name component's value, in config order, space-separated. Two Name components labelled "First name" and "Family name" read as one name everywhere the runtime shows a name.
+- **Every component configuration carries `secret: bool`.** A secret component's value is seen only by its player and the GM. api-game filters it per recipient, the way hidden DM tokens are filtered today.
+- **Runtime sheet order is fixed by the platform**: identity, then hit points, then attributes, then anything else; GM config order within a type. The player's create form keeps the GM's order.
+- **The zero point is shown, never acted on.** Reaching it renders as empty. Marking dead and ejecting are explicit roster actions.
+- **api-game is authoritative for values while a game is open.** The end ETL writes every player's values cold in one write; reconnect reads the room, never api-site. This closes `existing_plans/TODO-runtime-character-state-authority.md` in the direction Matt preferred (hot-only during play).
+- **Prompt-all is kept and repurposed.** The initiative-specific "prompt all players" becomes a generic group prompt: the GM types what the roll is for. The single-target dice prompt with free-text roll type stays. Every other D&D prompt goes.
+- **Mock corrections applied**: each component card carries a visible "Label" caption before its label input, and a "Secret" toggle.
+- **Existing characters are kept, as keepsakes.** The rewrite does not discard rows. Each old character loses its table (no campaign, no session, no version) and keeps a snapshot built from its name, hit points and ability scores, which is precisely the state a character reaches when its campaign is deleted. Current sessions therefore have no seated characters after the migration. Schema change = additive migration, backfill script, destructive migration; never a hand-written data migration.
 
 ## Vocabulary (define early, use everywhere)
 
@@ -166,7 +184,13 @@ the real content. Backend: extend `CreateCampaign` / `UpdateCampaign` with
    write the component value (`gameservice.py:385-450`, `CharacterSheet.js`, `PlayerCard.js`).
 
 **Strip** from the runtime in the same change: hard-coded `character_class`,
-`character_race`, `level`, `ac` and any D&D prompting.
+`character_race`, `level`, `ac`; the initiative tracker, combat toggle and combat state
+event; level-up; derived D&D stats; and every D&D-named prompt except the single-target
+dice prompt and the repurposed prompt-all. The full remove/replace/keep inventory is in
+`implementation/03-api-game.md` and `implementation/06-game-runtime-ui.md`.
+
+**Implementation plan for the executing agent** lives in `implementation/`, starting at
+`implementation/00-agent-brief.md`.
 
 **Framework preset**: out of the proof. Recorded as the test of expressiveness: the SRD
 becomes a set of component configurations, which today it cannot, being hard-coded.

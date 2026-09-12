@@ -1,0 +1,13 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",            "title": "Overview",              "x": 0,    "y": 0,    "w": 1440, "h": 1720 },
+    { "file": "World.dc.html",           "title": "World (stub)",          "x": 1540, "y": 0,    "w": 1440, "h": 900 },
+    { "file": "Character.dc.html",       "title": "Character config (GM)", "x": 0,    "y": 1860, "w": 1440, "h": 1560 },
+    { "file": "CharacterCreate.dc.html", "title": "Character create flow (player)", "x": 1540, "y": 1860, "w": 1440, "h": 1000 }
+  ],
+  "annotations": [
+    { "id": "read-order", "x": 0, "y": -150, "w": 520, "text": "Read left to right, top to bottom.\n1 Overview  2 World stub  3 GM configures components  4 Player builds against that config.\nWireframe fidelity, real site tokens. World content is ghosted on purpose: v1 ships it as a stub." },
+    { "id": "component-note", "x": 1540, "y": 1710, "w": 460, "text": "Two Hit points components on one config, one Number and one Weighted scale, to prove cardinality and representation are the GM's call, never the app's." }
+  ],
+  "launch": { "view": "canvas" }
+}

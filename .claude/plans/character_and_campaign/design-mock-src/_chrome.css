@@ -1,0 +1,27 @@
+    @import url('https://fonts.googleapis.com/css2?family=Metamorphous&family=Inter:wght@400;500;600;700&display=swap');
+    body { margin: 0; background: #F7F4F3; color: #1F1F1F; font-family: Inter, 'Segoe UI', Tahoma, sans-serif; font-size: 14px; }
+    a { color: #9A7526; } a:hover { color: #6E5319; }
+    .display { font-family: Metamorphous, Georgia, serif; font-weight: 400; }
+    .eyebrow { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: #9A7526; }
+    .skew { transform: skewX(-8deg); }
+    .unskew { display: inline-block; transform: skewX(8deg); }
+    .plate-gold { background: #D9A441; color: #241C08; border: 2px solid transparent; }
+    .plate-ghost { background: rgba(20,18,16,0.35); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.35); }
+    .plate-outline { background: rgba(247,244,243,0.06); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.28); }
+    .plate-light { background: transparent; color: #37322F; border: 1px solid #37322F; }
+    .btn { border-radius: 8px; font-weight: 600; letter-spacing: 0.05em; font-size: 13px; padding: 12px 22px; display: inline-flex; align-items: center; justify-content: center; }
+    .btn-sm { padding: 10px 12px; font-size: 12px; }
+    .card { background: #FFFFFF; border: 1px solid #E5DECF; border-radius: 6px; }
+    .parchment { background: #FBF7EF; border: 1px solid #E5DECF; border-radius: 12px; }
+    .input { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 2px; border: 1px solid #37322F; background: #F7F4F3; color: #1F1F1F; font: inherit; font-size: 14px; }
+    .label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: #37322F; }
+    .hint { font-size: 12.5px; color: #6B655E; line-height: 1.45; }
+    .nav-tab { border-radius: 8px; padding: 14px 20px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    .subtab { padding: 8px 16px; font-size: 12px; font-weight: 500; border-radius: 4px; color: #0B0A09; }
+    .subtab-active { background: #1F1F1F; color: #F7F4F3; }
+    .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 2px; border: 1px solid rgba(31,31,31,0.35); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+    .version { display: inline-flex; padding: 2.5px 8px; border-radius: 4px; background: #D9A441; color: #241C08; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; }
+    table.ref { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.ref th { text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E; padding: 8px 10px; border-bottom: 1px solid #E5DECF; }
+    table.ref td { padding: 8px 10px; border-bottom: 1px solid #F0EBE1; }
+    table.ref tr:nth-child(even) td { background: #F6F1E6; }

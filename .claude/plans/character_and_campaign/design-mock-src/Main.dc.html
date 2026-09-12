@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>Campaign · Overview</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Metamorphous&family=Inter:wght@400;500;600;700&display=swap');
+    body { margin: 0; background: #F7F4F3; color: #1F1F1F; font-family: Inter, 'Segoe UI', Tahoma, sans-serif; font-size: 14px; }
+    a { color: #9A7526; } a:hover { color: #6E5319; }
+    .display { font-family: Metamorphous, Georgia, serif; font-weight: 400; }
+    .eyebrow { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: #9A7526; }
+    .skew { transform: skewX(-8deg); }
+    .unskew { display: inline-block; transform: skewX(8deg); }
+    .plate-gold { background: #D9A441; color: #241C08; border: 2px solid transparent; }
+    .plate-ghost { background: rgba(20,18,16,0.35); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.35); }
+    .plate-outline { background: rgba(247,244,243,0.06); color: #F7F4F3; border: 1px solid rgba(247,244,243,0.28); }
+    .plate-light { background: transparent; color: #37322F; border: 1px solid #37322F; }
+    .btn { border-radius: 8px; font-weight: 600; letter-spacing: 0.05em; font-size: 13px; padding: 12px 22px; display: inline-flex; align-items: center; justify-content: center; }
+    .btn-sm { padding: 10px 12px; font-size: 12px; }
+    .card { background: #FFFFFF; border: 1px solid #E5DECF; border-radius: 6px; }
+    .parchment { background: #FBF7EF; border: 1px solid #E5DECF; border-radius: 12px; }
+    .input { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 2px; border: 1px solid #37322F; background: #F7F4F3; color: #1F1F1F; font: inherit; font-size: 14px; }
+    .label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: #37322F; }
+    .hint { font-size: 12.5px; color: #6B655E; line-height: 1.45; }
+    .nav-tab { border-radius: 8px; padding: 14px 20px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    .subtab { padding: 8px 16px; font-size: 12px; font-weight: 500; border-radius: 4px; color: #0B0A09; }
+    .subtab-active { background: #1F1F1F; color: #F7F4F3; }
+    .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 2px; border: 1px solid rgba(31,31,31,0.35); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+    .version { display: inline-flex; padding: 2.5px 8px; border-radius: 4px; background: #D9A441; color: #241C08; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; }
+    table.ref { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.ref th { text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B655E; padding: 8px 10px; border-bottom: 1px solid #E5DECF; }
+    table.ref td { padding: 8px 10px; border-bottom: 1px solid #F0EBE1; }
+    table.ref tr:nth-child(even) td { background: #F6F1E6; }
+
+  </style>
+</helmet>
+<div style="width: 1440px; min-height: 900px; background: #F7F4F3; display: flex; flex-direction: column;">
+  
+<div style="height: 64px; box-sizing: border-box; background: #1F1F1F; border-bottom: 1px solid #37322F40; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <div style="width: 32px; height: 32px; border-radius: 6px; background: #37322F; display: flex; align-items: center; justify-content: center; color: #D9A441;" class="display">T</div>
+    <div class="display" style="color: #F7F4F3; font-size: 18px;">Tabletop Tavern</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 28px;">
+    
+    <div style="height: 36px; display: inline-flex; align-items: stretch; border-radius: 8px; overflow: hidden; background: #37322F;">
+      <div style="width: 36px; background: #B5ADA6;"></div>
+      <div style="display: flex; align-items: center; padding: 0 12px; color: #F7F4F3; font-size: 14px;">Matt</div>
+    </div>
+    <div style="height: 36px; width: 32px; display: flex; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="#B5ADA6"><g transform="rotate(45 12 12)">
+<rect x="3.2" y="3.2" width="3.6" height="3.6"/><rect x="10.2" y="3.2" width="3.6" height="3.6"/><rect x="17.2" y="3.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="10.2" width="3.6" height="3.6"/><rect x="10.2" y="10.2" width="3.6" height="3.6"/><rect x="17.2" y="10.2" width="3.6" height="3.6"/>
+<rect x="3.2" y="17.2" width="3.6" height="3.6"/><rect x="10.2" y="17.2" width="3.6" height="3.6"/><rect x="17.2" y="17.2" width="3.6" height="3.6"/></g></svg></div>
+  </div>
+</div>
+  <div style="display: flex; flex-grow: 1; min-height: 836px;">
+    
+<div style="width: 92px; box-sizing: border-box; background: #1F1F1F; padding: 36px 20px 24px 20px; display: flex; flex-direction: column; gap: 22px; flex-shrink: 0; align-items: center;">
+    <div class="plate-gold" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">Overview</span></div>
+    <div class="plate-outline" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">World</span></div>
+    <div class="plate-outline" style="width: 52px; height: 168px; border-radius: 8px; transform: skewY(-8deg); display: flex; align-items: center; justify-content: center;"><span style="display: inline-block; transform: skewY(8deg) rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;">Character</span></div>
+</div>
+    <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+      
+<div style="height: 96px; box-sizing: border-box; background: #F7F4F3; border-bottom: 1px solid #E5DECF; padding: 0 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px;">
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="eyebrow">Campaign</div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div class="display" style="color: #0B0A09; font-size: 26px; line-height: 1.1;">Secret to Bear</div>
+      <span class="chip skew" style="border-color: #37322F; color: #37322F;"><span class="unskew">Draft</span></span>
+      <span class="version skew"><span class="unskew">v1.0.0</span></span>
+      <span class="hint">unsaved changes</span>
+    </div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px;">
+    <div class="btn btn-sm skew plate-light"><span class="unskew">Back to campaigns</span></div>
+    <div class="btn skew plate-gold"><span class="unskew">Save campaign</span></div>
+  </div>
+</div>
+      
+<div style="height: 44px; box-sizing: border-box; background: #B5ADA6; border-bottom: 1px solid #37322F; padding: 0 28px; display: flex; align-items: center; gap: 6px;">
+  <div class="subtab skew subtab-active"><span class="unskew">Story</span></div><div class="subtab skew"><span class="unskew">Setup</span></div>
+</div>
+      <div style="padding: 36px 40px 56px 40px;">
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start;">
+
+  <div style="display: flex; flex-direction: column; gap: 26px;">
+
+    <div style="position: relative; min-height: 220px; border-radius: 6px; overflow: hidden; background: radial-gradient(120% 90% at 78% 8%, #6B4A2E 0%, rgba(107,74,46,0) 34%), radial-gradient(90% 70% at 85% 30%, #24344F 0%, rgba(36,52,79,0) 55%), linear-gradient(115deg,#0A0D16 20%,#131B2E 55%,#0C1020 100%); clip-path: polygon(0 0, 100% 0, calc(100% - 41px) calc(100% - 5px), calc(100% - 43px) calc(100% - 1px), calc(100% - 47px) 100%, 0 100%);">
+      <div style="padding: 36px 42px 32px 42px; display: flex; flex-direction: column; gap: 14px;">
+        <input class="input display" value="Secret to Bear" style="background: transparent; border: none; border-bottom: 1px dashed rgba(247,244,243,0.35); color: #F7F4F3; font-size: 44px; line-height: 1.1; padding: 0 0 6px 0; border-radius: 0; text-shadow: 0 2px 10px rgba(5,4,3,.85);">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <span class="chip skew" style="border-color: rgba(247,244,243,0.4); color: #F7F4F3;"><span class="unskew">Mysterious</span></span>
+          <span class="chip skew" style="border-color: rgba(247,244,243,0.4); color: #F7F4F3;"><span class="unskew">Investigation</span></span>
+          <span class="chip skew" style="border-color: rgba(247,244,243,0.4); color: #F7F4F3;"><span class="unskew">Cosy tavern</span></span>
+          <span class="chip skew" style="border-color: rgba(217,164,65,0.6); color: #D9A441;"><span class="unskew">+ tag</span></span>
+        </div>
+        <textarea class="input" rows="5" style="background: rgba(247,244,243,0.06); border: 1px dashed rgba(247,244,243,0.3); color: #CFC9C2; font-size: 14.5px; line-height: 1.6; resize: none;">The party experience a shocking wake-up call when an innkeeper tells them that the horses they arrived on were killed in the night. With all the signs pointing to the killer being one of their fellow guests, can the party find the culprit before anyone else gets hurt?</textarea>
+      </div>
+    </div>
+
+    <div class="parchment" style="padding: 26px 28px;">
+      <div class="eyebrow" style="margin-bottom: 10px;">Starting the adventure</div>
+      <textarea class="input" rows="7" style="background: transparent; border: 1px dashed #E5DECF; color: #4C463E; font-size: 14.5px; line-height: 1.65; font-style: italic; resize: none;">"This far north the days are short and the nights are long, so you were grateful to have found a welcoming spot to rest when you arrived at this inn yesterday. You stabled your horses, shared a hearty meal with the other guests and headed up to bed. Undisturbed by the howling winds outside, you all slept deeply, until woken by a frantic knocking at your door."</textarea>
+      <div class="hint" style="margin-top: 10px;">Read aloud to open the first game. Optional.</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px;">
+      <div class="parchment" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 14px;">
+        <div class="eyebrow">Important characters</div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="width: 44px; height: 44px; flex-shrink: 0; background: #37322F; clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);"></div>
+            <div>
+              <div style="font-weight: 600; font-size: 14px; color: #141210;">Fealla Davey</div>
+              <div class="hint">Busy Fealla runs the inn by herself. She apologises profusely for the death of the party's mounts.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="width: 44px; height: 44px; flex-shrink: 0; background: #37322F; clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);"></div>
+            <div>
+              <div style="font-weight: 600; font-size: 14px; color: #141210;">Sandon Terez</div>
+              <div class="hint">Knows nothing of his own transformations, only going to sleep and waking up in his own bed.</div>
+            </div>
+          </div>
+        </div>
+        <div class="btn btn-sm skew plate-light" style="align-self: flex-start;"><span class="unskew">+ Add character</span></div>
+      </div>
+      <div class="parchment" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 14px;">
+        <div class="eyebrow">Key locations</div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <div style="font-weight: 600; font-size: 14px; color: #141210;">The Happy Raven Inn</div>
+            <div class="hint">The inn's decor shows signs of age, but its rooms are warm, dry and clean.</div>
+          </div>
+          <div>
+            <div style="font-weight: 600; font-size: 14px; color: #141210;">Stables</div>
+            <div class="hint">Yesterday the party secured their mounts in this sturdy shed. Now five biting swarms are feasting on the horses' bodies.</div>
+          </div>
+        </div>
+        <div class="btn btn-sm skew plate-light" style="align-self: flex-start;"><span class="unskew">+ Add location</span></div>
+      </div>
+    </div>
+
+    <div class="parchment" style="padding: 24px 26px; border-style: dashed; display: flex; flex-direction: column; gap: 12px;">
+      <div class="eyebrow">Secrets and clues</div>
+      <div class="hint" style="color: #4C463E;">GM-only. Never shown to players.</div>
+      <ol style="margin: 0; padding-left: 20px; color: #4C463E; font-size: 13.5px; line-height: 1.6; display: flex; flex-direction: column; gap: 6px;">
+        <li>Fealla's business is struggling, suggesting she could have killed the horses to make the party stay longer.</li>
+        <li>Dirk runs local tours focused on tales of cryptids, so could have killed the horses to drum up publicity.</li>
+        <li>Sandon is a crime writer who lives alone in a cabin. The killings match a scene described in his journal.</li>
+      </ol>
+      <div class="btn btn-sm skew plate-light" style="align-self: flex-start;"><span class="unskew">+ Add secret</span></div>
+    </div>
+
+    <div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+      <div class="eyebrow">The table</div>
+      <div style="display: grid; grid-template-columns: 220px 1fr; gap: 26px; align-items: start;">
+        <div>
+          <label class="label">Seats at the table</label>
+          <select class="input"><option>6</option></select>
+          <div class="hint" style="margin-top: 6px;">Applies the next time the game starts.</div>
+        </div>
+        <div>
+          <label class="label">Tile background</label>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
+            <div style="aspect-ratio: 16/9; border-radius: 2px; border: 2px solid #0B0A09; background: linear-gradient(115deg,#0A0D16,#131B2E);"></div>
+            <div style="aspect-ratio: 16/9; border-radius: 2px; border: 2px solid #37322F; background: linear-gradient(115deg,#17100A,#2B1C0E);"></div>
+            <div style="aspect-ratio: 16/9; border-radius: 2px; border: 2px solid #37322F; background: linear-gradient(115deg,#2A2E1A,#4A4E2E);"></div>
+            <div style="aspect-ratio: 16/9; border-radius: 2px; border: 2px dashed #B5ADA6; display: flex; align-items: center; justify-content: center; color: #6B655E; font-size: 12px;">From library</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 12px;">
+      <div class="eyebrow">Ruleset</div>
+      <div style="font-size: 13.5px; color: #4C463E; line-height: 1.5;">Characters in this campaign are built from the components you configure under <strong>Character</strong>.</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 6px; background: #F6F1E6; border: 1px solid #E5DECF;">
+        <div>
+          <div style="font-size: 13px; font-weight: 600; color: #141210;">Framework preset</div>
+          <div class="hint">None. Start from scratch.</div>
+        </div>
+        <div class="btn btn-sm skew plate-light"><span class="unskew">Choose</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div>
+    <div style="position: sticky; top: 24px; display: flex; flex-direction: column; gap: 4px; padding: 6px 0 0 18px; border-left: 1px solid #E5DECF;">
+      <div class="eyebrow" style="margin-bottom: 10px;">On this page</div>
+      <div style="font-size: 13.5px; font-weight: 600; color: #0B0A09; padding: 6px 0;">Story</div>
+      <div style="font-size: 13.5px; color: #4C463E; padding: 6px 0;">Starting the adventure</div>
+      <div style="font-size: 13.5px; color: #4C463E; padding: 6px 0;">Important characters</div>
+      <div style="font-size: 13.5px; color: #4C463E; padding: 6px 0;">Key locations</div>
+      <div style="font-size: 13.5px; color: #4C463E; padding: 6px 0;">Secrets and clues</div>
+      <div style="font-size: 13.5px; color: #4C463E; padding: 6px 0;">The table</div>
+      <div style="font-size: 13.5px; color: #4C463E; padding: 6px 0;">Ruleset</div>
+    </div>
+  </div>
+</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
