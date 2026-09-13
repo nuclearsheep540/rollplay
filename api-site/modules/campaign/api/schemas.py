@@ -42,6 +42,9 @@ class HeroImageAssetInfo(BaseModel):
     s3_url: Optional[str] = None
     file_size: Optional[int] = None
     filename: Optional[str] = None
+    # The "card" focal region when the host has chosen one: {x, y, width, height} in the
+    # image's native pixels. Every campaign card biases its cover-fit toward its centre.
+    card_focal_area: Optional[Dict[str, float]] = None
 
 
 class CampaignMemberResponse(BaseModel):

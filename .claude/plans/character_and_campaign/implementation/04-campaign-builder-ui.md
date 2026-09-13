@@ -147,6 +147,15 @@ and a ghosted "+ Add table" button. Copy the table contents from `World.dc.html`
 
 ## Character section — `components/CharacterSection.js`
 
+> **Revision (2026-09-13, groups).** Automatic adjacent-type grouping is gone (with
+> `groupAdjacentByType`/`groupLabelFor`). Groups are the GM's: an **Add group** plate in the
+> palette appends `ComponentGroup` with an editable name; `GroupCard.js` renders it with a
+> grip (draggable on the top level only), the name input, **Ungroup** (dissolves it, members
+> step out where it stood — never deletes a component) and a tail drop row. Drag targets are
+> `{containerId, slot}` (top level = `null`), computed from a card's before/after half; the
+> draft hook's `moveEntry(id, target)` does the lift-and-insert. Cards no longer know their
+> index. Member cards `stopPropagation` so the group does not also offer a slot beside itself.
+
 Layout: `grid grid-cols-[minmax(0,1fr)_300px] gap-[26px] items-start`.
 
 **Header row**: eyebrow "Character config", heading "What a character is made of"

@@ -17,16 +17,20 @@ import Modal from './Modal';
  *
  * Purpose-agnostic by design: the caller owns persistence and the purpose
  * key ("token" today, "character" in a later PR). The modal only converts
- * an image + optional initial area into a confirmed square.
+ * an image + optional initial area into a confirmed square — or, for a
+ * caller that passes a non-square aspect and a 'rect' frame, a region.
  */
 export default function FocalAreaModal({
   open,
   imageUrl,
-  initialArea = null,   // {x, y, size} native px, or null for a fresh pick
+  initialArea = null,   // {x, y, size} or {x, y, width, height}, native px; null = fresh pick
   title = 'Choose the focal area',
   confirmLabel = 'Use this area',
+  hint = 'Drag to position, scroll or use the slider to zoom. The circle is exactly how the token will look.',
+  aspect = 1,           // width / height of the frame; 1 confirms a square, anything else a region
+  cropShape = 'round',  // 'round' | 'rect'
   saving = false,
-  onConfirm,            // ({x, y, size}) — native px square
+  onConfirm,            // square: ({x, y, size}); otherwise ({x, y, width, height}) — native px
   onCancel,
 }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -39,30 +43,39 @@ export default function FocalAreaModal({
 
   const handleConfirm = () => {
     if (!areaPixels || !onConfirm) return;
-    // Aspect is locked at 1 so width === height; store one side length.
-    onConfirm({ x: areaPixels.x, y: areaPixels.y, size: areaPixels.width });
+    // The stored shape follows the frame: a square keeps the FocalArea contract's one
+    // side length; any other ratio is a FocalRegion with both.
+    if (aspect === 1) {
+      onConfirm({ x: areaPixels.x, y: areaPixels.y, size: areaPixels.width });
+    } else {
+      onConfirm({ x: areaPixels.x, y: areaPixels.y, width: areaPixels.width, height: areaPixels.height });
+    }
   };
+
+  const initialPixels = initialArea
+    ? {
+        x: initialArea.x,
+        y: initialArea.y,
+        width: initialArea.width ?? initialArea.size,
+        height: initialArea.height ?? initialArea.size,
+      }
+    : undefined;
 
   return (
     <Modal open={open} onClose={onCancel} size="lg">
       <div className="space-y-3">
         <p className="text-sm font-semibold text-content-on-dark">{title}</p>
-        <p className="text-xs text-content-secondary">
-          Drag to position, scroll or use the slider to zoom. The circle is
-          exactly how the token will look.
-        </p>
+        <p className="text-xs text-content-secondary">{hint}</p>
 
         <div className="relative w-full h-80 bg-black/60 rounded overflow-hidden">
           <Cropper
             image={imageUrl}
             crop={crop}
             zoom={zoom}
-            aspect={1}
-            cropShape="round"
+            aspect={aspect}
+            cropShape={cropShape}
             showGrid={false}
-            initialCroppedAreaPixels={initialArea
-              ? { x: initialArea.x, y: initialArea.y, width: initialArea.size, height: initialArea.size }
-              : undefined}
+            initialCroppedAreaPixels={initialPixels}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={handleCropComplete}

@@ -10,7 +10,7 @@ End brings the values home, because api-game owns them while the game is open.
 
 import pytest
 from shared_contracts.components.hit_points import HitPointsValue, IntHitPointsState
-from shared_contracts.components.name import NameValue
+from shared_contracts.components.identity import IdentityConfiguration, IdentityValue, TextIdentityAnswer, TextIdentityInput
 from shared_contracts.session import PlayerState
 
 from modules.characters.application.commands import WriteCharacterValuesFromGame
@@ -47,7 +47,7 @@ class TestEndWritesValuesCold:
         WriteCharacterValuesFromGame(character_repo).execute(
             character_id=character.id,
             values={
-                "name_1": NameValue(component_id="name_1", text="Brannoc Vell"),
+                "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="Brannoc Vell")),
                 "hit_points_1": HitPointsValue(component_id="hit_points_1",
                                                state=IntHitPointsState(current=0)),
             },
@@ -69,7 +69,7 @@ class TestEndWritesValuesCold:
 
         WriteCharacterValuesFromGame(character_repo).execute(
             character_id=character.id,
-            values={"attribute_9": NameValue(component_id="attribute_9", text="not a thing")},
+            values={"attribute_9": IdentityValue(component_id="attribute_9", answer=TextIdentityAnswer(text="not a thing"))},
             color="#ff0000",
         )
 

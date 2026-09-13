@@ -33,7 +33,7 @@ const WORKING_ART_BASE = `
  */
 export default function WorkingOnCard({ campaign }) {
   const router = useRouter()
-  const { url: artUrl } = useHeroImage(campaign)
+  const { url: artUrl, focalPosition } = useHeroImage(campaign)
 
   if (!campaign) {
     return (
@@ -88,7 +88,7 @@ export default function WorkingOnCard({ campaign }) {
         {artUrl && (
           <div
             className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${artUrl})` }}
+            style={{ backgroundImage: `url(${artUrl})`, backgroundPosition: focalPosition }}
           />
         )}
         {/* Moodier than the hero: this is the workbench, not the table. */}

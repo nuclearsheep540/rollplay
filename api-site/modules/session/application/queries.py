@@ -75,6 +75,7 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
     return SessionResponse(
         id=model.id,
         campaign_id=model.campaign_id,
+        campaign_name=model.campaign.title if model.campaign else None,
         host_id=model.host_id,
         host_name=host_name,
         created_at=model.created_at,

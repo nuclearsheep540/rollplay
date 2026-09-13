@@ -17,13 +17,13 @@ from pydantic import BaseModel
 from shared.dependencies.auth import get_current_user_id
 from shared_contracts.components.attribute import AttributeConfiguration, AttributeValue
 from shared_contracts.components.hit_points import HitPointsConfiguration, HitPointsValue
-from shared_contracts.components.name import NameConfiguration, NameValue
+from shared_contracts.components.identity import IdentityConfiguration, IdentityValue
 
 router = APIRouter()
 
 # Palette order, which is the order the builder lists them in.
 COMPONENT_CATALOGUE = [
-    ("name", "Name", NameConfiguration, NameValue),
+    ("identity", "Identity", IdentityConfiguration, IdentityValue),
     ("hit_points", "Hit points", HitPointsConfiguration, HitPointsValue),
     ("attribute", "Attribute", AttributeConfiguration, AttributeValue),
 ]

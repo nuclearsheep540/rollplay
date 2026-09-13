@@ -104,12 +104,20 @@ body {
 
   /* Highlight accent - primary CTAs, live state, favorites */
   --gold: #D9A441;
+  /* Gold that reads as text on a light surface; the eyebrow colour in the mock. */
+  --gold-ink: #9A7526;
 
   /* Library favorite star */
   --favorite: var(--gold);
 
   /* Hover shade for items sitting on dark panels */
   --surface-hover: #2B2724;
+
+  /* The content frame: how wide a page's content may grow on an ultrawide screen.
+     Set on the old campaign-dash TabNav (2026-04) and matched by the site header, so
+     the nav items mark the frame's edges and content sits inside them — pages pad
+     inward from here rather than the viewport. */
+  --content-frame: 1410px;
 }
 
 /* Landing Page Styles */
@@ -2070,6 +2078,33 @@ input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
 .home-btn-outline:hover:not(:disabled) {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+/* A number input with the browser's own spinner removed — for controls that supply
+   their own − and + (the Stepper), where two sets of arrows would compete. Both engines
+   need telling: WebKit draws the spinner as pseudo-elements, Firefox via appearance. */
+.number-plain {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.number-plain::-webkit-outer-spin-button,
+.number-plain::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* The light-surface plate: the mock's .plate-light. The other skins are built for dark
+   panels — smoke text on the smoke band was invisible. */
+.home-btn-light {
+  background: transparent;
+  color: var(--border-default);
+  border: 1px solid var(--border-default);
+}
+
+.home-btn-light:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold-ink);
 }
 
 .home-btn-danger {

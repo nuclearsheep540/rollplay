@@ -349,7 +349,7 @@ def create_game(game_repo: GameRepository):
 
 @pytest.fixture
 def make_character_config():
-    """A fresh CharacterConfig per call — Name, Hit points, one Attribute.
+    """A fresh CharacterConfig per call — Identity (a name), Hit points, one Attribute.
 
     Never a module constant: a test that mutated a shared config would be writing to every
     other test's fixture.
@@ -357,11 +357,11 @@ def make_character_config():
     from shared_contracts.character_config import CharacterConfig
     from shared_contracts.components.attribute import AttributeConfiguration
     from shared_contracts.components.hit_points import HitPointsConfiguration, IntHitPointsRules
-    from shared_contracts.components.name import NameConfiguration
+    from shared_contracts.components.identity import IdentityConfiguration, TextIdentityInput
 
     def _make(version: int = 1, hp_maximum: int = 20):
         return CharacterConfig(version=version, components=[
-            NameConfiguration(id="name_1", label="Name"),
+            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
             HitPointsConfiguration(id="hit_points_1", label="Vitality",
                                    rules=IntHitPointsRules(minimum=0, maximum=hp_maximum, starting=10)),
             AttributeConfiguration(id="attribute_1", label="Strength", minimum=1, maximum=20, default=10),
@@ -375,11 +375,11 @@ def make_character_values():
     """Values matching make_character_config, fresh per call."""
     from shared_contracts.components.attribute import AttributeValue
     from shared_contracts.components.hit_points import HitPointsValue, IntHitPointsState
-    from shared_contracts.components.name import NameValue
+    from shared_contracts.components.identity import IdentityValue, TextIdentityAnswer
 
     def _make(name: str = "Test Character", current: int = 10, score: int = 10):
         return {
-            "name_1": NameValue(component_id="name_1", text=name),
+            "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text=name)),
             "hit_points_1": HitPointsValue(component_id="hit_points_1",
                                            state=IntHitPointsState(current=current)),
             "attribute_1": AttributeValue(component_id="attribute_1", score=score),

@@ -16,7 +16,15 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 export const SECTIONS = [
   { key: 'overview', label: 'Overview', subTabs: [{ key: 'story', label: 'Story' }, { key: 'setup', label: 'Setup' }] },
   { key: 'world', label: 'World', subTabs: [{ key: 'tables', label: 'Tables' }, { key: 'reference', label: 'Reference' }] },
-  { key: 'character', label: 'Character', subTabs: [{ key: 'components', label: 'Components' }, { key: 'versions', label: 'Versions' }] },
+  {
+    key: 'character',
+    label: 'Character',
+    subTabs: [
+      { key: 'components', label: 'Components' },
+      { key: 'preview', label: 'Preview' },
+      { key: 'versions', label: 'Versions' },
+    ],
+  },
 ]
 
 export function useBuilderNav() {

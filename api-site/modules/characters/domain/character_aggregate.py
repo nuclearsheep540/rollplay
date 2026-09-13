@@ -4,11 +4,11 @@
 """Character aggregate root — system-agnostic.
 
 A character is whatever its campaign's character config said it was. The aggregate knows
-what a component *is* (it can pair a value with its configuration, and read a Name) and
+what a component *is* (it can pair a value with its configuration, and read an Identity) and
 nothing about what any component *means*: there is no damage, no death, no level, and
 reaching a hit-points component's zero point is just a value like any other.
 
-Its one derived fact is the display name, joined from every Name value in config order.
+Its one derived fact is the display name, joined from every text Identity value in config order.
 """
 
 import re
@@ -76,16 +76,16 @@ class CharacterAggregate:
         Raises:
             ValidationError: the values do not pair with the config (a data invariant —
                 wrong type, wrong representation, unknown component id). Always blocked.
-            ValueError: a required Name has no text. Completeness at finalize, which is
-                the one axis it is fair to require.
+            ValueError: a required Identity is unanswered. Completeness at finalize,
+                which is the one axis it is fair to require.
         """
         CharacterSheet(config=config, values=values)
 
         missing = [
             component.label
-            for component in config.components
-            if component.type == "name" and component.required
-            and not (values.get(component.id) and values[component.id].text.strip())
+            for component in config.flat_components()
+            if component.type == "identity" and component.required
+            and not (values.get(component.id) and values[component.id].is_populated())
         ]
         if missing:
             raise ValueError(f"Missing required: {', '.join(missing)}")
@@ -111,18 +111,19 @@ class CharacterAggregate:
         return aggregate
 
     def derive_display_name(self) -> str:
-        """Every Name value in config order, single-space joined.
+        """Every text-kind Identity value in config order, single-space joined.
 
-        Two Name components labelled "First name" and "Family name" therefore read as one
-        name everywhere the runtime shows a name.
+        Two such components labelled "First name" and "Family name" therefore read as one
+        name everywhere the runtime shows a name. A chosen class or role is an identity
+        too, but not a name — selects are left out.
         """
         parts = []
-        for configuration in self.config_snapshot.components:
-            if configuration.type != "name":
+        for configuration in self.config_snapshot.flat_components():
+            if configuration.type != "identity" or configuration.input.kind != "text":
                 continue
             value = self.values.get(configuration.id)
-            if value is not None and value.text.strip():
-                parts.append(value.text.strip())
+            if value is not None and value.answer.text.strip():
+                parts.append(value.answer.text.strip())
         return " ".join(parts) if parts else UNNAMED
 
     def set_component_value(self, value: ComponentValue) -> None:

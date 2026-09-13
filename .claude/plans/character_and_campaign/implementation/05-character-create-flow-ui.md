@@ -90,6 +90,13 @@ This is the first thing a brand-new player meets; do not shortcut it.
 
 ## Form — `app/characters/components/CharacterCreateForm.js`
 
+> **Revision (2026-09-13, groups).** The form renders the config's entries: a group is a
+> named section (its label as the gold eyebrow, skipped when published empty); bare
+> components stand on their own with no heading. Consecutive attributes inside any
+> container tile into the 3-column grid — a layout rule, not a group. Seeding, validation
+> and the payload iterate `flatComponents(config.components)`; the runtime sheet ignores
+> groups and keeps the platform type order.
+
 Data: `useSessionParty(sessionId)`? No — the form needs the campaign and its latest
 config: `useCampaign(campaignId)` (from PR 4's hooks; campaign id comes from the session:
 add `useSession(sessionId)` → `GET /api/sessions/{id}` key `['sessions', id]`) and

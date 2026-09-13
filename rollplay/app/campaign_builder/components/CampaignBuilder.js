@@ -178,8 +178,12 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
       ...draft,
       addComponent: scheduling(draft.addComponent),
       updateComponent: scheduling(draft.updateComponent),
+      duplicateComponent: scheduling(draft.duplicateComponent),
       removeComponent: scheduling(draft.removeComponent),
-      moveComponent: scheduling(draft.moveComponent),
+      moveEntry: scheduling(draft.moveEntry),
+      addGroup: scheduling(draft.addGroup),
+      updateGroup: scheduling(draft.updateGroup),
+      removeGroup: scheduling(draft.removeGroup),
     }
   }, [draft, scheduleAutoSave])
 
@@ -227,7 +231,11 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-var(--site-header-height,64px))] bg-surface-primary">
+    // A fixed height, not a minimum: the band and the sub-tab strip are chrome, and only the
+    // content pane below them scrolls. With min-h the pane had no ceiling, so it never
+    // scrolled — the page did, taking the band with it — and the flex column was free to
+    // shrink the band to make room, which is what made the header look different per tab.
+    <div className="flex h-[calc(100vh-var(--site-header-height,64px))] overflow-hidden bg-surface-primary">
       <BuilderRail sections={nav.sections} activeKey={nav.sectionKey} onSelect={onSelectSection} />
       <div className="grow flex flex-col min-w-0">
         <CampaignBand
@@ -240,7 +248,7 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
           saving={saving}
         />
         <BuilderSubTabs subTabs={nav.section.subTabs} activeKey={nav.tabKey} onSelect={onSelectTab} />
-        <div className="grow px-10 pt-9 pb-14 overflow-y-auto">
+        <div className="grow min-h-0 px-10 pt-9 pb-14 overflow-y-auto">
           {nav.sectionKey === 'overview' && (
             <OverviewSection tabKey={nav.tabKey} fields={fields} onFieldChange={onFieldChange} />
           )}
@@ -255,6 +263,8 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
               publishing={publish.isPending}
               canEdit={isHost}
               campaignSaved={!!campaignId}
+              campaignName={fields.title}
+              hostName={user?.screen_name || user?.account_name}
             />
           )}
         </div>

@@ -3,22 +3,23 @@
 
 'use client'
 
+import { FieldHeader, Stepper } from '../shared/Fields'
+
 export default function CreateInput({ configuration, value, onChange }) {
-  const hint =
-    configuration.default === null || configuration.default === undefined
-      ? `${configuration.minimum} to ${configuration.maximum}`
-      : `${configuration.minimum} to ${configuration.maximum}, default ${configuration.default}`
+  // The range and nothing else. The default is already what the box starts at, and saying
+  // so again only tells the player what they are looking at.
+  const hint = `${configuration.minimum} to ${configuration.maximum}`
 
   return (
-    <div className="rounded-xl border border-[#E5DECF] bg-[#FBF7EF] px-4 py-3.5 flex flex-col gap-2">
-      <div className="font-semibold text-[13.5px] text-[#141210]">{configuration.label}</div>
-      <input
-        type="number"
-        className="w-full box-border px-3 py-2 rounded-sm border border-[#37322F] bg-[#F7F4F3] text-center text-lg font-semibold"
-        value={value?.score ?? ''}
-        onChange={(event) => onChange({ ...value, score: Number(event.target.value) })}
+    <div className="rounded-xl border border-[#E5DECF] bg-[#FBF7EF] px-4 py-3.5">
+      <FieldHeader label={configuration.label} hint={hint} description={configuration.description} />
+      <Stepper
+        ariaLabel={configuration.label}
+        value={value?.score}
+        min={configuration.minimum}
+        max={configuration.maximum}
+        onChange={(score) => onChange({ ...value, score })}
       />
-      <div className="text-[12.5px] text-content-muted">{hint}</div>
     </div>
   )
 }

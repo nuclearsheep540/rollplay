@@ -14,10 +14,10 @@ import { useSetFocalArea } from './useSetFocalArea';
  * avatar button and the character avatar picker both funnel through here
  * so the interaction is coded once.
  *
- * The purpose key is deliberately hardcoded to "token" (decision 31): an
- * image has ONE crop no matter who sets it, so pc and npc tokens share a
- * single read path. Add a purpose parameter only when a second purpose
- * actually exists.
+ * The purpose defaults to "token" (decision 31): an image has ONE token
+ * crop no matter who sets it, so pc and npc tokens share a single read path.
+ * The second purpose is "card" — the region a campaign card keeps in frame —
+ * which is why purpose and frame are parameters rather than constants.
  *
  * Usage:
  *   const cropFlow = useFocalAreaFlow({ onCropSaved });
@@ -33,7 +33,7 @@ import { useSetFocalArea } from './useSetFocalArea';
  * PATCH lands; it may be async — a rejection keeps the modal open so the
  * user can retry or cancel, same as a failed crop save.
  */
-export function useFocalAreaFlow({ onCropSaved }) {
+export function useFocalAreaFlow({ onCropSaved, purpose = 'token', aspect = 1, cropShape = 'round' }) {
   const [cropState, setCropState] = useState(null);
   const [saving, setSaving] = useState(false);
   const focalAreaMutation = useSetFocalArea();
@@ -44,11 +44,11 @@ export function useFocalAreaFlow({ onCropSaved }) {
     setCropState({
       imageAssetId,
       imageUrl: imageAsset.s3_url,
-      initialArea: imageAsset.focal_areas?.token || null,
+      initialArea: imageAsset.focal_areas?.[purpose] || null,
       context,
     });
     return true;
-  }, []);
+  }, [purpose]);
 
   const cancel = useCallback(() => {
     setCropState(null);
@@ -61,7 +61,7 @@ export function useFocalAreaFlow({ onCropSaved }) {
     try {
       await focalAreaMutation.mutateAsync({
         assetId: activeCrop.imageAssetId,
-        purpose: 'token',
+        purpose,
         area,
       });
       if (onCropSaved) {
@@ -80,7 +80,7 @@ export function useFocalAreaFlow({ onCropSaved }) {
       setSaving(false);
     }
     setCropState(null);
-  }, [cropState, focalAreaMutation, onCropSaved]);
+  }, [cropState, focalAreaMutation, onCropSaved, purpose]);
 
   return {
     begin,
@@ -89,6 +89,8 @@ export function useFocalAreaFlow({ onCropSaved }) {
       open: !!cropState,
       imageUrl: cropState?.imageUrl || null,
       initialArea: cropState?.initialArea || null,
+      aspect,
+      cropShape,
       saving,
       onConfirm: confirm,
       onCancel: cancel,

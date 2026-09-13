@@ -112,6 +112,16 @@ __all__ = [
 
 ## File: `shared_contracts/components/name.py`
 
+> **Revision (2026-09-13, identity).** `name` is now `identity` (`components/identity.py`;
+> `name.py` deleted): a name is one identity among many. `IdentityConfiguration.input` is
+> discriminated on `kind` — `text {max_length}`, `single_select {options}`,
+> `multi_select {options}` (options: 1–50 distinct non-blank strings ≤ 60 chars).
+> `IdentityValue.answer` mirrors it: `text {text}`, `single_select {choice}`,
+> `multi_select {choices}`; `is_populated()` is what `required` checks. Pairing blocks a
+> kind mismatch and over-long text; a choice no longer on the list is axis 2, never blocked.
+> The display name joins text-kind identities only. `RUNTIME_TYPE_ORDER` starts with
+> `identity`; ids mint as `identity_n`. The listing below predates this.
+
 ```python
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -291,6 +301,16 @@ class AttributeValue(ContractModel):
 ```
 
 ## File: `shared_contracts/character_config.py`
+
+> **Revision (2026-09-13, groups).** `CharacterConfig.components` is a list of *entries*:
+> a component, or `ComponentGroup(type="group", id, label, components: List[ComponentConfiguration])`
+> — a GM-named section of the form, one level deep, never nested. Order of the entries is
+> the form's order; a bare component is one in no section. Everything that is not the form
+> reads `flat_components()` (pairing, secrets, display name, `configuration_by_id`). Ids are
+> unique across groups and components. `diff_configs` compares groups by label only and
+> reports membership on the members: moving into/out of/between groups is `"position"`;
+> a group is added/removed/renamed like anything else. Old snapshots (bare lists) stay valid.
+> The listing below predates this and shows the flat shape.
 
 ```python
 # Copyright (C) 2025 Matthew Davey

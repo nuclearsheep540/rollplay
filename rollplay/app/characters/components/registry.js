@@ -14,11 +14,11 @@
  * blanking someone's character.
  */
 
-import NameConfigEditor from './name/ConfigEditor'
-import NameCreateInput from './name/CreateInput'
-import NameSeatCompact from './name/SeatCompact'
-import NameSheetFull from './name/SheetFull'
-import nameDescribeChange from './name/describeChange'
+import IdentityConfigEditor from './identity/ConfigEditor'
+import IdentityCreateInput from './identity/CreateInput'
+import IdentitySeatCompact from './identity/SeatCompact'
+import IdentitySheetFull from './identity/SheetFull'
+import identityDescribeChange from './identity/describeChange'
 
 import HitPointsConfigEditor from './hit_points/ConfigEditor'
 import HitPointsCreateInput from './hit_points/CreateInput'
@@ -39,13 +39,13 @@ import GenericSheetFull from './fallback/GenericSheetFull'
 import genericDescribeChange from './fallback/describeChange'
 
 export const COMPONENT_REGISTRY = {
-  name: {
-    label: 'Name',
-    ConfigEditor: NameConfigEditor,
-    CreateInput: NameCreateInput,
-    SeatCompact: NameSeatCompact,
-    SheetFull: NameSheetFull,
-    describeChange: nameDescribeChange,
+  identity: {
+    label: 'Identity',
+    ConfigEditor: IdentityConfigEditor,
+    CreateInput: IdentityCreateInput,
+    SeatCompact: IdentitySeatCompact,
+    SheetFull: IdentitySheetFull,
+    describeChange: identityDescribeChange,
   },
   hit_points: {
     label: 'Hit points',
@@ -85,6 +85,34 @@ export function labelForType(type) {
 }
 
 /**
+ * Every component of a config's entries in form order, the group boundaries forgotten —
+ * the mirror of CharacterConfig.flat_components(). What anything that is not the form
+ * wants: seeding values, the submit, the runtime sheet.
+ */
+export function flatComponents(entries) {
+  return (entries ?? []).flatMap((entry) => (entry.type === 'group' ? entry.components : [entry]))
+}
+
+/** An unanswered identity in the shape its input asks for. */
+function emptyAnswerFor(input) {
+  if (input.kind === 'single_select') return { kind: 'single_select', choice: '' }
+  if (input.kind === 'multi_select') return { kind: 'multi_select', choices: [] }
+  return { kind: 'text', text: '' }
+}
+
+/**
+ * Whether a player has answered an identity: non-blank text, a choice, or at least one.
+ * Mirrors IdentityValue.is_populated in the contracts — what "required" checks.
+ */
+export function isIdentityPopulated(value) {
+  const answer = value?.answer
+  if (!answer) return false
+  if (answer.kind === 'text') return !!answer.text?.trim()
+  if (answer.kind === 'single_select') return !!answer.choice
+  return (answer.choices?.length ?? 0) > 0
+}
+
+/**
  * What a player's input starts at for one configuration.
  *
  * The GM's starting value where they declared one, because that is what they meant by it;
@@ -92,8 +120,8 @@ export function labelForType(type) {
  */
 export function initialValueFor(configuration) {
   switch (configuration.type) {
-    case 'name':
-      return { type: 'name', component_id: configuration.id, text: '' }
+    case 'identity':
+      return { type: 'identity', component_id: configuration.id, answer: emptyAnswerFor(configuration.input) }
     case 'hit_points':
       return configuration.rules.representation === 'int'
         ? {
@@ -122,4 +150,4 @@ export function initialValueFor(configuration) {
  * every runtime surface. GM config order applies within a type; the create form does NOT
  * use this, it keeps the GM's order. Keep in sync with the contract.
  */
-export const RUNTIME_TYPE_ORDER = ['name', 'hit_points', 'attribute']
+export const RUNTIME_TYPE_ORDER = ['identity', 'hit_points', 'attribute']

@@ -51,6 +51,31 @@ class TestSetFocalAreaAggregate:
         asset.set_focal_area("token", {"x": 340, "y": 120, "size": 512})
         assert asset.get_focal_area("token") == {"x": 340.0, "y": 120.0, "size": 512.0}
 
+    def test_card_purpose_stores_a_region(self):
+        """A campaign card is 16:4, so its purpose stores a rectangle — the FocalRegion
+        sibling — while token keeps its square. The purpose's convention picks the shape."""
+        asset = make_image_asset()
+        asset.set_focal_area("card", {"x": 10, "y": 20, "width": 1600, "height": 400})
+        assert asset.get_focal_area("card") == {"x": 10.0, "y": 20.0, "width": 1600.0, "height": 400.0}
+
+    def test_a_square_and_a_region_may_coexist_on_one_image(self):
+        asset = make_image_asset()
+        asset.set_focal_area("token", {"x": 0, "y": 0, "size": 100})
+        asset.set_focal_area("card", {"x": 0, "y": 0, "width": 400, "height": 100})
+        assert "size" in asset.get_focal_area("token")
+        assert "width" in asset.get_focal_area("card")
+
+    def test_a_shape_that_is_both_is_rejected(self):
+        """size alongside width/height would leave a consumer unable to tell which it holds."""
+        asset = make_image_asset()
+        with pytest.raises(ValueError):
+            asset.set_focal_area("card", {"x": 0, "y": 0, "size": 100, "width": 400, "height": 100})
+
+    def test_a_shape_that_is_neither_is_rejected(self):
+        asset = make_image_asset()
+        with pytest.raises(ValueError):
+            asset.set_focal_area("card", {"x": 0, "y": 0, "width": 400})
+
     def test_purposes_are_independent(self):
         asset = make_image_asset()
         asset.set_focal_area("token", {"x": 0, "y": 0, "size": 100})

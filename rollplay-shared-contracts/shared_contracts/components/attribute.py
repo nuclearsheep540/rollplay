@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from pydantic import Field, model_validator
 
 from ..base import ContractModel
+from .identity import DESCRIPTION_MAX_LENGTH
 
 
 class AttributeConfiguration(ContractModel):
@@ -15,6 +16,8 @@ class AttributeConfiguration(ContractModel):
     id: str = Field(min_length=1, max_length=64)
     label: str = Field(min_length=1, max_length=60)
     secret: bool = False
+    # GM-written, shown on the form between the hint and the input. Optional.
+    description: Optional[str] = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     minimum: int
     maximum: int
     default: Optional[int] = None

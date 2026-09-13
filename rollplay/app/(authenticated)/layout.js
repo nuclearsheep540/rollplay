@@ -137,7 +137,15 @@ function AuthenticatedShell({ children }) {
           </SiteHeader>
         </div>
 
-        {children}
+        {/* The one scroll region under the header. Pages render inside it and scroll
+            inside it; the header cannot scroll away, whatever a page does. Before this,
+            the column relied on every page being a flex-1 min-h-0 child — three pages
+            that were not overflowed the column, scrolled the body, took the header with
+            them, and exposed the body's unstyled white below. Still a flex column, so
+            pages built as flex-1 children keep filling and scrolling exactly as they did. */}
+        <main className="flex-1 min-h-0 flex flex-col overflow-y-auto overscroll-none">
+          {children}
+        </main>
       </div>
     </AuthenticatedContext.Provider>
   )

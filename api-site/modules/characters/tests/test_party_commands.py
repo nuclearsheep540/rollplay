@@ -232,3 +232,56 @@ class TestEjectDuringAGame:
 
         # The cold write already stands — the room re-reads on reconnect.
         assert character_repo.get_by_id(seated.id).is_keepsake is True
+
+
+
+class TestCreateWithAvatar:
+    """The avatar chosen on the create form. Through the real asset repository, because
+    characters.avatar_asset_id is a foreign key and the test database enforces it — a fake
+    would prove the rule and hide the row."""
+
+    @pytest.fixture
+    def asset_repo(self, db_session):
+        from modules.library.repositories.asset_repository import MediaAssetRepository
+        return MediaAssetRepository(db_session)
+
+    def _image_owned_by(self, asset_repo, owner_id):
+        from modules.library.domain.image_asset_aggregate import ImageAsset
+        asset = ImageAsset.create(
+            user_id=owner_id, filename="portrait.png", s3_key="images/portrait.png",
+            content_type="image/png", file_size=1234)
+        asset_repo.save(asset)
+        return asset
+
+    def test_an_owned_image_becomes_the_avatar(
+            self, character_repo, user_repo, session_repo, campaign_repo, version_repo,
+            game_repo, notifier, asset_repo, session, published, player, make_character_values):
+        asset = self._image_owned_by(asset_repo, player.id)
+        character = asyncio.run(CreateCharacter(
+            character_repo, user_repo, session_repo, campaign_repo, version_repo,
+            game_repo, notifier, asset_repo,
+        ).execute(user_id=player.id, session_id=session.id,
+                  values=make_character_values(name="Brannoc"), avatar_asset_id=asset.id))
+        assert character.avatar_asset_id == asset.id
+        assert character_repo.get_by_id(character.id).avatar_asset_id == asset.id
+
+    def test_someone_elses_image_is_refused(
+            self, character_repo, user_repo, session_repo, campaign_repo, version_repo,
+            game_repo, notifier, asset_repo, session, published, player, host, make_character_values):
+        asset = self._image_owned_by(asset_repo, host.id)
+        with pytest.raises(ValueError, match="not found in your library"):
+            asyncio.run(CreateCharacter(
+                character_repo, user_repo, session_repo, campaign_repo, version_repo,
+                game_repo, notifier, asset_repo,
+            ).execute(user_id=player.id, session_id=session.id,
+                      values=make_character_values(name="Brannoc"), avatar_asset_id=asset.id))
+
+    def test_no_avatar_is_still_fine(
+            self, character_repo, user_repo, session_repo, campaign_repo, version_repo,
+            game_repo, notifier, session, published, player, make_character_values):
+        character = asyncio.run(CreateCharacter(
+            character_repo, user_repo, session_repo, campaign_repo, version_repo,
+            game_repo, notifier, None,
+        ).execute(user_id=player.id, session_id=session.id,
+                  values=make_character_values(name="Brannoc")))
+        assert character.avatar_asset_id is None

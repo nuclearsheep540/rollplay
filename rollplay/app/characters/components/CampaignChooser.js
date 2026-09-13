@@ -42,7 +42,7 @@ export default function CampaignChooser() {
           <PlateButton variant="gold" onClick={() => router.push('/campaign/new')}>
             Create a campaign
           </PlateButton>
-          <PlateButton variant="outline" onClick={() => router.push('/dashboard')}>
+          <PlateButton variant="light" onClick={() => router.push('/dashboard')}>
             Back to dashboard
           </PlateButton>
         </div>
@@ -97,7 +97,7 @@ export default function CampaignChooser() {
                     Build here
                   </PlateButton>
                 ) : isHost ? (
-                  <PlateButton variant="outline" size="sm" onClick={() => router.push(`/campaign/${campaign.id}?section=character`)}>
+                  <PlateButton variant="light" size="sm" onClick={() => router.push(`/campaign/${campaign.id}?section=character`)}>
                     Configure it
                   </PlateButton>
                 ) : null}
@@ -116,7 +116,7 @@ export default function CampaignChooser() {
             {invited.map((campaign) => (
               <div key={campaign.id} className="flex items-center justify-between gap-4 rounded-md border border-dashed border-[#E5DECF] px-5 py-4">
                 <div className="font-semibold text-sm text-content-primary truncate">{campaign.title}</div>
-                <PlateButton variant="outline" size="sm" onClick={() => router.push('/dashboard?tab=campaigns')}>
+                <PlateButton variant="light" size="sm" onClick={() => router.push('/dashboard?tab=campaigns')}>
                   Accept invite
                 </PlateButton>
               </div>

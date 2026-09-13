@@ -35,12 +35,12 @@ export function useCharacter(characterId) {
 export function useCreateCharacter() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ sessionId, values }) => {
+    mutationFn: async ({ sessionId, values, avatarAssetId = null }) => {
       const response = await authFetch('/api/characters/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ session_id: sessionId, values }),
+        body: JSON.stringify({ session_id: sessionId, values, avatar_asset_id: avatarAssetId }),
       })
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))

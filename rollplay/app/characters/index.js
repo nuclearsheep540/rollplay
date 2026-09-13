@@ -4,6 +4,7 @@
 export {
   COMPONENT_REGISTRY,
   RUNTIME_TYPE_ORDER,
+  flatComponents,
   initialValueFor,
   labelForType,
   pieceFor,

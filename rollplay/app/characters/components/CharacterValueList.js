@@ -3,7 +3,7 @@
 
 'use client'
 
-import { labelForType, pieceFor, RUNTIME_TYPE_ORDER } from './registry'
+import { flatComponents, labelForType, pieceFor, RUNTIME_TYPE_ORDER } from './registry'
 
 /**
  * A character's values, in the platform's fixed order: identity, then hit points, then
@@ -13,13 +13,15 @@ import { labelForType, pieceFor, RUNTIME_TYPE_ORDER } from './registry'
  * pressure mid-game, and it should sit in the same place on everyone's screen. The create
  * form is the opposite case and keeps the GM's order.
  *
+ * The GM's groups are a form thing and do not appear here: the sheet is flat, by type.
+ *
  * A component with no value is skipped — that is a secret one, stripped for this viewer.
  */
 export default function CharacterValueList({ config, values, editable = false, onChange, pendingIds }) {
   if (!config) return null
 
   const byType = new Map()
-  for (const configuration of config.components) {
+  for (const configuration of flatComponents(config.components)) {
     const list = byType.get(configuration.type) || []
     list.push(configuration)
     byType.set(configuration.type, list)

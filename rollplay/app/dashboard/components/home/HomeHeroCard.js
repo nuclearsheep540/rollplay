@@ -43,7 +43,7 @@ const LIVE_GREEN = '#16A34A'
  */
 export default function HomeHeroCard({ campaign, user, playerCharacter }) {
   const router = useRouter()
-  const { url: artUrl } = useHeroImage(campaign)
+  const { url: artUrl, focalPosition } = useHeroImage(campaign)
   const startGame = useStartGame()
 
   const session = findCurrentSession(campaign)
@@ -107,7 +107,7 @@ export default function HomeHeroCard({ campaign, user, playerCharacter }) {
         {artUrl && (
           <div
             className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${artUrl})` }}
+            style={{ backgroundImage: `url(${artUrl})`, backgroundPosition: focalPosition }}
           />
         )}
         <div

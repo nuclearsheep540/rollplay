@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
+import { Stepper } from '../shared/Fields'
 
 export default function SheetFull({ configuration, value, editable, onChange, pending }) {
   const rules = configuration.rules
@@ -43,40 +44,26 @@ export default function SheetFull({ configuration, value, editable, onChange, pe
     )
   }
 
-  const step = (delta) => {
-    const next = Math.max(rules.minimum, Math.min(rules.maximum, Number(draft) + delta))
-    setDraft(next)
-    onChange({ ...value, state: { representation: 'int', current: next } })
-  }
-
-  const commit = () => {
-    const next = Number(draft)
-    if (next !== value?.state?.current) {
-      onChange({ ...value, state: { representation: 'int', current: next } })
-    }
-  }
-
   return (
     <div className="flex items-center justify-between gap-3 py-1.5">
       <span className="text-[12.5px] text-content-muted">{configuration.label}</span>
       {editable ? (
-        <div className="flex items-center gap-1.5">
-          <button type="button" disabled={pending} className="px-2 py-0.5 rounded border border-border disabled:opacity-60" onClick={() => step(-1)}>
-            −
-          </button>
-          <input
-            type="number"
-            className="w-[64px] px-1 py-1 rounded-sm border border-border bg-surface-primary text-center text-sm font-semibold disabled:opacity-60"
+        <div className="flex items-center gap-2">
+          <Stepper
+            size="sm"
+            ariaLabel={configuration.label}
             value={draft}
+            min={rules.minimum}
+            max={rules.maximum}
             disabled={pending}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={commit}
-            onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+            onChange={(next) => {
+              setDraft(next)
+              if (next !== '' && next !== value?.state?.current) {
+                onChange({ ...value, state: { representation: 'int', current: next } })
+              }
+            }}
           />
-          <button type="button" disabled={pending} className="px-2 py-0.5 rounded border border-border disabled:opacity-60" onClick={() => step(1)}>
-            +
-          </button>
-          <span className="ml-1 text-[11px] text-content-muted">/ {rules.maximum}</span>
+          <span className="text-[11px] text-content-muted">/ {rules.maximum}</span>
         </div>
       ) : (
         <span className="text-sm font-semibold">

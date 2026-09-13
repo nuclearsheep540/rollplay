@@ -5,7 +5,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import FocalAreaModal from '@/app/shared/components/FocalAreaModal'
 import S3Image from '@/app/shared/components/S3Image'
+import { useFocalAreaFlow } from '@/app/shared/hooks/useFocalAreaFlow'
+import { useImageFocalPosition } from '@/app/shared/hooks/useImageFocalPosition'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAssets } from '@/app/asset_library/hooks/useAssets'
 import { useUploadAsset } from '@/app/asset_library/hooks/useUploadAsset'
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
@@ -59,6 +63,21 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
     ? libraryImages.find((asset) => asset.id === fields.heroImageAssetId) || null
     : null
 
+  // "Select card area": the same pick-and-persist chain the token face uses, with the
+  // "card" purpose and a 16:4 rectangular frame — the widest card, so every other card's
+  // cover-fit lands inside it. Only asset images can carry one; presets are static files.
+  const queryClient = useQueryClient()
+  const cardAreaFlow = useFocalAreaFlow({
+    purpose: 'card',
+    aspect: 4,
+    cropShape: 'rect',
+    onCropSaved: () => queryClient.invalidateQueries({ queryKey: ['campaigns'] }),
+  })
+  const previewFocalPosition = useImageFocalPosition(
+    selectedLibraryAsset?.s3_url || null,
+    selectedLibraryAsset?.focal_areas?.card || null,
+  )
+
   const uploadAsset = useUploadAsset()
   const onUploadChosen = async (event) => {
     const file = event.target.files?.[0]
@@ -74,10 +93,10 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
 
   const sections =
     tabKey === 'setup'
-      ? [{ key: 'table', label: 'The table' }, { key: 'ruleset', label: 'Ruleset' }]
+      ? [{ key: 'table', label: 'Party' }, { key: 'ruleset', label: 'Ruleset' }]
       : [
           { key: 'story', label: 'The campaign' },
-          { key: 'table', label: 'The table' },
+          { key: 'table', label: 'Party' },
           { key: 'ruleset', label: 'Ruleset' },
         ]
 
@@ -115,6 +134,7 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
                   assetId={selectedLibraryAsset.id}
                   alt=""
                   className="absolute inset-0 w-full h-full object-cover"
+                  style={{ objectPosition: previewFocalPosition }}
                 />
               ) : fields.heroImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -147,8 +167,19 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
                 {/* The card background is part of what the campaign looks like, so it lives
                     with the name and the description rather than with the game settings. */}
                 <div className="mt-5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#D9A441] mb-2.5">
-                    Card background
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#D9A441]">
+                      Card background
+                    </div>
+                    {selectedLibraryAsset && (
+                      <button
+                        type="button"
+                        onClick={() => cardAreaFlow.begin(selectedLibraryAsset.id)}
+                        className="text-[11.5px] font-semibold tracking-wide text-[#F7F4F3] px-3 py-1 rounded border border-[rgba(247,244,243,0.35)] hover:border-[#D9A441] hover:text-[#D9A441]"
+                      >
+                        Select card area
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {CARD_BACKGROUNDS.map((preset) => {
@@ -189,12 +220,11 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
                     />
                   </div>
 
+                  {/* Library images continue the same row; the tile's title says where
+                      each came from. A heading here read as a second section. */}
                   {libraryImages.length > 0 && (
                     <>
-                      <div className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(217,164,65,0.75)]">
-                        From your library
-                      </div>
-                      <div className="flex flex-wrap gap-3">
+                      <div className="mt-3 flex flex-wrap gap-3">
                         {libraryImages.map((asset) => (
                           <BackgroundTile
                             key={asset.id}
@@ -220,7 +250,7 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
           </>
         )}
 
-        <PlainCard reference={register('table')} eyebrow="The table">
+        <PlainCard reference={register('table')} eyebrow="Party">
           <div className="flex flex-wrap gap-8 items-start">
             <div>
               <label className="block text-[13px] font-medium mb-2 text-[#37322F]">Maximum players</label>
@@ -255,6 +285,15 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
           </div>
         </PlainCard>
       </div>
+
+      {cardAreaFlow.isOpen && (
+        <FocalAreaModal
+          {...cardAreaFlow.modalProps}
+          title="Choose the card area"
+          confirmLabel="Use this area"
+          hint="Drag to position, scroll or use the slider to zoom. The frame is what every campaign card keeps in view."
+        />
+      )}
 
       <nav className="sticky top-6 border-l border-[#E5DECF] pl-[18px]">
         <div className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#9A7526] mb-2.5">On this page</div>

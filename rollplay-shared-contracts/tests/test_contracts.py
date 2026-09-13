@@ -18,7 +18,7 @@ from shared_contracts.grid_math import (
     resnap_token_position,
     snap_axis_nearest,
 )
-from shared_contracts.image import FocalArea, ImageConfig
+from shared_contracts.image import FocalArea, FocalRegion, ImageConfig, focal_center
 from shared_contracts.map import (
     FOG_REGIONS_MAX,
     PC_TOKEN_SCALE_MAX,
@@ -50,11 +50,21 @@ from shared_contracts.components.hit_points import (
     WeightedHitPointsRules,
     WeightedHitPointsState,
 )
-from shared_contracts.components.name import NameConfiguration, NameValue
+from shared_contracts.components.identity import (
+    IdentityConfiguration,
+    IdentityValue,
+    MultiSelectIdentityAnswer,
+    MultiSelectIdentityInput,
+    SingleSelectIdentityAnswer,
+    SingleSelectIdentityInput,
+    TextIdentityAnswer,
+    TextIdentityInput,
+)
 from shared_contracts.character_config import (
     CharacterConfig,
     CharacterSheet,
     ComponentChange,
+    ComponentGroup,
     diff_configs,
 )
 
@@ -62,10 +72,17 @@ from shared_contracts.character_config import (
 # --- Component factories: a fresh object per call, never a module constant ---
 
 
-def make_name(component_id="name_1", label="Name", **overrides):
-    fields = {"id": component_id, "label": label, "secret": False, "max_length": 60, "required": True}
+def make_identity(component_id="identity_1", label="Name", **overrides):
+    """A text identity — a name — unless `input` says otherwise."""
+    input_ = overrides.pop("input", TextIdentityInput(max_length=overrides.pop("max_length", 60)))
+    fields = {"id": component_id, "label": label, "secret": False, "input": input_, "required": True,
+              "description": None}
     fields.update(overrides)
-    return NameConfiguration(**fields)
+    return IdentityConfiguration(**fields)
+
+
+def make_text_answer(component_id, text):
+    return IdentityValue(component_id=component_id, answer=TextIdentityAnswer(text=text))
 
 
 def make_int_hit_points(component_id="hit_points_1", label="Vitality", **overrides):
@@ -102,7 +119,7 @@ def make_mock_config():
     Full/High/Mid/Low/Zero = 1.0/0.8/0.6/0.3/0.0, secret), Strength/Agility/Wits (1..20
     default 10)."""
     return CharacterConfig(version=1, components=[
-        make_name(),
+        make_identity(),
         make_int_hit_points(),
         make_weighted_hit_points(),
         make_attribute("attribute_1", "Strength"),
@@ -114,7 +131,7 @@ def make_mock_config():
 def make_mock_values():
     """Brannoc Vell: name, Vitality 10, Resolve 1.0, Strength 14, Agility 10, Wits 8."""
     return {
-        "name_1": NameValue(component_id="name_1", text="Brannoc Vell"),
+        "identity_1": make_text_answer("identity_1", "Brannoc Vell"),
         "hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(current=10)),
         "hit_points_2": HitPointsValue(component_id="hit_points_2", state=WeightedHitPointsState(current_weight=1.0)),
         "attribute_1": AttributeValue(component_id="attribute_1", score=14),
@@ -791,7 +808,7 @@ class TestCharacterConfigEtl:
     def test_two_players_on_two_versions_both_travel(self):
         """A config edit must not force anyone to rebuild: both versions ride along."""
         older = make_mock_config()
-        newer = CharacterConfig(version=2, components=[make_name()])
+        newer = CharacterConfig(version=2, components=[make_identity()])
         payload = SessionStartPayload(
             game_id="s1",
             campaign_id="c1",
@@ -1113,6 +1130,53 @@ class TestMapTokenV2Flags:
         assert token.owner_user_id == "player-1"
 
 
+class TestFocalRegionConstraints:
+    """The rectangular sibling of FocalArea, for purposes whose consumer is not square —
+    a campaign card is 16:4, and a square can only say where its centre is."""
+
+    def test_round_trip(self):
+        region = FocalRegion(x=10.0, y=20.0, width=1600.0, height=400.0)
+        assert FocalRegion.model_validate(region.model_dump()) == region
+
+    def test_zero_or_negative_extent_rejected(self):
+        with pytest.raises(ValidationError):
+            FocalRegion(x=0.0, y=0.0, width=0.0, height=10.0)
+        with pytest.raises(ValidationError):
+            FocalRegion(x=0.0, y=0.0, width=10.0, height=-1.0)
+
+    def test_negative_position_rejected(self):
+        with pytest.raises(ValidationError):
+            FocalRegion(x=-1.0, y=0.0, width=10.0, height=10.0)
+
+    def test_non_finite_rejected(self):
+        with pytest.raises(ValidationError):
+            FocalRegion(x=0.0, y=0.0, width=float("inf"), height=10.0)
+
+    def test_extra_fields_forbidden(self):
+        """A region carries width and height; `size` is the square's word and may not
+        ride along, or a consumer could not tell which shape it holds."""
+        with pytest.raises(ValidationError):
+            FocalRegion.model_validate({"x": 0.0, "y": 0.0, "width": 10.0, "height": 5.0, "size": 10.0})
+
+    def test_a_square_dict_is_not_a_region(self):
+        with pytest.raises(ValidationError):
+            FocalRegion.model_validate({"x": 0.0, "y": 0.0, "size": 10.0})
+
+
+class TestFocalCenter:
+    """Consumers bias a cover-fit image toward the area's centre, whichever shape it is."""
+
+    def test_square_center(self):
+        assert focal_center(FocalArea(x=100.0, y=50.0, size=200.0)) == (200.0, 150.0)
+
+    def test_region_center(self):
+        assert focal_center(FocalRegion(x=100.0, y=50.0, width=1600.0, height=400.0)) == (900.0, 250.0)
+
+    def test_raw_dicts_of_either_shape(self):
+        assert focal_center({"x": 0, "y": 0, "size": 10}) == (5.0, 5.0)
+        assert focal_center({"x": 0, "y": 0, "width": 10, "height": 4}) == (5.0, 2.0)
+
+
 class TestFocalAreaConstraints:
     def test_round_trip(self):
         area = FocalArea(x=340.0, y=120.0, size=512.0)
@@ -1239,28 +1303,65 @@ class TestGridMath:
 # --- Character components ---
 
 
-class TestNameComponent:
-    def test_configuration_round_trip(self):
-        configuration = make_name(label="First name", max_length=40)
-        assert NameConfiguration.model_validate(configuration.model_dump()) == configuration
+class TestIdentityComponent:
+    """Who or what the character is, answered the way the GM chose: free text, one choice
+    from a list, or several."""
 
-    def test_value_round_trip(self):
-        value = NameValue(component_id="name_1", text="Brannoc Vell")
-        assert NameValue.model_validate(value.model_dump()) == value
+    def test_text_configuration_round_trip(self):
+        configuration = make_identity(label="First name", max_length=40)
+        assert IdentityConfiguration.model_validate(configuration.model_dump()) == configuration
+
+    def test_select_configurations_round_trip(self):
+        single = make_identity(input=SingleSelectIdentityInput(options=["Rogue", "Mage"]))
+        multi = make_identity(input=MultiSelectIdentityInput(options=["Guard", "Cook"]))
+        assert IdentityConfiguration.model_validate(single.model_dump()) == single
+        assert IdentityConfiguration.model_validate(multi.model_dump()) == multi
+
+    def test_input_is_required(self):
+        """No silent shape: the GM says how an identity is answered."""
+        with pytest.raises(ValidationError):
+            IdentityConfiguration(id="identity_1", label="Name")
+
+    def test_value_round_trips_for_every_kind(self):
+        for value in (
+            make_text_answer("identity_1", "Brannoc Vell"),
+            IdentityValue(component_id="identity_1", answer=SingleSelectIdentityAnswer(choice="Rogue")),
+            IdentityValue(component_id="identity_1", answer=MultiSelectIdentityAnswer(choices=["Guard", "Cook"])),
+        ):
+            assert IdentityValue.model_validate(value.model_dump()) == value
 
     def test_extra_fields_forbidden(self):
         with pytest.raises(ValidationError):
-            NameConfiguration(id="name_1", label="Name", nickname="nope")
+            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput(), nickname="nope")
         with pytest.raises(ValidationError):
-            NameValue(component_id="name_1", text="x", nickname="nope")
+            IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="x"), nickname="nope")
 
     def test_max_length_above_platform_ceiling_rejected(self):
         with pytest.raises(ValidationError):
-            make_name(max_length=201)
+            make_identity(max_length=201)
 
     def test_empty_label_rejected(self):
         with pytest.raises(ValidationError):
-            make_name(label="")
+            make_identity(label="")
+
+    def test_options_must_be_present_distinct_and_non_blank(self):
+        with pytest.raises(ValidationError):
+            SingleSelectIdentityInput(options=[])
+        with pytest.raises(ValidationError):
+            SingleSelectIdentityInput(options=["Rogue", "Rogue"])
+        with pytest.raises(ValidationError):
+            MultiSelectIdentityInput(options=["Guard", "  "])
+
+    def test_multi_select_choices_distinct(self):
+        with pytest.raises(ValidationError):
+            MultiSelectIdentityAnswer(choices=["Guard", "Guard"])
+
+    def test_is_populated_per_kind(self):
+        assert make_text_answer("identity_1", "Brannoc").is_populated()
+        assert not make_text_answer("identity_1", "   ").is_populated()
+        assert IdentityValue(component_id="identity_1", answer=SingleSelectIdentityAnswer(choice="Rogue")).is_populated()
+        assert IdentityValue(component_id="identity_1", answer=MultiSelectIdentityAnswer(choices=["Guard"])).is_populated()
+        assert not IdentityValue(component_id="identity_1", answer=MultiSelectIdentityAnswer(choices=[])).is_populated()
 
 
 class TestIntHitPoints:
@@ -1368,6 +1469,24 @@ class TestHitPointsDiscriminators:
                 "rules": {"representation": "percentage", "minimum": 0, "maximum": 20}})
 
 
+class TestComponentDescription:
+    """Every component may carry a GM-written description, shown on the form between the
+    hint and the input. Optional everywhere, capped so it stays a sentence or two."""
+
+    def test_defaults_to_none_on_every_type(self):
+        assert make_identity().description is None
+        assert make_int_hit_points().description is None
+        assert make_attribute().description is None
+
+    def test_round_trips(self):
+        configuration = make_attribute(description="How strong you are.")
+        assert AttributeConfiguration.model_validate(configuration.model_dump()).description == "How strong you are."
+
+    def test_over_long_rejected(self):
+        with pytest.raises(ValidationError):
+            make_identity(description="x" * 241)
+
+
 class TestAttributeComponent:
     def test_round_trip(self):
         configuration = make_attribute()
@@ -1405,7 +1524,7 @@ class TestCharacterConfig:
 
     def test_duplicate_component_ids_rejected(self):
         with pytest.raises(ValidationError):
-            CharacterConfig(version=1, components=[make_name("name_1"), make_name("name_1", label="Other")])
+            CharacterConfig(version=1, components=[make_identity("identity_1"), make_identity("identity_1", label="Other")])
 
     def test_version_below_one_rejected(self):
         with pytest.raises(ValidationError):
@@ -1414,7 +1533,7 @@ class TestCharacterConfig:
     def test_configuration_by_id_returns_every_component(self):
         config = make_mock_config()
         by_id = config.configuration_by_id()
-        assert set(by_id) == {"name_1", "hit_points_1", "hit_points_2",
+        assert set(by_id) == {"identity_1", "hit_points_1", "hit_points_2",
                               "attribute_1", "attribute_2", "attribute_3"}
 
     def test_mock_config_json_round_trip(self):
@@ -1427,6 +1546,102 @@ class TestCharacterConfig:
                 {"type": "alignment", "id": "alignment_1", "label": "Alignment"}]})
 
 
+class TestComponentGroups:
+    """A group is a GM-named section of the form holding an ordered run of components.
+    One level deep, an entry in the same top-level list as bare components, and part of
+    the versioned config — a player builds against the sections too."""
+
+    def make_grouped(self):
+        return CharacterConfig(version=1, components=[
+            make_identity(),
+            ComponentGroup(id="group_1", label="Combat", components=[
+                make_int_hit_points(),
+                make_attribute("attribute_1", "Strength"),
+            ]),
+            make_attribute("attribute_2", "Agility"),
+        ])
+
+    def test_round_trips_through_json(self):
+        config = self.make_grouped()
+        assert CharacterConfig.model_validate_json(config.model_dump_json()) == config
+
+    def test_flat_components_keeps_order_and_ignores_the_group_boundary(self):
+        assert [c.id for c in self.make_grouped().flat_components()] == [
+            "identity_1", "hit_points_1", "attribute_1", "attribute_2"]
+
+    def test_configuration_by_id_reaches_inside_groups(self):
+        assert self.make_grouped().configuration_by_id()["hit_points_1"].label == "Vitality"
+
+    def test_groups_do_not_nest(self):
+        with pytest.raises(ValidationError):
+            CharacterConfig.model_validate({"version": 1, "components": [
+                {"type": "group", "id": "group_1", "label": "Outer", "components": [
+                    {"type": "group", "id": "group_2", "label": "Inner", "components": []}]}]})
+
+    def test_ids_are_unique_across_groups_and_components(self):
+        with pytest.raises(ValidationError):
+            CharacterConfig(version=1, components=[
+                make_identity("identity_1"),
+                ComponentGroup(id="group_1", label="A", components=[make_identity("identity_1", label="Again")]),
+            ])
+        with pytest.raises(ValidationError):
+            CharacterConfig(version=1, components=[
+                ComponentGroup(id="same", label="A"),
+                make_identity("same"),
+            ])
+
+    def test_an_empty_group_is_legal(self):
+        """A GM adds the section before dragging anything in."""
+        config = CharacterConfig(version=1, components=[ComponentGroup(id="group_1", label="Later")])
+        assert config.flat_components() == []
+
+    def test_sheet_pairs_against_grouped_config(self):
+        values = {"hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(current=3))}
+        assert CharacterSheet(config=self.make_grouped(), values=values).values["hit_points_1"].state.current == 3
+
+    def test_old_snapshots_without_groups_still_validate(self):
+        """A list of bare components is a list of entries — every existing version is fine."""
+        assert make_mock_config().flat_components() == make_mock_config().components
+
+
+class TestDiffConfigsWithGroups:
+    def test_moving_into_a_group_is_a_position_change(self):
+        older = CharacterConfig(version=1, components=[make_identity(), make_int_hit_points()])
+        newer = CharacterConfig(version=2, components=[
+            make_identity(), ComponentGroup(id="group_1", label="Combat", components=[make_int_hit_points()])])
+        changes = diff_configs(older, newer)
+        assert [(c.component_id, c.kind, c.fields) for c in changes] == [
+            ("hit_points_1", "changed", ["position"]),
+            ("group_1", "added", []),
+        ]
+
+    def test_renaming_a_group_is_a_change_on_the_group(self):
+        older = CharacterConfig(version=1, components=[
+            ComponentGroup(id="group_1", label="Combat", components=[make_int_hit_points()])])
+        newer = CharacterConfig(version=2, components=[
+            ComponentGroup(id="group_1", label="Fighting", components=[make_int_hit_points()])])
+        changes = diff_configs(older, newer)
+        assert [(c.component_id, c.kind, c.fields, c.label) for c in changes] == [
+            ("group_1", "changed", ["label"], "Fighting")]
+
+    def test_ungrouping_moves_the_members_and_removes_the_group(self):
+        older = CharacterConfig(version=1, components=[
+            make_identity(), ComponentGroup(id="group_1", label="Combat", components=[make_int_hit_points()])])
+        newer = CharacterConfig(version=2, components=[make_identity(), make_int_hit_points()])
+        changes = diff_configs(older, newer)
+        assert [(c.component_id, c.kind) for c in changes] == [
+            ("group_1", "removed"), ("hit_points_1", "changed")]
+        assert changes[1].fields == ["position"]
+
+    def test_reordering_inside_a_group_is_a_position_change(self):
+        older = CharacterConfig(version=1, components=[ComponentGroup(id="group_1", label="G", components=[
+            make_attribute("attribute_1", "A"), make_attribute("attribute_2", "B")])])
+        newer = CharacterConfig(version=2, components=[ComponentGroup(id="group_1", label="G", components=[
+            make_attribute("attribute_2", "B"), make_attribute("attribute_1", "A")])])
+        changes = diff_configs(older, newer)
+        assert len(changes) == 1 and changes[0].fields == ["position"]
+
+
 class TestCharacterSheet:
     def test_mock_config_and_values_validate(self):
         sheet = CharacterSheet(config=make_mock_config(), values=make_mock_values())
@@ -1434,7 +1649,7 @@ class TestCharacterSheet:
 
     def test_values_key_must_match_component_id(self):
         values = make_mock_values()
-        values["wrong_key"] = values.pop("name_1")
+        values["wrong_key"] = values.pop("identity_1")
         with pytest.raises(ValidationError):
             CharacterSheet(config=make_mock_config(), values=values)
 
@@ -1445,9 +1660,9 @@ class TestCharacterSheet:
             CharacterSheet(config=make_mock_config(), values=values)
 
     def test_type_mismatch_rejected(self):
-        """A name value against a hit-points configuration is a data invariant: hard block."""
+        """An identity value against a hit-points configuration is a data invariant: hard block."""
         values = make_mock_values()
-        values["hit_points_1"] = NameValue(component_id="hit_points_1", text="nope")
+        values["hit_points_1"] = make_text_answer("hit_points_1", "nope")
         with pytest.raises(ValidationError):
             CharacterSheet(config=make_mock_config(), values=values)
 
@@ -1458,10 +1673,24 @@ class TestCharacterSheet:
         with pytest.raises(ValidationError):
             CharacterSheet(config=make_mock_config(), values=values)
 
-    def test_name_longer_than_configured_max_rejected(self):
-        config = CharacterConfig(version=1, components=[make_name(max_length=5)])
+    def test_text_longer_than_configured_max_rejected(self):
+        config = CharacterConfig(version=1, components=[make_identity(max_length=5)])
         with pytest.raises(ValidationError):
-            CharacterSheet(config=config, values={"name_1": NameValue(component_id="name_1", text="far too long")})
+            CharacterSheet(config=config, values={"identity_1": make_text_answer("identity_1", "far too long")})
+
+    def test_identity_kind_mismatch_rejected(self):
+        """A text answer to a select identity is a data invariant: hard block."""
+        config = CharacterConfig(version=1, components=[
+            make_identity(input=SingleSelectIdentityInput(options=["Rogue", "Mage"]))])
+        with pytest.raises(ValidationError):
+            CharacterSheet(config=config, values={"identity_1": make_text_answer("identity_1", "Rogue")})
+
+    def test_choice_no_longer_among_options_accepted(self):
+        """Axis 2: the GM rewrote the list after the character picked. Reported, never blocked."""
+        config = CharacterConfig(version=1, components=[
+            make_identity(input=SingleSelectIdentityInput(options=["Rogue", "Mage"]))])
+        value = IdentityValue(component_id="identity_1", answer=SingleSelectIdentityAnswer(choice="Bard"))
+        assert CharacterSheet(config=config, values={"identity_1": value}).values["identity_1"].answer.choice == "Bard"
 
     def test_attribute_above_configured_maximum_accepted(self):
         """Axis 2: a GM raised or lowered the range after the character was built. That is a
@@ -1502,7 +1731,7 @@ class TestDiffConfigs:
         """Vitality maximum 20->25, Wits removed, Nerve added — in the documented order."""
         older = make_mock_config()
         newer = CharacterConfig(version=2, components=[
-            make_name(),
+            make_identity(),
             make_int_hit_points(rules=IntHitPointsRules(minimum=0, maximum=25, starting=10)),
             make_weighted_hit_points(),
             make_attribute("attribute_1", "Strength"),
@@ -1535,6 +1764,46 @@ class TestDiffConfigs:
                 ScaleStep(weight=0.0, label="Zero")]))])
         changes = diff_configs(older, newer)
         assert changes[0].fields == ["rules.scale"]
+
+    def test_a_pure_reorder_is_a_change(self):
+        """The form renders components in the GM's order, so order is part of the config
+        and a reorder must be publishable. Moving Wits to the front is one move."""
+        older = make_mock_config()
+        components = list(older.components)
+        wits = components.pop(5)
+        newer = CharacterConfig(version=2, components=[wits] + components)
+        changes = diff_configs(older, newer)
+        assert [(change.component_id, change.kind, change.fields) for change in changes] == [
+            ("attribute_3", "changed", ["position"]),
+        ]
+
+    def test_reorder_reports_the_minimal_moves(self):
+        """Moving one component shifts every other one's index; only the one that moved
+        is reported, or a single drag would read as the whole config changing."""
+        older = make_mock_config()
+        components = list(older.components)
+        name = components.pop(0)
+        newer = CharacterConfig(version=2, components=components + [name])
+        changes = diff_configs(older, newer)
+        assert len(changes) == 1
+        assert changes[0].component_id == "identity_1"
+        assert changes[0].fields == ["position"]
+
+    def test_moved_and_edited_is_one_entry(self):
+        older = make_mock_config()
+        components = list(older.components)
+        wits = components.pop(5)
+        newer = CharacterConfig(version=2, components=[
+            make_attribute("attribute_3", "Cunning")] + components)
+        changes = diff_configs(older, newer)
+        assert len(changes) == 1
+        assert changes[0].kind == "changed"
+        assert changes[0].fields == ["label", "position"]
+
+    def test_description_change_is_a_field(self):
+        older = CharacterConfig(version=1, components=[make_attribute()])
+        newer = CharacterConfig(version=2, components=[make_attribute(description="How strong you are.")])
+        assert diff_configs(older, newer)[0].fields == ["description"]
 
     def test_change_is_information_not_a_verdict(self):
         """diff_configs returns descriptions. Nothing in the contract ranks or blocks them."""

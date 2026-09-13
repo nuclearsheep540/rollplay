@@ -23,7 +23,6 @@ export default function ConfigEditor({ configuration, onChange }) {
         value={configuration.default}
         allowEmpty
         onChange={(value) => onChange({ ...configuration, default: value })}
-        hint="Blank = none"
       />
     </div>
   )

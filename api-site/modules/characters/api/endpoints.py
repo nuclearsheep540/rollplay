@@ -136,14 +136,16 @@ async def create_character(
     version_repo: CharacterConfigVersionRepository = Depends(get_character_config_version_repository),
     game_repo: GameRepository = Depends(get_game_repository),
     game_notifier: GameNotifier = Depends(get_game_notifier),
+    asset_repo: MediaAssetRepository = Depends(get_media_asset_repository),
     s3_service: S3Service = Depends(get_s3_service),
 ):
     """Build a character against the session's campaign config, and join the party."""
     try:
         character = await CreateCharacter(
             character_repo, user_repo, session_repo, campaign_repo, version_repo,
-            game_repo, game_notifier,
-        ).execute(user_id=user_id, session_id=request.session_id, values=request.values)
+            game_repo, game_notifier, asset_repo,
+        ).execute(user_id=user_id, session_id=request.session_id, values=request.values,
+                  avatar_asset_id=request.avatar_asset_id)
     except PermissionError as denied:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(denied))
     except ValueError as invalid:

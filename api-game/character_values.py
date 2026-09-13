@@ -66,7 +66,7 @@ def validate_value_for_player(room: dict, user_id: str, value: ComponentValue) -
 
 def secret_component_ids(config: CharacterConfig) -> Set[str]:
     """Components the GM marked "only the player and GM can see these values"."""
-    return {component.id for component in config.components if component.secret}
+    return {component.id for component in config.flat_components() if component.secret}
 
 
 def _secret_ids_for_player(room: dict, user_id: str) -> Set[str]:
@@ -120,13 +120,17 @@ def filter_component_change_for_viewer(room: dict, owner_user_id: str, component
 def render_value_for_log(configuration, value) -> str:
     """A component value as one short string for the adventure log.
 
-    Generic by construction: the text of a name, the score of an attribute, the current
+    Generic by construction: an identity's text or choices, the score of an attribute, the current
     number or the scale step's label for hit points. A dict lookup on the config, never an
     interpretation of what the number means. The frontend's describeChange must produce
     exactly this text.
     """
-    if configuration.type == "name":
-        return value.text
+    if configuration.type == "identity":
+        if value.answer.kind == "text":
+            return value.answer.text
+        if value.answer.kind == "single_select":
+            return value.answer.choice
+        return ", ".join(value.answer.choices) or "—"
     if configuration.type == "attribute":
         return str(value.score)
     if configuration.type == "hit_points":

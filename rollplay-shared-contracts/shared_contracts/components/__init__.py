@@ -16,6 +16,18 @@ from typing import Annotated, Union
 from pydantic import Field
 
 from .attribute import AttributeConfiguration, AttributeValue
+from .identity import (
+    IdentityAnswer,
+    IdentityConfiguration,
+    IdentityInput,
+    IdentityValue,
+    MultiSelectIdentityAnswer,
+    MultiSelectIdentityInput,
+    SingleSelectIdentityAnswer,
+    SingleSelectIdentityInput,
+    TextIdentityAnswer,
+    TextIdentityInput,
+)
 from .hit_points import (
     HitPointsConfiguration,
     HitPointsRules,
@@ -27,22 +39,21 @@ from .hit_points import (
     WeightedHitPointsRules,
     WeightedHitPointsState,
 )
-from .name import NameConfiguration, NameValue
 
 ComponentConfiguration = Annotated[
-    Union[NameConfiguration, HitPointsConfiguration, AttributeConfiguration],
+    Union[IdentityConfiguration, HitPointsConfiguration, AttributeConfiguration],
     Field(discriminator="type"),
 ]
 
 ComponentValue = Annotated[
-    Union[NameValue, HitPointsValue, AttributeValue],
+    Union[IdentityValue, HitPointsValue, AttributeValue],
     Field(discriminator="type"),
 ]
 
 # Platform-fixed order of component types on every runtime surface (sheet, seat card).
 # GM config order applies within a type. The player's create form does NOT use this —
 # it keeps the GM's config order.
-RUNTIME_TYPE_ORDER = ("name", "hit_points", "attribute")
+RUNTIME_TYPE_ORDER = ("identity", "hit_points", "attribute")
 
 __all__ = [
     "AttributeConfiguration",
@@ -53,10 +64,18 @@ __all__ = [
     "HitPointsRules",
     "HitPointsState",
     "HitPointsValue",
+    "IdentityAnswer",
+    "IdentityConfiguration",
+    "IdentityInput",
+    "IdentityValue",
     "IntHitPointsRules",
     "IntHitPointsState",
-    "NameConfiguration",
-    "NameValue",
+    "MultiSelectIdentityAnswer",
+    "MultiSelectIdentityInput",
+    "SingleSelectIdentityAnswer",
+    "SingleSelectIdentityInput",
+    "TextIdentityAnswer",
+    "TextIdentityInput",
     "RUNTIME_TYPE_ORDER",
     "ScaleStep",
     "WeightedHitPointsRules",

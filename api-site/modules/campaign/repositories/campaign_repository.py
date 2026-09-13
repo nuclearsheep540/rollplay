@@ -250,6 +250,9 @@ class CampaignRepository:
                 s3_key=asset.s3_key,
                 file_size=asset.file_size,
                 filename=asset.filename,
+                # getattr-guarded like CharacterRepository: only the image subclass has
+                # focal areas, and a legacy non-image hero must degrade to None, not raise.
+                focal_areas=getattr(asset, "focal_areas", None),
             )
 
         return CampaignAggregate(

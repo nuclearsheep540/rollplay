@@ -38,7 +38,7 @@ class TestBuildKeepsake:
         )
         config = CharacterConfig.model_validate(keepsake["config_snapshot"])
         assert [(component.type, component.label) for component in config.components] == [
-            ("name", "Name"),
+            ("identity", "Name"),
             ("hit_points", "Hit points"),
             ("attribute", "Strength"),
             ("attribute", "Dexterity"),
@@ -50,7 +50,7 @@ class TestBuildKeepsake:
             [("strength", 11), ("dexterity", 15)],
         )
         values = keepsake["values"]
-        assert values["name_1"]["text"] == "Daiki Bando"
+        assert values["identity_1"]["answer"] == {"kind": "text", "text": "Daiki Bando"}
         assert values["hit_points_1"]["state"]["current"] == 7
         assert values["attribute_1"]["score"] == 11
         assert values["attribute_2"]["score"] == 15
@@ -62,7 +62,7 @@ class TestBuildKeepsake:
     def test_blank_name_falls_back(self):
         keepsake = build_keepsake({"character_name": "   ", "hp_max": 1, "hp_current": 1}, [])
         assert keepsake["display_name"] == "Unnamed character"
-        assert keepsake["values"]["name_1"]["text"] == ""
+        assert keepsake["values"]["identity_1"]["answer"]["text"] == ""
 
     def test_hp_current_above_max_is_clamped(self):
         """Old rows are not trusted to be consistent; the snapshot must still validate."""
@@ -90,7 +90,7 @@ class TestBuildKeepsake:
             [("strength", 11), ("dexterity", 15), ("constitution", 10)],
         )
         sheet = revalidate(keepsake)
-        assert sheet.values["name_1"].text == "Daiki Bando"
+        assert sheet.values["identity_1"].answer.text == "Daiki Bando"
         assert len(sheet.config.components) == 5
 
     def test_no_abilities_is_still_a_valid_keepsake(self):

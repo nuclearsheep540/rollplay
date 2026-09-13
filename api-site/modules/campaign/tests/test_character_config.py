@@ -13,7 +13,7 @@ import pytest
 from shared_contracts.character_config import CharacterConfig, diff_configs
 from shared_contracts.components.attribute import AttributeConfiguration
 from shared_contracts.components.hit_points import HitPointsConfiguration, IntHitPointsRules
-from shared_contracts.components.name import NameConfiguration
+from shared_contracts.components.identity import IdentityConfiguration, IdentityValue, TextIdentityAnswer, TextIdentityInput
 
 from modules.campaign.application.commands import (
     PublishCharacterConfigVersion,
@@ -27,7 +27,7 @@ from modules.campaign.repositories.character_config_version_repository import (
 def make_config(version=1, maximum=20, with_wits=True):
     """A fresh config per call — never a module constant."""
     components = [
-        NameConfiguration(id="name_1", label="Name"),
+        IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
         HitPointsConfiguration(id="hit_points_1", label="Vitality",
                                rules=IntHitPointsRules(minimum=0, maximum=maximum, starting=10)),
         AttributeConfiguration(id="attribute_1", label="Strength", minimum=1, maximum=20, default=10),
@@ -119,6 +119,28 @@ class TestPublish:
         record = publish.execute(campaign_id=campaign.id, host_id=host.id)
         assert record.version == 2
         assert [entry.version for entry in version_repo.list_for_campaign(campaign.id)] == [1, 2]
+
+    def test_a_reorder_alone_is_publishable(self, campaign_repo, version_repo, campaign, host):
+        """The form renders the GM's order, so a reorder is a change worth a version —
+        previously the diff keyed by id and a pure reorder was refused as "no changes"."""
+        save = SaveCharacterConfigDraft(campaign_repo, version_repo)
+        publish = PublishCharacterConfigVersion(campaign_repo, version_repo)
+        save.execute(campaign_id=campaign.id, host_id=host.id, config=make_config())
+        publish.execute(campaign_id=campaign.id, host_id=host.id)
+
+        reordered = make_config()
+        components = list(reordered.components)
+        reordered = CharacterConfig(version=1, components=[components[-1]] + components[:-1])
+        save.execute(campaign_id=campaign.id, host_id=host.id, config=reordered)
+
+        latest = version_repo.get_latest(campaign.id)
+        draft = campaign_repo.get_by_id(campaign.id).character_config_draft
+        assert [(change.component_id, change.fields) for change in diff_configs(latest.config, draft)] == [
+            ("attribute_3", ["position"]),
+        ]
+        record = publish.execute(campaign_id=campaign.id, host_id=host.id)
+        assert record.version == 2
+        assert record.config.components[0].id == "attribute_3"
 
     def test_published_versions_are_immutable(self, campaign_repo, version_repo, campaign, host):
         """v1 still reads as v1 after v2 exists — a character built on it is never rewritten."""

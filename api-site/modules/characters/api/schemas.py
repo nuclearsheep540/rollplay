@@ -33,6 +33,9 @@ class EditionResponse(BaseModel):
 class CharacterCreateRequest(BaseModel):
     session_id: UUID
     values: Dict[str, ComponentValue]
+    # An image from the user's library, chosen on the form. Optional: the default
+    # portrait is the frontend's fallback, not a stored value.
+    avatar_asset_id: Optional[UUID] = None
 
 
 class UpdateComponentRequest(BaseModel):

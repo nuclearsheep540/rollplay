@@ -13,8 +13,8 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from shared_contracts.image import ImageConfig
-from shared_contracts.image import FocalArea
+from pydantic import TypeAdapter
+from shared_contracts.image import FocalShape, ImageConfig
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.cine_config import MotionConfig
@@ -24,6 +24,10 @@ from modules.library.domain.overlays import Overlay
 VALID_IMAGE_FITS = {"float", "wrap", "letterbox"}
 VALID_DISPLAY_MODES = {"standard", "cine"}
 VALID_ASPECT_RATIOS = {"2.39:1", "1.85:1", "16:9", "4:3", "1:1"}
+
+
+# Built once: a TypeAdapter compiles a validator.
+FOCAL_SHAPE = TypeAdapter(FocalShape)
 
 
 @dataclass
@@ -156,7 +160,7 @@ class ImageAsset(MediaAssetAggregate):
         return self.image_fit is not None
 
     def set_focal_area(self, purpose: str, area: Optional[dict]) -> None:
-        """Set (or clear with area=None) one purpose's focal square
+        """Set (or clear with area=None) one purpose's focal square or region
         (tokens v2, decision 27). The area is the image's attribute —
         every consumer of the purpose shares it. Validation against the
         FocalArea contract happens here; bounds against the actual pixels
@@ -170,7 +174,9 @@ class ImageAsset(MediaAssetAggregate):
         if area is None:
             current_areas.pop(purpose_key, None)
         else:
-            current_areas[purpose_key] = FocalArea.model_validate(area).model_dump()
+            # A square (FocalArea) or a rectangle (FocalRegion): the purpose's convention
+            # decides which, and the union rejects anything that is neither or both.
+            current_areas[purpose_key] = FOCAL_SHAPE.validate_python(area).model_dump()
         self.focal_areas = current_areas or None
         self.updated_at = datetime.utcnow()
 

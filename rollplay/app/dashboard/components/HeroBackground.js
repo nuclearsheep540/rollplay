@@ -14,7 +14,7 @@ import { useHeroImage } from '@/app/dashboard/hooks/useHeroImage'
  * Usage: <HeroBackground campaign={campaign} fallback="/campaign-tile-bg.png" className="..." style={{...}}>
  */
 const HeroBackground = React.forwardRef(({ campaign, fallback, className, style, children, ...props }, ref) => {
-  const { url, ready } = useHeroImage(campaign)
+  const { url, ready, focalPosition } = useHeroImage(campaign)
   const bgUrl = ready && url ? url : (fallback || null)
 
   return (
@@ -26,7 +26,7 @@ const HeroBackground = React.forwardRef(({ campaign, fallback, className, style,
         backgroundImage: bgUrl ? `url(${bgUrl})` : 'none',
         backgroundColor: bgUrl ? 'transparent' : style?.backgroundColor,
         backgroundSize: style?.backgroundSize || 'cover',
-        backgroundPosition: style?.backgroundPosition || 'center',
+        backgroundPosition: style?.backgroundPosition || focalPosition || 'center',
       }}
       {...props}
     >

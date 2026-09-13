@@ -21,7 +21,12 @@ import {
 import { useAuthenticated } from '@/app/shared/providers/AuthenticatedContext'
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 
-import CharacterAvatarPane from '../components/CharacterAvatarPane'
+import AvatarPlate from '@/app/characters/components/AvatarPlate'
+import CharacterAvatarPickerModal from '../components/CharacterAvatarPickerModal'
+import { useSetCharacterAvatar } from '../hooks/useSetCharacterAvatar'
+import FocalAreaModal from '@/app/shared/components/FocalAreaModal'
+import { useFocalAreaFlow } from '@/app/shared/hooks/useFocalAreaFlow'
+import { useQueryClient } from '@tanstack/react-query'
 
 /**
  * THE character view — every entry point lands here, and it renders whatever the
@@ -39,7 +44,24 @@ export default function CharacterDetailPage() {
   const setAlive = useSetCharacterAlive(id)
   const ejectCharacter = useEjectCharacter()
   const deleteCharacter = useDeleteCharacter()
+  const setAvatar = useSetCharacterAvatar(id)
+  const queryClient = useQueryClient()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+
+  // Pick -> frame the token face -> apply, the workshop's chain. Saving the crop lands on
+  // the image asset; the character then re-reads its avatar_focal_area from it, so the
+  // character queries are invalidated too. Adjusting the crop on the current portrait
+  // takes the same door without changing which image it is.
+  const cropFlow = useFocalAreaFlow({
+    onCropSaved: async ({ imageAssetId }) => {
+      if (imageAssetId !== character?.avatar_asset_id) {
+        await setAvatar.mutateAsync(imageAssetId)
+      }
+      queryClient.invalidateQueries({ queryKey: ['character', id] })
+      queryClient.invalidateQueries({ queryKey: ['characters'] })
+    },
+  })
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-24"><Spinner /></div>
@@ -75,15 +97,21 @@ export default function CharacterDetailPage() {
 
   return (
     <div className="max-w-[1040px] mx-auto px-10 py-10 grid grid-cols-[280px_minmax(0,1fr)] gap-8 items-start">
-      <div className="h-[320px] rounded-md overflow-hidden border border-border">
-        <CharacterAvatarPane
-          avatarUrl={character.avatar_url}
-          avatarAssetId={character.avatar_asset_id}
-          focalArea={character.avatar_focal_area}
-          readOnly={!isOwner}
-          onOpenPicker={() => {}}
-        />
-      </div>
+      <AvatarPlate
+        className="h-[200px] mx-3"
+        avatarUrl={character.avatar_url}
+        avatarAssetId={character.avatar_asset_id}
+        focalArea={character.avatar_focal_area}
+        readOnly={!isOwner}
+        onOpenPicker={() => setAvatarPickerOpen(true)}
+        onAdjustCrop={() => cropFlow.begin(character.avatar_asset_id)}
+      />
+      <CharacterAvatarPickerModal
+        open={avatarPickerOpen}
+        onClose={() => setAvatarPickerOpen(false)}
+        onSelect={(assetId) => cropFlow.begin(assetId)}
+      />
+      {cropFlow.isOpen && <FocalAreaModal {...cropFlow.modalProps} title="Frame the token's face" />}
 
       <div className="flex flex-col gap-6">
         <div>
@@ -125,7 +153,7 @@ export default function CharacterDetailPage() {
         {isOwner && (
           <div className="flex items-center gap-3 flex-wrap">
             <PlateButton
-              variant="outline"
+              variant="light"
               size="sm"
               onClick={() => setAlive.mutate(!character.is_alive)}
               disabled={setAlive.isPending}
@@ -133,7 +161,7 @@ export default function CharacterDetailPage() {
               {character.is_alive ? 'Mark dead' : 'Mark alive'}
             </PlateButton>
             {atATable && (
-              <PlateButton variant="outline" size="sm" onClick={onEject} disabled={ejectCharacter.isPending}>
+              <PlateButton variant="light" size="sm" onClick={onEject} disabled={ejectCharacter.isPending}>
                 {ejectCharacter.isPending ? 'Leaving…' : 'Leave the table'}
               </PlateButton>
             )}
@@ -155,10 +183,10 @@ export default function CharacterDetailPage() {
                 >
                   Delete
                 </PlateButton>
-                <PlateButton variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>Cancel</PlateButton>
+                <PlateButton variant="light" size="sm" onClick={() => setConfirmingDelete(false)}>Cancel</PlateButton>
               </div>
             ) : (
-              <PlateButton variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)}>Delete</PlateButton>
+              <PlateButton variant="light" size="sm" onClick={() => setConfirmingDelete(true)}>Delete</PlateButton>
             )}
           </div>
         )}

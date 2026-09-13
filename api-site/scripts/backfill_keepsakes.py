@@ -34,7 +34,7 @@ from shared_contracts.components.hit_points import (
     IntHitPointsRules,
     IntHitPointsState,
 )
-from shared_contracts.components.name import NameConfiguration, NameValue
+from shared_contracts.components.identity import IdentityConfiguration, IdentityValue, TextIdentityAnswer, TextIdentityInput
 
 LOG_TAG = "BACKFILL"
 UNNAMED = "Unnamed character"
@@ -62,7 +62,7 @@ def build_keepsake(row, ability_rows):
     current = _clamp(int(row["hp_current"] or 0), 0, maximum)
 
     components = [
-        NameConfiguration(id="name_1", label="Name", max_length=NAME_MAX_LENGTH, required=True),
+        IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput(max_length=NAME_MAX_LENGTH), required=True),
         HitPointsConfiguration(
             id="hit_points_1",
             label="Hit points",
@@ -70,7 +70,7 @@ def build_keepsake(row, ability_rows):
         ),
     ]
     values = {
-        "name_1": NameValue(component_id="name_1", text=old_name[:NAME_MAX_LENGTH]),
+        "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text=old_name[:NAME_MAX_LENGTH])),
         "hit_points_1": HitPointsValue(
             component_id="hit_points_1", state=IntHitPointsState(current=current)
         ),

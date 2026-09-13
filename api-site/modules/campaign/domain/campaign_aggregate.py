@@ -17,6 +17,8 @@ class HeroImageAssetMeta:
     s3_key: str
     file_size: Optional[int] = None
     filename: Optional[str] = None
+    # purpose -> focal shape, straight off the image asset. The card reads "card".
+    focal_areas: Optional[dict] = None
 
 
 @dataclass

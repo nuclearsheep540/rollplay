@@ -72,7 +72,7 @@ export default function InviteDeck({ invites = [], children }) {
   const pending = invites.filter((invite) => !dismissedIds.includes(invite.id))
   const invite = pending[0]
   // Called before the early return so hook order stays stable; handles undefined.
-  const { url: artUrl } = useHeroImage(invite)
+  const { url: artUrl, focalPosition } = useHeroImage(invite)
 
   if (!invite) {
     return <div className="relative" style={{ minHeight: PLATE_HEIGHT_PX }}>{children}</div>
@@ -181,6 +181,7 @@ export default function InviteDeck({ invites = [], children }) {
               className="absolute inset-0 bg-cover bg-center"
               style={{
                 backgroundImage: `url(${artUrl})`,
+                backgroundPosition: focalPosition,
                 opacity: promoted ? 1 : 0,
                 transition: `opacity ${SWAP_MS}ms`,
               }}

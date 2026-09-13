@@ -7,7 +7,7 @@ from .audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from .assets import AssetRef
 from .base import ContractModel
 from .character import DungeonMaster, PlayerCharacter, SessionUser
-from .character_config import CharacterConfig, CharacterSheet, ComponentChange, diff_configs
+from .character_config import CharacterConfig, CharacterSheet, ComponentChange, ComponentGroup, ConfigEntry, diff_configs
 from .components import (
     RUNTIME_TYPE_ORDER,
     AttributeConfiguration,
@@ -18,8 +18,8 @@ from .components import (
     HitPointsValue,
     IntHitPointsRules,
     IntHitPointsState,
-    NameConfiguration,
-    NameValue,
+    IdentityConfiguration,
+    IdentityValue,
     ScaleStep,
     WeightedHitPointsRules,
     WeightedHitPointsState,
@@ -27,7 +27,7 @@ from .components import (
 from .cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig, VisualOverlay
 from .display import ActiveDisplayType
 from .grid_math import grid_geometry_changed, grid_usable, resnap_token_position, snap_axis_nearest
-from .image import FocalArea, ImageConfig
+from .image import FocalArea, FocalRegion, FocalShape, ImageConfig, focal_center
 from .map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
 from .map_token import MapToken, TokenImageRef
 from .session import (
@@ -52,6 +52,8 @@ __all__ = [
     "CharacterConfig",
     "CharacterSheet",
     "ComponentChange",
+    "ComponentGroup",
+    "ConfigEntry",
     "ComponentConfiguration",
     "ComponentValue",
     "diff_configs",
@@ -60,8 +62,8 @@ __all__ = [
     "HitPointsValue",
     "IntHitPointsRules",
     "IntHitPointsState",
-    "NameConfiguration",
-    "NameValue",
+    "IdentityConfiguration",
+    "IdentityValue",
     "PlayerCharacter",
     "RUNTIME_TYPE_ORDER",
     "ScaleStep",
@@ -83,6 +85,9 @@ __all__ = [
     "MapToken",
     "TokenImageRef",
     "FocalArea",
+    "FocalRegion",
+    "FocalShape",
+    "focal_center",
     "FilmGrainOverlay",
     "VisualOverlay",
     "PlayerState",

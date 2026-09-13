@@ -96,6 +96,7 @@ def _build_hero_image_asset_info(campaign: CampaignAggregate, s3_service: Option
         s3_url=s3_url,
         file_size=campaign.hero_image_asset_meta.file_size,
         filename=campaign.hero_image_asset_meta.filename,
+        card_focal_area=(campaign.hero_image_asset_meta.focal_areas or {}).get("card"),
     )
 
 
@@ -571,7 +572,7 @@ def _character_config_state(
                 id=record.id,
                 version=record.version,
                 created_at=record.created_at,
-                component_count=len(record.config.components),
+                component_count=len(record.config.flat_components()),
             )
             for record in versions
         ],

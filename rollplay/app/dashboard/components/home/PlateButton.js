@@ -16,6 +16,8 @@ const VARIANT_CLASSES = {
   gold: 'home-btn-gold',
   ghost: 'home-btn-ghost',
   outline: 'home-btn-outline',
+  // For light surfaces — the campaign band, the create flow. The others assume dark.
+  light: 'home-btn-light',
   danger: 'home-btn-danger',
 }
 

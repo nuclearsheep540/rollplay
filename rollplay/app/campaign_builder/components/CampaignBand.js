@@ -49,7 +49,7 @@ export default function CampaignBand({
   const router = useRouter()
 
   return (
-    <div className="h-24 box-border px-10 flex items-center justify-between gap-6 border-b border-[#E5DECF] bg-surface-primary">
+    <div className="h-24 shrink-0 box-border px-10 flex items-center justify-between gap-6 border-b border-[#E5DECF] bg-surface-primary">
       <div className="flex flex-col gap-1.5 min-w-0">
         <div className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#9A7526]">Campaign</div>
         <div className="flex items-center gap-3.5 min-w-0">
@@ -76,7 +76,7 @@ export default function CampaignBand({
         </div>
       </div>
       <div className="flex items-center gap-2.5 shrink-0">
-        <PlateButton variant="outline" size="sm" onClick={() => router.push('/dashboard?tab=campaigns')}>
+        <PlateButton variant="light" size="sm" onClick={() => router.push('/dashboard?tab=campaigns')}>
           Back to campaigns
         </PlateButton>
         <PlateButton

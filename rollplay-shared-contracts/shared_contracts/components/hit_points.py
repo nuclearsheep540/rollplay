@@ -10,11 +10,12 @@ Two representations share that meaning:
 The runtime renders both as a bar and a label and never decides what reaching zero means.
 """
 
-from typing import Annotated, List, Literal, Union
+from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import Field, model_validator
 
 from ..base import ContractModel
+from .identity import DESCRIPTION_MAX_LENGTH
 
 
 class IntHitPointsRules(ContractModel):
@@ -68,6 +69,8 @@ class HitPointsConfiguration(ContractModel):
     id: str = Field(min_length=1, max_length=64)
     label: str = Field(min_length=1, max_length=60)
     secret: bool = False
+    # GM-written, shown on the form between the hint and the input. Optional.
+    description: Optional[str] = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     rules: HitPointsRules
 
 

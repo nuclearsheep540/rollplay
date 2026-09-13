@@ -38,6 +38,21 @@ def _free_slot_for(user, character_repository) -> int:
     )
 
 
+def _check_avatar_asset(asset_repository, asset_id: UUID, user_id: UUID) -> None:
+    """An avatar must be an image in the user's own library. Shared by creating a
+    character with one and changing one later, so the rule cannot drift between them."""
+    if asset_repository is None:
+        raise ValueError("Image not found in your library")
+    asset = asset_repository.get_by_id(asset_id)
+    # is_owned_by, not a field compare: the aggregate owns that rule. The old code
+    # compared against `uploaded_by`, which the aggregate has never had — every avatar
+    # set to a library image raised AttributeError, and the test for this path found it.
+    if asset is None or not asset.is_owned_by(user_id):
+        raise ValueError("Image not found in your library")
+    if getattr(asset.asset_type, "value", asset.asset_type) != "image":
+        raise ValueError("Character avatars must be images")
+
+
 async def _player_identity(user_repository, user_id: UUID, campaign, character=None):
     """Build the PlayerCharacterUpdate a running room needs for one player.
 
@@ -80,7 +95,7 @@ class CreateCharacter:
 
     def __init__(self, character_repository, user_repository, session_repository,
                  campaign_repository, version_repository, game_repository,
-                 game_notifier: Optional[GameNotifier] = None):
+                 game_notifier: Optional[GameNotifier] = None, asset_repository=None):
         self.repository = character_repository
         self.user_repository = user_repository
         self.session_repository = session_repository
@@ -88,9 +103,11 @@ class CreateCharacter:
         self.version_repository = version_repository
         self.game_repository = game_repository
         self.game_notifier = game_notifier
+        self.asset_repository = asset_repository
 
     async def execute(self, *, user_id: UUID, session_id: UUID,
-                      values: Dict[str, ComponentValue]) -> CharacterAggregate:
+                      values: Dict[str, ComponentValue],
+                      avatar_asset_id: Optional[UUID] = None) -> CharacterAggregate:
         session = self.session_repository.get_by_id(session_id)
         if session is None:
             raise ValueError("Session not found")
@@ -108,6 +125,9 @@ class CreateCharacter:
         if user is None:
             raise ValueError("User not found")
 
+        if avatar_asset_id is not None:
+            _check_avatar_asset(self.asset_repository, avatar_asset_id, user_id)
+
         character = CharacterAggregate.create(
             user_id=user_id,
             campaign_id=session.campaign_id,
@@ -116,6 +136,7 @@ class CreateCharacter:
             config=latest.config,
             values=values,
             slot=_free_slot_for(user, self.repository),
+            avatar_asset_id=avatar_asset_id,
         )
         self.repository.save(character)
 
@@ -261,11 +282,7 @@ class SetCharacterAvatar:
             raise PermissionError("You do not own this character")
 
         if asset_id is not None:
-            asset = self.asset_repository.get_by_id(asset_id)
-            if asset is None or asset.uploaded_by != user_id:
-                raise ValueError("Image not found in your library")
-            if getattr(asset.asset_type, "value", asset.asset_type) != "image":
-                raise ValueError("Character avatars must be images")
+            _check_avatar_asset(self.asset_repository, asset_id, user_id)
 
         character.set_avatar_asset(asset_id)
         self.repository.save(character)

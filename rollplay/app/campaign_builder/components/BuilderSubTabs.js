@@ -7,7 +7,7 @@ import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 
 export default function BuilderSubTabs({ subTabs, activeKey, onSelect }) {
   return (
-    <div className="h-11 box-border px-7 flex items-center gap-1.5 bg-content-secondary border-b border-[#37322F]">
+    <div className="h-11 shrink-0 box-border px-7 flex items-center gap-1.5 bg-content-secondary border-b border-[#37322F]">
       {subTabs.map((subTab) => {
         const active = subTab.key === activeKey
         return (

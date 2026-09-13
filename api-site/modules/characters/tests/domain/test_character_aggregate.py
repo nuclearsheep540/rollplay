@@ -23,14 +23,23 @@ from shared_contracts.components.hit_points import (
     WeightedHitPointsRules,
     WeightedHitPointsState,
 )
-from shared_contracts.components.name import NameConfiguration, NameValue
+from shared_contracts.components.identity import (
+    IdentityConfiguration,
+    IdentityValue,
+    MultiSelectIdentityAnswer,
+    MultiSelectIdentityInput,
+    SingleSelectIdentityAnswer,
+    SingleSelectIdentityInput,
+    TextIdentityAnswer,
+    TextIdentityInput,
+)
 
 from modules.characters.domain.character_aggregate import UNNAMED, CharacterAggregate
 
 
-def make_config(*, names=(("name_1", "Name", True),), attributes=(("attribute_1", "Strength"),)):
+def make_config(*, names=(("identity_1", "Name", True),), attributes=(("attribute_1", "Strength"),)):
     components = [
-        NameConfiguration(id=component_id, label=label, required=required)
+        IdentityConfiguration(id=component_id, label=label, input=TextIdentityInput(), required=required)
         for component_id, label, required in names
     ]
     components.append(HitPointsConfiguration(
@@ -46,7 +55,7 @@ def make_config(*, names=(("name_1", "Name", True),), attributes=(("attribute_1"
 def make_values(name_texts=("Brannoc Vell",), score=14):
     values = {}
     for index, text in enumerate(name_texts, start=1):
-        values[f"name_{index}"] = NameValue(component_id=f"name_{index}", text=text)
+        values[f"identity_{index}"] = IdentityValue(component_id=f"identity_{index}", answer=TextIdentityAnswer(text=text))
     values["hit_points_1"] = HitPointsValue(
         component_id="hit_points_1", state=IntHitPointsState(current=10))
     values["attribute_1"] = AttributeValue(component_id="attribute_1", score=score)
@@ -74,7 +83,7 @@ class TestCreate:
         assert character.is_alive is True
 
     def test_two_name_components_join_with_a_space(self):
-        config = make_config(names=(("name_1", "First name", True), ("name_2", "Family name", False)))
+        config = make_config(names=(("identity_1", "First name", True), ("identity_2", "Family name", False)))
         character = make_character(config=config, values=make_values(("Brannoc", "Vell")))
         assert character.display_name == "Brannoc Vell"
 
@@ -93,20 +102,45 @@ class TestCreate:
 
     def test_blank_required_name_is_refused(self):
         values = make_values()
-        values["name_1"] = NameValue(component_id="name_1", text="   ")
+        values["identity_1"] = IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="   "))
         with pytest.raises(ValueError, match="Missing required"):
             make_character(values=values)
 
     def test_optional_name_may_be_absent(self):
-        config = make_config(names=(("name_1", "First name", True), ("name_2", "Nickname", False)))
+        config = make_config(names=(("identity_1", "First name", True), ("identity_2", "Nickname", False)))
         character = make_character(config=config, values=make_values(("Brannoc",)))
         assert character.display_name == "Brannoc"
 
     def test_type_mismatch_is_a_hard_block(self):
         values = make_values()
-        values["hit_points_1"] = NameValue(component_id="hit_points_1", text="nope")
+        values["hit_points_1"] = IdentityValue(component_id="hit_points_1", answer=TextIdentityAnswer(text="nope"))
         with pytest.raises(ValidationError):
             make_character(values=values)
+
+    def test_select_identities_are_not_part_of_the_display_name(self):
+        """A class or a set of roles is an identity, not a name."""
+        config = CharacterConfig(version=1, components=[
+            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
+            IdentityConfiguration(id="identity_2", label="Class",
+                                  input=SingleSelectIdentityInput(options=["Rogue", "Mage"])),
+            IdentityConfiguration(id="identity_3", label="Roles", required=False,
+                                  input=MultiSelectIdentityInput(options=["Guard", "Cook"])),
+        ])
+        values = {
+            "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="Brannoc")),
+            "identity_2": IdentityValue(component_id="identity_2", answer=SingleSelectIdentityAnswer(choice="Rogue")),
+            "identity_3": IdentityValue(component_id="identity_3", answer=MultiSelectIdentityAnswer(choices=["Guard", "Cook"])),
+        }
+        assert make_character(config=config, values=values).display_name == "Brannoc"
+
+    def test_required_multi_select_with_no_choice_is_refused(self):
+        config = CharacterConfig(version=1, components=[
+            IdentityConfiguration(id="identity_1", label="Roles",
+                                  input=MultiSelectIdentityInput(options=["Guard", "Cook"])),
+        ])
+        values = {"identity_1": IdentityValue(component_id="identity_1", answer=MultiSelectIdentityAnswer(choices=[]))}
+        with pytest.raises(ValueError, match="Missing required: Roles"):
+            make_character(config=config, values=values)
 
     def test_values_are_copied_not_aliased(self):
         """The caller's dict must not become the aggregate's state."""
@@ -119,7 +153,7 @@ class TestCreate:
 class TestSetComponentValue:
     def test_replaces_one_value_and_redirves_the_name(self):
         character = make_character()
-        character.set_component_value(NameValue(component_id="name_1", text="Someone Else"))
+        character.set_component_value(IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="Someone Else")))
         assert character.display_name == "Someone Else"
         assert character.values["attribute_1"].score == 14
 
@@ -189,7 +223,7 @@ class TestTableMembership:
 class TestWeightedRepresentation:
     def test_weighted_hit_points_pair_and_store(self):
         config = CharacterConfig(version=1, components=[
-            NameConfiguration(id="name_1", label="Name"),
+            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
             HitPointsConfiguration(id="hit_points_1", label="Resolve", rules=WeightedHitPointsRules(
                 starting_weight=1.0,
                 scale=[ScaleStep(weight=1.0, label="Full"),
@@ -197,7 +231,7 @@ class TestWeightedRepresentation:
                        ScaleStep(weight=0.0, label="Zero")])),
         ])
         character = make_character(config=config, values={
-            "name_1": NameValue(component_id="name_1", text="Brannoc"),
+            "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="Brannoc")),
             "hit_points_1": HitPointsValue(
                 component_id="hit_points_1", state=WeightedHitPointsState(current_weight=1.0)),
         })

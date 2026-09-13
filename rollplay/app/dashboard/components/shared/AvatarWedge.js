@@ -20,7 +20,7 @@ const WEDGE_SCRIM = 'linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparen
  * Extracted because those two were byte-identical, comments included. The
  * other two avatar surfaces deliberately do NOT use this: the character strip
  * card is a parallelogram with a flat overlay and greyscale/zoom behaviour,
- * and CharacterAvatarPane is a full-pane forward-slash. They share the hook,
+ * and AvatarPlate is a full plate in the 8° family. They share the hook,
  * not the geometry — which is why useAvatarImage is the reusable unit and this
  * component only sits on top of it where the shape genuinely repeats.
  *

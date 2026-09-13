@@ -14,7 +14,7 @@ from shared_contracts.components.hit_points import (
     IntHitPointsState,
     WeightedHitPointsState,
 )
-from shared_contracts.components.name import NameValue
+from shared_contracts.components.identity import IdentityValue, TextIdentityAnswer
 
 from character_values import (
     config_for_player,
@@ -35,8 +35,8 @@ def make_config(secret_resolve=True):
     return {
         "version": 1,
         "components": [
-            {"type": "name", "id": "name_1", "label": "Name", "secret": False,
-             "max_length": 60, "required": True},
+            {"type": "identity", "id": "identity_1", "label": "Name", "secret": False,
+             "input": {"kind": "text", "max_length": 60}, "required": True},
             {"type": "hit_points", "id": "hit_points_1", "label": "Vitality", "secret": False,
              "rules": {"representation": "int", "minimum": 0, "maximum": 20, "starting": 10}},
             {"type": "hit_points", "id": "hit_points_2", "label": "Resolve",
@@ -60,7 +60,7 @@ def make_room(secret_resolve=True):
                 "user_id": OWNER_ID, "player_name": "Bran", "character_id": "char-1",
                 "display_name": "Brannoc Vell", "config_version_id": "ver-1",
                 "values": {
-                    "name_1": {"type": "name", "component_id": "name_1", "text": "Brannoc Vell"},
+                    "identity_1": {"type": "identity", "component_id": "identity_1", "answer": {"kind": "text", "text": "Brannoc Vell"}},
                     "hit_points_1": {"type": "hit_points", "component_id": "hit_points_1",
                                      "state": {"representation": "int", "current": 10}},
                     "hit_points_2": {"type": "hit_points", "component_id": "hit_points_2",
@@ -102,8 +102,8 @@ class TestValidateValueForPlayer:
 
     def test_type_mismatch_rejected(self):
         with pytest.raises(ValueError):
-            validate_value_for_player(make_room(), OWNER_ID, NameValue(
-                component_id="hit_points_1", text="nope"))
+            validate_value_for_player(make_room(), OWNER_ID, IdentityValue(
+                component_id="hit_points_1", answer=TextIdentityAnswer(text="nope")))
 
     def test_representation_mismatch_rejected(self):
         with pytest.raises(ValueError):
@@ -202,5 +202,5 @@ class TestLogRendering:
 
     def test_name_renders_as_the_text(self):
         assert render_value_for_log(
-            self._configuration("name_1"),
-            NameValue(component_id="name_1", text="Brannoc Vell")) == "Brannoc Vell"
+            self._configuration("identity_1"),
+            IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="Brannoc Vell"))) == "Brannoc Vell"

@@ -4,6 +4,7 @@
 'use client'
 
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
+import { FieldHeader, Stepper } from '../shared/Fields'
 
 export default function CreateInput({ configuration, value, onChange }) {
   const rules = configuration.rules
@@ -11,30 +12,26 @@ export default function CreateInput({ configuration, value, onChange }) {
   if (rules.representation === 'int') {
     return (
       <div>
-        <label className="block text-[13px] font-medium mb-2 text-[#37322F]">{configuration.label}</label>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            className="w-[90px] box-border px-3 py-2 rounded-sm border border-[#37322F] bg-[#F7F4F3] text-center text-lg font-semibold"
-            value={value?.state?.current ?? ''}
-            onChange={(event) =>
-              onChange({ ...value, state: { representation: 'int', current: Number(event.target.value) } })
-            }
-          />
-          <div className="text-[12.5px] text-content-muted">
-            {rules.minimum} to {rules.maximum}. Starts at {rules.starting}.
-          </div>
-        </div>
+        <FieldHeader
+          label={configuration.label}
+          hint={`${rules.minimum} to ${rules.maximum}`}
+          description={configuration.description}
+        />
+        <Stepper
+          ariaLabel={configuration.label}
+          value={value?.state?.current}
+          min={rules.minimum}
+          max={rules.maximum}
+          onChange={(current) => onChange({ ...value, state: { representation: 'int', current } })}
+        />
       </div>
     )
   }
 
-  const startingStep = rules.scale.find((step) => step.weight === rules.starting_weight)
-
   return (
     <div>
-      <label className="block text-[13px] font-medium mb-2 text-[#37322F]">{configuration.label}</label>
-      <div className="flex gap-1.5 flex-wrap">
+      <FieldHeader label={configuration.label} description={configuration.description} />
+      <div className="flex gap-1.5 flex-wrap max-w-[720px]">
         {rules.scale.map((step) => {
           const selected = value?.state?.current_weight === step.weight
           return (
@@ -56,9 +53,6 @@ export default function CreateInput({ configuration, value, onChange }) {
           )
         })}
       </div>
-      {startingStep && (
-        <div className="mt-2 text-[12.5px] text-content-muted">Starts at {startingStep.label}.</div>
-      )}
     </div>
   )
 }

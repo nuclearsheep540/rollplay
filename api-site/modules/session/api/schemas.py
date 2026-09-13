@@ -80,6 +80,9 @@ class SessionResponse(BaseModel):
     """
     id: UUID
     campaign_id: UUID
+    # The campaign's title, spelled campaign_name as everywhere it is copied. The create
+    # flow's header needs it and should not have to fetch the campaign to get one string.
+    campaign_name: Optional[str] = None
     host_id: UUID
     host_name: str  # DM/Host screen name or email
     created_at: datetime

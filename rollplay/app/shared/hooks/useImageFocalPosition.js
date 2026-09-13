@@ -24,12 +24,24 @@ import { useEffect, useState } from 'react';
  * pending / when there is no area — callers keep their `bg-center` class
  * as the fallback, which is byte-identical to the pre-crop rendering.
  */
+/**
+ * Either focal shape's extent — a square's one side, or a region's two. Mirrors
+ * shared_contracts.image.focal_center; the centre is the one thing both shapes agree on.
+ */
+function focalExtent(area) {
+  if (!area) return null;
+  if (area.size) return { width: area.size, height: area.size };
+  if (area.width && area.height) return { width: area.width, height: area.height };
+  return null;
+}
+
 export function useImageFocalPosition(url, area = null) {
   const [naturalDims, setNaturalDims] = useState(null);
+  const extent = focalExtent(area);
 
   useEffect(() => {
     setNaturalDims(null);
-    if (!url || !area || !area.size) return undefined;
+    if (!url || !extent) return undefined;
     let cancelled = false;
     const probe = new Image();
     probe.onload = () => {
@@ -39,12 +51,12 @@ export function useImageFocalPosition(url, area = null) {
     };
     probe.src = url;
     return () => { cancelled = true; };
-  }, [url, area?.x, area?.y, area?.size]);
+  }, [url, area?.x, area?.y, extent?.width, extent?.height]);
 
-  if (!url || !area || !area.size || !naturalDims) return undefined;
+  if (!url || !extent || !naturalDims) return undefined;
 
   const clampPercent = (value) => Math.max(0, Math.min(100, value));
-  const centerX = clampPercent(((area.x + area.size / 2) / naturalDims.width) * 100);
-  const centerY = clampPercent(((area.y + area.size / 2) / naturalDims.height) * 100);
+  const centerX = clampPercent(((area.x + extent.width / 2) / naturalDims.width) * 100);
+  const centerY = clampPercent(((area.y + extent.height / 2) / naturalDims.height) * 100);
   return `${centerX.toFixed(2)}% ${centerY.toFixed(2)}%`;
 }
