@@ -86,7 +86,7 @@ def make_text_answer(component_id, text):
 
 
 def make_int_hit_points(component_id="hit_points_1", label="Vitality", **overrides):
-    rules = overrides.pop("rules", IntHitPointsRules(minimum=0, maximum=20, starting=10))
+    rules = overrides.pop("rules", IntHitPointsRules(minimum=0, maximum=20))
     fields = {"id": component_id, "label": label, "secret": False, "rules": rules}
     fields.update(overrides)
     return HitPointsConfiguration(**fields)
@@ -132,7 +132,7 @@ def make_mock_values():
     """Brannoc Vell: name, Vitality 10, Resolve 1.0, Strength 14, Agility 10, Wits 8."""
     return {
         "identity_1": make_text_answer("identity_1", "Brannoc Vell"),
-        "hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(current=10)),
+        "hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(maximum=12, current=10)),
         "hit_points_2": HitPointsValue(component_id="hit_points_2", state=WeightedHitPointsState(current_weight=1.0)),
         "attribute_1": AttributeValue(component_id="attribute_1", score=14),
         "attribute_2": AttributeValue(component_id="attribute_2", score=10),
@@ -1369,24 +1369,40 @@ class TestIntHitPoints:
         configuration = make_int_hit_points()
         assert HitPointsConfiguration.model_validate(configuration.model_dump()) == configuration
 
-    def test_minimum_not_below_maximum_rejected(self):
+    def test_minimum_above_maximum_rejected(self):
         with pytest.raises(ValidationError):
-            IntHitPointsRules(minimum=10, maximum=10, starting=10)
+            IntHitPointsRules(minimum=11, maximum=10)
 
-    def test_starting_outside_range_rejected(self):
+    def test_equal_bounds_fix_the_maximum(self):
+        """A GM may say "you start with 10 and cannot change it": no range to choose from."""
+        assert IntHitPointsRules(minimum=10, maximum=10).maximum == 10
+
+    def test_negative_minimum_rejected(self):
+        """A maximum cannot be set below zero, so the bound on it cannot be either."""
         with pytest.raises(ValidationError):
-            IntHitPointsRules(minimum=0, maximum=20, starting=21)
+            IntHitPointsRules(minimum=-1, maximum=20)
+
+    def test_no_starting_value(self):
+        """The entry is the character's maximum; nothing starts anywhere else."""
+        with pytest.raises(ValidationError):
+            IntHitPointsRules(minimum=0, maximum=20, starting=10)
 
     def test_state_round_trip(self):
-        state = IntHitPointsState(current=7)
+        state = IntHitPointsState(maximum=12, current=7)
         assert IntHitPointsState.model_validate(state.model_dump()) == state
 
-    def test_state_accepts_current_outside_any_range(self):
-        """The value model is range-blind by design. A current that no longer fits its
-        configuration is a version difference (axis 2, surfaced by diff_configs), never a
-        data invariant — so the leaf must accept it."""
-        assert IntHitPointsState(current=-40).current == -40
-        assert IntHitPointsState(current=9999).current == 9999
+    def test_state_accepts_numbers_outside_the_rules(self):
+        """The value model is range-blind by design. A maximum the GM would no longer accept
+        at entry, or a current above the maximum, is a version difference (axis 2, surfaced
+        by diff_configs), never a data invariant — so the leaf must accept it."""
+        assert IntHitPointsState(maximum=9999, current=9999).current == 9999
+        assert IntHitPointsState(maximum=5, current=40).current == 40
+
+    def test_state_rejects_negatives(self):
+        with pytest.raises(ValidationError):
+            IntHitPointsState(maximum=12, current=-1)
+        with pytest.raises(ValidationError):
+            IntHitPointsState(maximum=-1, current=0)
 
 
 class TestWeightedHitPoints:
@@ -1435,7 +1451,7 @@ class TestWeightedHitPoints:
 class TestHitPointsDiscriminators:
     def test_int_rules_resolve_from_json(self):
         payload = {"type": "hit_points", "id": "hit_points_1", "label": "Vitality", "secret": False,
-                   "rules": {"representation": "int", "minimum": 0, "maximum": 20, "starting": 10}}
+                   "rules": {"representation": "int", "minimum": 0, "maximum": 20}}
         configuration = HitPointsConfiguration.model_validate(payload)
         assert isinstance(configuration.rules, IntHitPointsRules)
 
@@ -1449,7 +1465,7 @@ class TestHitPointsDiscriminators:
     def test_states_resolve_from_json(self):
         int_value = HitPointsValue.model_validate({
             "type": "hit_points", "component_id": "hit_points_1",
-            "state": {"representation": "int", "current": 3}})
+            "state": {"representation": "int", "maximum": 12, "current": 3}})
         weighted_value = HitPointsValue.model_validate({
             "type": "hit_points", "component_id": "hit_points_2",
             "state": {"representation": "weighted", "current_weight": 0.6}})
@@ -1460,7 +1476,7 @@ class TestHitPointsDiscriminators:
         with pytest.raises(ValidationError):
             HitPointsConfiguration.model_validate({
                 "type": "hit_points", "id": "hit_points_1", "label": "Vitality",
-                "rules": {"minimum": 0, "maximum": 20, "starting": 10}})
+                "rules": {"minimum": 0, "maximum": 20}})
 
     def test_unknown_representation_rejected(self):
         with pytest.raises(ValidationError):
@@ -1596,7 +1612,7 @@ class TestComponentGroups:
         assert config.flat_components() == []
 
     def test_sheet_pairs_against_grouped_config(self):
-        values = {"hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(current=3))}
+        values = {"hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(maximum=12, current=3))}
         assert CharacterSheet(config=self.make_grouped(), values=values).values["hit_points_1"].state.current == 3
 
     def test_old_snapshots_without_groups_still_validate(self):
@@ -1699,12 +1715,13 @@ class TestCharacterSheet:
         values["attribute_1"] = AttributeValue(component_id="attribute_1", score=99)
         assert CharacterSheet(config=make_mock_config(), values=values).values["attribute_1"].score == 99
 
-    def test_hit_points_current_above_configured_maximum_accepted(self):
-        """Axis 2, same reasoning as the attribute above."""
+    def test_hit_points_maximum_above_entry_bound_accepted(self):
+        """Axis 2, same reasoning as the attribute above: the GM lowered the bound after the
+        character entered its maximum."""
         values = make_mock_values()
         values["hit_points_1"] = HitPointsValue(
-            component_id="hit_points_1", state=IntHitPointsState(current=500))
-        assert CharacterSheet(config=make_mock_config(), values=values).values["hit_points_1"].state.current == 500
+            component_id="hit_points_1", state=IntHitPointsState(maximum=500, current=500))
+        assert CharacterSheet(config=make_mock_config(), values=values).values["hit_points_1"].state.maximum == 500
 
     def test_weight_no_longer_on_the_scale_accepted(self):
         """Axis 2: the GM edited the scale under a character that had picked a step."""
@@ -1732,7 +1749,7 @@ class TestDiffConfigs:
         older = make_mock_config()
         newer = CharacterConfig(version=2, components=[
             make_identity(),
-            make_int_hit_points(rules=IntHitPointsRules(minimum=0, maximum=25, starting=10)),
+            make_int_hit_points(rules=IntHitPointsRules(minimum=0, maximum=25)),
             make_weighted_hit_points(),
             make_attribute("attribute_1", "Strength"),
             make_attribute("attribute_2", "Agility"),

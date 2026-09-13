@@ -49,7 +49,7 @@ class TestEndWritesValuesCold:
             values={
                 "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="Brannoc Vell")),
                 "hit_points_1": HitPointsValue(component_id="hit_points_1",
-                                               state=IntHitPointsState(current=0)),
+                                               state=IntHitPointsState(maximum=20, current=0)),
             },
             color="#3b82f6",
         )

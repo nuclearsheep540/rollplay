@@ -115,8 +115,10 @@ export function isIdentityPopulated(value) {
 /**
  * What a player's input starts at for one configuration.
  *
- * The GM's starting value where they declared one, because that is what they meant by it;
- * otherwise the least surprising floor.
+ * The GM's default where they declared one, because that is what they meant by it;
+ * otherwise the least surprising floor. Hit points start at the top of the GM's entry
+ * range — a full character — since the entry is the character's own maximum and there
+ * is nothing else to start from.
  */
 export function initialValueFor(configuration) {
   switch (configuration.type) {
@@ -127,7 +129,7 @@ export function initialValueFor(configuration) {
         ? {
             type: 'hit_points',
             component_id: configuration.id,
-            state: { representation: 'int', current: configuration.rules.starting },
+            state: { representation: 'int', maximum: configuration.rules.maximum, current: configuration.rules.maximum },
           }
         : {
             type: 'hit_points',

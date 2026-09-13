@@ -66,13 +66,13 @@ def build_keepsake(row, ability_rows):
         HitPointsConfiguration(
             id="hit_points_1",
             label="Hit points",
-            rules=IntHitPointsRules(minimum=0, maximum=maximum, starting=maximum),
+            rules=IntHitPointsRules(minimum=0, maximum=maximum),
         ),
     ]
     values = {
         "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text=old_name[:NAME_MAX_LENGTH])),
         "hit_points_1": HitPointsValue(
-            component_id="hit_points_1", state=IntHitPointsState(current=current)
+            component_id="hit_points_1", state=IntHitPointsState(maximum=maximum, current=current)
         ),
     }
 

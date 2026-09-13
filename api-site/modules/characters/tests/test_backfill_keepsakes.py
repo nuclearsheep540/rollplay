@@ -51,7 +51,8 @@ class TestBuildKeepsake:
         )
         values = keepsake["values"]
         assert values["identity_1"]["answer"] == {"kind": "text", "text": "Daiki Bando"}
-        assert values["hit_points_1"]["state"]["current"] == 7
+        # hp_max is the character's own maximum, not the campaign's entry bound.
+        assert values["hit_points_1"]["state"] == {"representation": "int", "maximum": 10, "current": 7}
         assert values["attribute_1"]["score"] == 11
         assert values["attribute_2"]["score"] == 15
 

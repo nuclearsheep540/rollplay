@@ -83,7 +83,7 @@ const DEFAULTS_BY_TYPE = {
     label: 'Hit points',
     secret: false,
     description: null,
-    rules: { representation: 'int', minimum: 0, maximum: 10, starting: 10 },
+    rules: { representation: 'int', minimum: 1, maximum: 10 },
   },
   attribute: { label: 'Attribute', secret: false, description: null, minimum: 1, maximum: 10, default: null },
 }

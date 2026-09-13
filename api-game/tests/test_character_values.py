@@ -38,7 +38,7 @@ def make_config(secret_resolve=True):
             {"type": "identity", "id": "identity_1", "label": "Name", "secret": False,
              "input": {"kind": "text", "max_length": 60}, "required": True},
             {"type": "hit_points", "id": "hit_points_1", "label": "Vitality", "secret": False,
-             "rules": {"representation": "int", "minimum": 0, "maximum": 20, "starting": 10}},
+             "rules": {"representation": "int", "minimum": 0, "maximum": 20}},
             {"type": "hit_points", "id": "hit_points_2", "label": "Resolve",
              "secret": secret_resolve,
              "rules": {"representation": "weighted", "starting_weight": 1.0, "scale": [
@@ -93,7 +93,7 @@ class TestConfigForPlayer:
 class TestValidateValueForPlayer:
     def test_a_matching_value_passes(self):
         validate_value_for_player(make_room(), OWNER_ID, HitPointsValue(
-            component_id="hit_points_1", state=IntHitPointsState(current=3)))
+            component_id="hit_points_1", state=IntHitPointsState(maximum=20, current=3)))
 
     def test_unknown_component_rejected(self):
         with pytest.raises(ValueError):
@@ -179,7 +179,7 @@ class TestLogRendering:
     def test_int_hit_points_render_as_the_number(self):
         assert render_value_for_log(
             self._configuration("hit_points_1"),
-            HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(current=7))) == "7"
+            HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(maximum=20, current=7))) == "7"
 
     def test_weighted_hit_points_render_as_the_step_label(self):
         assert render_value_for_log(

@@ -41,6 +41,10 @@ export default function CharacterCreateForm({ sessionId }) {
   // Per-component messages from the last submit — "<label> is required" — cleared for a
   // component the moment its value changes, so the red goes away as the player fixes it.
   const [errors, setErrors] = useState({})
+  // Set on a successful create. The mutation stops being pending the moment the response
+  // lands, but the page is still here until the push to the new character completes — and
+  // a second click in that beat would create a second character.
+  const [joined, setJoined] = useState(false)
 
   // The avatar, chosen before the character exists: held as an asset id and sent with the
   // create. The picker is the old wizard's — library or upload, one modal — and the pane
@@ -97,7 +101,10 @@ export default function CharacterCreateForm({ sessionId }) {
     })
   }
 
+  const busy = createCharacter.isPending || joined
+
   const submit = async () => {
+    if (busy) return
     // The same completeness rule the backend applies, checked here first so the answer is
     // on the field rather than in a toast after a round trip. Only what the config marks
     // required can be missing; an identity is populated by non-blank text or a choice.
@@ -125,6 +132,7 @@ export default function CharacterCreateForm({ sessionId }) {
 
     try {
       const character = await createCharacter.mutateAsync({ sessionId, values: payload, avatarAssetId })
+      setJoined(true)
       showToast(`Joined the party at ${session.data?.campaign_name || 'the table'}`, 'success')
       router.push(`/character/${character.id}`)
     } catch (error) {
@@ -162,8 +170,8 @@ export default function CharacterCreateForm({ sessionId }) {
           <div className="max-w-[68ch] text-[12.5px] text-content-muted">
             Nothing here is checked against a rulebook. Your table decides what is fair.
           </div>
-          <PlateButton variant="gold" onClick={submit} disabled={createCharacter.isPending}>
-            {createCharacter.isPending ? 'Joining…' : 'Join the party'}
+          <PlateButton variant="gold" onClick={submit} disabled={busy}>
+            {busy ? 'Joining…' : 'Join the party'}
           </PlateButton>
         </div>
       </CharacterFormFields>

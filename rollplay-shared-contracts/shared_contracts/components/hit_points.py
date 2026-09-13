@@ -4,7 +4,10 @@
 """Hit points component — an ordered scale with a current position and a zero point.
 
 Two representations share that meaning:
-  int      — a number between minimum and maximum; minimum is the zero point.
+  int      — the character's own maximum, entered at creation within the GM's bounds,
+             and a current that moves with play from that maximum down to 0. The GM's
+             minimum and maximum bound the entry only: a minimum of 1 means no character
+             starts dead. Neither number is ever negative.
   weighted — a list of labelled steps from weight 1.0 (best) to 0.0 (zero point).
 
 The runtime renders both as a bar and a label and never decides what reaching zero means.
@@ -19,17 +22,20 @@ from .identity import DESCRIPTION_MAX_LENGTH
 
 
 class IntHitPointsRules(ContractModel):
+    """Bounds on the maximum a player may enter — data-entry validation, not a character's
+    hit points and not the floor of play, which is always 0. There is no starting value:
+    the entry is the character's maximum, and current begins equal to it."""
+
     representation: Literal["int"] = "int"
-    minimum: int = 0
+    # The lowest and highest maximum a player may set.
+    minimum: int = Field(default=1, ge=0)
     maximum: int = Field(ge=1)
-    starting: int
 
     @model_validator(mode="after")
     def check_bounds(self) -> "IntHitPointsRules":
-        if self.minimum >= self.maximum:
-            raise ValueError("minimum must be less than maximum")
-        if not (self.minimum <= self.starting <= self.maximum):
-            raise ValueError("starting must lie between minimum and maximum")
+        # Equal is allowed: the GM fixes the maximum and the player has nothing to choose.
+        if self.minimum > self.maximum:
+            raise ValueError("minimum must not exceed maximum")
         return self
 
 
@@ -75,8 +81,12 @@ class HitPointsConfiguration(ContractModel):
 
 
 class IntHitPointsState(ContractModel):
+    """The character's own numbers. Neither may be negative — a data invariant. Whether
+    they sit within the rules' bounds is a version difference, never checked here."""
+
     representation: Literal["int"] = "int"
-    current: int
+    maximum: int = Field(ge=0)
+    current: int = Field(ge=0)
 
 
 class WeightedHitPointsState(ContractModel):

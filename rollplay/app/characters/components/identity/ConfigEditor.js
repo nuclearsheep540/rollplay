@@ -55,7 +55,7 @@ export default function ConfigEditor({ configuration, onChange }) {
           />
         </div>
         <div className="text-[12.5px] text-content-muted leading-snug">
-          A short free text — a name. Text identities join up to make the character&apos;s display name.
+          Free text. Can represent any kind of flavor you want to give player characters.
         </div>
       </>
     )
@@ -100,8 +100,8 @@ export default function ConfigEditor({ configuration, onChange }) {
       </div>
       <div className="text-[12.5px] text-content-muted leading-snug">
         {input.kind === 'single_select'
-          ? 'The player picks one — a class, a house, a calling.'
-          : 'The player picks any number — roles, trades, allegiances.'}
+          ? 'The player picks one. Eg: a house or a calling.'
+          : 'The player picks multiple. Eg. quirks or traits'}
       </div>
     </>
   )

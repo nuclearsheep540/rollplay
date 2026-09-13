@@ -44,7 +44,7 @@ def make_config(*, names=(("identity_1", "Name", True),), attributes=(("attribut
     ]
     components.append(HitPointsConfiguration(
         id="hit_points_1", label="Vitality",
-        rules=IntHitPointsRules(minimum=0, maximum=20, starting=10)))
+        rules=IntHitPointsRules(minimum=0, maximum=20)))
     components.extend(
         AttributeConfiguration(id=component_id, label=label, minimum=1, maximum=20, default=10)
         for component_id, label in attributes
@@ -57,7 +57,7 @@ def make_values(name_texts=("Brannoc Vell",), score=14):
     for index, text in enumerate(name_texts, start=1):
         values[f"identity_{index}"] = IdentityValue(component_id=f"identity_{index}", answer=TextIdentityAnswer(text=text))
     values["hit_points_1"] = HitPointsValue(
-        component_id="hit_points_1", state=IntHitPointsState(current=10))
+        component_id="hit_points_1", state=IntHitPointsState(maximum=20, current=10))
     values["attribute_1"] = AttributeValue(component_id="attribute_1", score=score)
     return values
 
@@ -98,7 +98,7 @@ class TestCreate:
     def test_missing_required_name_is_refused_by_label(self):
         with pytest.raises(ValueError, match="Missing required: Name"):
             make_character(values={"hit_points_1": HitPointsValue(
-                component_id="hit_points_1", state=IntHitPointsState(current=10))})
+                component_id="hit_points_1", state=IntHitPointsState(maximum=20, current=10))})
 
     def test_blank_required_name_is_refused(self):
         values = make_values()
@@ -179,7 +179,7 @@ class TestSetComponentValue:
         """Reaching the zero point renders as empty and does nothing else. No auto-death."""
         character = make_character()
         character.set_component_value(HitPointsValue(
-            component_id="hit_points_1", state=IntHitPointsState(current=0)))
+            component_id="hit_points_1", state=IntHitPointsState(maximum=20, current=0)))
         assert character.is_alive is True
 
 

@@ -161,6 +161,17 @@ class NameValue(ContractModel):
 
 ## File: `shared_contracts/components/hit_points.py`
 
+> **Revision (2026-09-13, per-character maximum).** The GM's int `minimum`/`maximum` are
+> **data-entry bounds** on what a player enters at creation — not a character's hit
+> points. `IntHitPointsRules` loses `starting` (there is no author-set starting value);
+> `minimum` (default 1, `ge=0`) and `maximum` are the lowest and highest maximum a
+> player may set — entry bounds only; play always runs down to 0. `IntHitPointsState` is `{maximum, current}`, both `ge=0`: the
+> entry becomes the character's own `maximum` and `current` starts equal to it. Range-blind
+> as before — a maximum outside the entry bounds, or a current above the maximum, is axis
+> 2. Sheet/seat/log render `current / state.maximum`; the sheet edits both. The keepsake
+> backfill maps `hp_max`→`state.maximum`, `hp_current`→`state.current`. The listing below
+> predates this.
+
 ```python
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later

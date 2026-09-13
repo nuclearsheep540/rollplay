@@ -13,10 +13,10 @@ export default function SeatCompact({ configuration, value }) {
   let caption = '—'
 
   if (rules.representation === 'int') {
-    const current = value?.state?.current ?? rules.minimum
-    const span = rules.maximum - rules.minimum
-    fraction = span > 0 ? (current - rules.minimum) / span : 0
-    caption = `${current} / ${rules.maximum}`
+    const current = value?.state?.current ?? 0
+    const maximum = value?.state?.maximum ?? current
+    fraction = maximum > 0 ? current / maximum : 0
+    caption = `${current} / ${maximum}`
   } else {
     const weight = value?.state?.current_weight ?? 0
     fraction = weight

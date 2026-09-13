@@ -198,7 +198,7 @@ class TestEjectDuringAGame:
         character, so unbinding before reading discards the night."""
         notifier.fetch_player_values.return_value = {
             "hit_points_1": HitPointsValue(component_id="hit_points_1",
-                                           state=IntHitPointsState(current=3))
+                                           state=IntHitPointsState(maximum=20, current=3))
         }
         result = asyncio.run(self.make_eject(character_repo, session_repo, campaign_repo,
                                        user_repo, game_repo, notifier).execute(

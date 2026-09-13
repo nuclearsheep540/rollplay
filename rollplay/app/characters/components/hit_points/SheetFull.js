@@ -10,8 +10,10 @@ import { Stepper } from '../shared/Fields'
 
 export default function SheetFull({ configuration, value, editable, onChange, pending }) {
   const rules = configuration.rules
-  const [draft, setDraft] = useState(value?.state?.current ?? 0)
-  useEffect(() => setDraft(value?.state?.current ?? 0), [value?.state?.current])
+  const current = value?.state?.current
+  const maximum = value?.state?.maximum
+  const [draft, setDraft] = useState(current ?? 0)
+  useEffect(() => setDraft(current ?? 0), [current])
 
   if (rules.representation === 'weighted') {
     const current = value?.state?.current_weight
@@ -44,6 +46,9 @@ export default function SheetFull({ configuration, value, editable, onChange, pe
     )
   }
 
+  // Current moves between 0 and the character's own maximum — the GM's range bounded the
+  // entry, not play. The maximum is the character's too (a level-up raises it), so it is
+  // a second, smaller stepper rather than a fixed caption.
   return (
     <div className="flex items-center justify-between gap-3 py-1.5">
       <span className="text-[12.5px] text-content-muted">{configuration.label}</span>
@@ -53,21 +58,32 @@ export default function SheetFull({ configuration, value, editable, onChange, pe
             size="sm"
             ariaLabel={configuration.label}
             value={draft}
-            min={rules.minimum}
-            max={rules.maximum}
+            min={0}
+            max={maximum}
             disabled={pending}
             onChange={(next) => {
               setDraft(next)
-              if (next !== '' && next !== value?.state?.current) {
-                onChange({ ...value, state: { representation: 'int', current: next } })
+              if (next !== '' && next !== current) {
+                onChange({ ...value, state: { representation: 'int', maximum, current: next } })
               }
             }}
           />
-          <span className="text-[11px] text-content-muted">/ {rules.maximum}</span>
+          <span className="text-[11px] text-content-muted">/</span>
+          <Stepper
+            size="sm"
+            ariaLabel={`${configuration.label} maximum`}
+            value={maximum}
+            min={1}
+            disabled={pending}
+            onChange={(next) => {
+              if (next === '' || next === maximum) return
+              onChange({ ...value, state: { representation: 'int', maximum: next, current: Math.min(current ?? next, next) } })
+            }}
+          />
         </div>
       ) : (
         <span className="text-sm font-semibold">
-          {value?.state?.current ?? '—'} / {rules.maximum}
+          {current ?? '—'} / {maximum ?? '—'}
         </span>
       )}
     </div>

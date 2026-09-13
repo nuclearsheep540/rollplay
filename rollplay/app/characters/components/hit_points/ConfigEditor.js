@@ -13,7 +13,7 @@ import { NumberField, SelectField, TextField } from '../shared/Fields'
  * between them, and a half-translated one would be worse than starting clean.
  */
 
-const INT_DEFAULTS = { representation: 'int', minimum: 0, maximum: 10, starting: 10 }
+const INT_DEFAULTS = { representation: 'int', minimum: 1, maximum: 10 }
 const WEIGHTED_DEFAULTS = {
   representation: 'weighted',
   starting_weight: 1.0,
@@ -45,14 +45,13 @@ export default function ConfigEditor({ configuration, onChange }) {
   if (rules.representation === 'int') {
     return (
       <>
-        <div className="grid grid-cols-[200px_repeat(3,140px)] gap-4 items-end">
+        <div className="grid grid-cols-[200px_repeat(2,140px)] gap-4 items-end">
           {representationSelect}
-          <NumberField label="Minimum" value={rules.minimum} onChange={(minimum) => setRules({ ...rules, minimum })} />
-          <NumberField label="Maximum" value={rules.maximum} onChange={(maximum) => setRules({ ...rules, maximum })} />
-          <NumberField label="Starting value" value={rules.starting} onChange={(starting) => setRules({ ...rules, starting })} />
+          <NumberField label="Minimum" value={rules.minimum} min={0} onChange={(minimum) => setRules({ ...rules, minimum })} />
+          <NumberField label="Maximum" value={rules.maximum} min={1} onChange={(maximum) => setRules({ ...rules, maximum })} />
         </div>
         <div className="text-[12.5px] text-content-muted leading-snug">
-          A number between minimum and maximum. Reaching the minimum is the zero point.
+          The lowest and highest maximum a player may set. In play, hit points run from that maximum down to 0.
         </div>
       </>
     )

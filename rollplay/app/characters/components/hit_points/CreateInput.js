@@ -10,19 +10,21 @@ export default function CreateInput({ configuration, value, onChange }) {
   const rules = configuration.rules
 
   if (rules.representation === 'int') {
+    // What the player enters is the character's own maximum — the GM's range bounds the
+    // entry, nothing more — and current begins equal to it.
     return (
       <div>
         <FieldHeader
           label={configuration.label}
-          hint={`${rules.minimum} to ${rules.maximum}`}
+          hint={rules.minimum === rules.maximum ? `Maximum ${rules.maximum}` : `Maximum ${rules.minimum} to ${rules.maximum}`}
           description={configuration.description}
         />
         <Stepper
           ariaLabel={configuration.label}
-          value={value?.state?.current}
+          value={value?.state?.maximum}
           min={rules.minimum}
           max={rules.maximum}
-          onChange={(current) => onChange({ ...value, state: { representation: 'int', current } })}
+          onChange={(maximum) => onChange({ ...value, state: { representation: 'int', maximum, current: maximum } })}
         />
       </div>
     )

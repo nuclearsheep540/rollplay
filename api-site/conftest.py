@@ -363,7 +363,7 @@ def make_character_config():
         return CharacterConfig(version=version, components=[
             IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
             HitPointsConfiguration(id="hit_points_1", label="Vitality",
-                                   rules=IntHitPointsRules(minimum=0, maximum=hp_maximum, starting=10)),
+                                   rules=IntHitPointsRules(minimum=0, maximum=hp_maximum)),
             AttributeConfiguration(id="attribute_1", label="Strength", minimum=1, maximum=20, default=10),
         ])
 
@@ -377,11 +377,11 @@ def make_character_values():
     from shared_contracts.components.hit_points import HitPointsValue, IntHitPointsState
     from shared_contracts.components.identity import IdentityValue, TextIdentityAnswer
 
-    def _make(name: str = "Test Character", current: int = 10, score: int = 10):
+    def _make(name: str = "Test Character", current: int = 10, score: int = 10, maximum: int = 20):
         return {
             "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text=name)),
             "hit_points_1": HitPointsValue(component_id="hit_points_1",
-                                           state=IntHitPointsState(current=current)),
+                                           state=IntHitPointsState(maximum=maximum, current=current)),
             "attribute_1": AttributeValue(component_id="attribute_1", score=score),
         }
 

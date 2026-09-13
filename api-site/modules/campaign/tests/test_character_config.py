@@ -29,7 +29,7 @@ def make_config(version=1, maximum=20, with_wits=True):
     components = [
         IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
         HitPointsConfiguration(id="hit_points_1", label="Vitality",
-                               rules=IntHitPointsRules(minimum=0, maximum=maximum, starting=10)),
+                               rules=IntHitPointsRules(minimum=0, maximum=maximum)),
         AttributeConfiguration(id="attribute_1", label="Strength", minimum=1, maximum=20, default=10),
     ]
     if with_wits:
