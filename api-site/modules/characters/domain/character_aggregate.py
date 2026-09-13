@@ -8,7 +8,7 @@ what a component *is* (it can pair a value with its configuration, and read an I
 nothing about what any component *means*: there is no damage, no death, no level, and
 reaching a hit-points component's zero point is just a value like any other.
 
-Its one derived fact is the display name, joined from every text Identity value in config order.
+Its one derived fact is the display name, joined from every `is_title` Identity value in config order.
 """
 
 import re
@@ -111,19 +111,20 @@ class CharacterAggregate:
         return aggregate
 
     def derive_display_name(self) -> str:
-        """Every text-kind Identity value in config order, single-space joined.
+        """Every Identity value the GM marked `is_title`, in config order, single-space
+        joined.
 
-        Two such components labelled "First name" and "Family name" therefore read as one
-        name everywhere the runtime shows a name. A chosen class or role is an identity
-        too, but not a name — selects are left out.
+        "First name" and "Family name" therefore read as one name everywhere the runtime
+        shows a name, and a Profession the GM left unmarked stays off it — whichever kind
+        each is: a chosen house can be a title as much as a typed name.
         """
         parts = []
         for configuration in self.config_snapshot.flat_components():
-            if configuration.type != "identity" or configuration.input.kind != "text":
+            if configuration.type != "identity" or not configuration.is_title:
                 continue
             value = self.values.get(configuration.id)
-            if value is not None and value.answer.text.strip():
-                parts.append(value.answer.text.strip())
+            if value is not None and value.as_text():
+                parts.append(value.as_text())
         return " ".join(parts) if parts else UNNAMED
 
     def set_component_value(self, value: ComponentValue) -> None:

@@ -37,7 +37,11 @@ from modules.characters.application.commands import (
     SetCharacterAvatar,
     UpdateCharacterComponent,
 )
-from modules.characters.application.queries import GetCharacterById, GetCharactersByUser
+from modules.characters.application.queries import (
+    GetCharacterById,
+    GetCharactersByUser,
+    GetCharacterVersionDrift,
+)
 from modules.characters.dependencies.providers import get_character_repository
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.characters.repositories.character_repository import CharacterRepository
@@ -64,9 +68,11 @@ def _to_character_response(
     character: CharacterAggregate,
     s3_service: Optional[S3Service] = None,
     campaign_repo: Optional[CampaignRepository] = None,
+    version_repo: Optional[CharacterConfigVersionRepository] = None,
 ) -> CharacterResponse:
-    """Map the aggregate, then join what it cannot know: a signed avatar URL and the
-    campaign's title."""
+    """Map the aggregate, then join what it cannot know: a signed avatar URL, the
+    campaign's title, and — when a version repo is given — how far the campaign's config
+    has moved on since the character was built."""
     avatar_url: Optional[str] = None
     if character.avatar_s3_key and s3_service is not None:
         try:
@@ -80,6 +86,8 @@ def _to_character_response(
     if character.campaign_id and campaign_repo is not None:
         campaign = campaign_repo.get_by_id(character.campaign_id)
         campaign_title = campaign.title if campaign else None
+
+    drift = GetCharacterVersionDrift(version_repo).execute(character) if version_repo is not None else None
 
     return CharacterResponse(
         id=character.id,
@@ -100,6 +108,8 @@ def _to_character_response(
         updated_at=character.updated_at,
         avatar_url=avatar_url,
         campaign_title=campaign_title,
+        latest_version=drift.latest_version if drift else None,
+        version_changes=drift.changes if drift else [],
     )
 
 
@@ -160,16 +170,18 @@ def get_character(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
+    version_repo: CharacterConfigVersionRepository = Depends(get_character_config_version_repository),
     s3_service: S3Service = Depends(get_s3_service),
 ):
     """The whole character, secret values included — the only readers here are the owner
-    and their GM, both of whom may see them."""
+    and their GM, both of whom may see them. Carries the version drift, so the page can
+    say what the campaign changed since this character was built."""
     character = GetCharacterById(character_repo).execute(character_id)
     if character is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")
     if not _may_read(character, user_id, campaign_repo):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your character")
-    return _to_character_response(character, s3_service, campaign_repo)
+    return _to_character_response(character, s3_service, campaign_repo, version_repo)
 
 
 @router.put("/{character_id}/components/{component_id}", response_model=CharacterResponse)

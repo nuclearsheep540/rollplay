@@ -156,6 +156,12 @@ create card → `/character/new`. `HomeManager.js:63`: drop the `active_campaign
 
 ## Campaign drawer — `app/dashboard/components/CampaignManager.js`
 
+> **Done (2026-09-13).** `CharacterSelectionModal.js` and `dashboard/hooks/mutations/useCharacterMutations.js`
+> (select-character / my-character, routes retired in PR 2) deleted. The viewer's own party
+> tile goes to `/character/new?session_id=…` when they have no character and to
+> `/character/{id}` when they do; the eject control on that tile is "Leave the party"
+> via `POST /api/characters/{id}/eject`. The character page shows a version-drift panel.
+
 - `characterLine` (1893-1901): `character_display_name`, plus "· dead" when
   `character_is_alive === false`. Remove level/class.
 - `handleSelectCharacter` (586) is **deleted**. A roster member with no character has

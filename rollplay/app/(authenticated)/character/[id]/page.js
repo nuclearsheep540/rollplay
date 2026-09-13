@@ -140,6 +140,14 @@ export default function CharacterDetailPage() {
           </div>
         </div>
 
+        {character.latest_version && (
+          <VersionDriftPanel
+            builtOn={character.config_snapshot?.version}
+            latest={character.latest_version}
+            changes={character.version_changes}
+          />
+        )}
+
         <div className="rounded-md border border-border bg-surface-primary px-6 py-5">
           <CharacterValueList
             config={character.config_snapshot}
@@ -190,6 +198,32 @@ export default function CharacterDetailPage() {
             )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the campaign changed since this character was built. Information, never a
+ * verdict: the character keeps playing on the version it was built against, and
+ * nothing here asks anyone to do anything about it.
+ */
+function VersionDriftPanel({ builtOn, latest, changes }) {
+  return (
+    <div className="rounded-md border border-[#E5DECF] bg-[#FBF7EF] px-5 py-4">
+      <div className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#9A7526]">
+        Built on v{builtOn} · v{latest} is now published
+      </div>
+      <ul className="mt-2 flex flex-col gap-1">
+        {changes.map((change) => (
+          <li key={`${change.component_id}-${change.kind}`} className="text-[12.5px] text-[#37322F]">
+            <span className="font-semibold">{change.label}</span> — {change.kind}
+            {change.fields?.length ? ` (${change.fields.join(', ')})` : ''}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 text-[12px] text-content-muted">
+        This character still plays on v{builtOn}. Differences are for you and your GM to know about, not a block.
       </div>
     </div>
   )

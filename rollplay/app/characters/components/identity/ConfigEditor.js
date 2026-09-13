@@ -24,6 +24,19 @@ export default function ConfigEditor({ configuration, onChange }) {
   const input = configuration.input
   const setInput = (next) => onChange({ ...configuration, input: next })
 
+  // Part of the character's display name — whatever kind answers it. Beside the input
+  // because it is about the answer: "this is what we call them".
+  const titleToggle = (
+    <label className="flex items-center gap-1.5 pb-2.5 text-[12.5px] text-[#37322F] cursor-pointer whitespace-nowrap">
+      <input
+        type="checkbox"
+        checked={!!configuration.is_title}
+        onChange={(event) => onChange({ ...configuration, is_title: event.target.checked })}
+      />
+      Is title
+    </label>
+  )
+
   const kindSelect = (
     <SelectField
       label="Input choice"
@@ -44,7 +57,7 @@ export default function ConfigEditor({ configuration, onChange }) {
   if (input.kind === 'text') {
     return (
       <>
-        <div className="grid grid-cols-[200px_140px] gap-4 items-end">
+        <div className="grid grid-cols-[200px_140px_auto] gap-4 items-end">
           {kindSelect}
           <NumberField
             label="Maximum length"
@@ -53,9 +66,11 @@ export default function ConfigEditor({ configuration, onChange }) {
             max={200}
             onChange={(max_length) => setInput({ ...input, max_length })}
           />
+          {titleToggle}
         </div>
         <div className="text-[12.5px] text-content-muted leading-snug">
-          Free text. Can represent any kind of flavor you want to give player characters.
+          Free text. Can represent any kind of flavor you want to give player characters. Every identity
+          marked as title joins up, in order, to make the character&apos;s name.
         </div>
       </>
     )
@@ -69,7 +84,10 @@ export default function ConfigEditor({ configuration, onChange }) {
   return (
     <>
       <div className="grid grid-cols-[200px_1fr] gap-4 items-start">
-        {kindSelect}
+        <div className="flex flex-col gap-2">
+          {kindSelect}
+          {titleToggle}
+        </div>
         <div>
           <label className="block text-[13px] font-medium mb-2 text-[#37322F]">Options, in the order shown</label>
           <div className="flex flex-col gap-1.5">

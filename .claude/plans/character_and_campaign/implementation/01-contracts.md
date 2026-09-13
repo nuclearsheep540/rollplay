@@ -322,6 +322,13 @@ class AttributeValue(ContractModel):
 > reports membership on the members: moving into/out of/between groups is `"position"`;
 > a group is added/removed/renamed like anything else. Old snapshots (bare lists) stay valid.
 > The listing below predates this and shows the flat shape.
+>
+> **Revision (2026-09-13, is_title).** `IdentityConfiguration.is_title: bool = False` —
+> the GM marks which identities (any kind) make up the character's title; the display
+> name joins their `IdentityValue.as_text()` in config order. The builder marks the first
+> identity by default. `GET /api/characters/{id}` now carries `latest_version` and
+> `version_changes` (`GetCharacterVersionDrift`): what the campaign published since the
+> character was built — information, never a block.
 
 ```python
 # Copyright (C) 2025 Matthew Davey

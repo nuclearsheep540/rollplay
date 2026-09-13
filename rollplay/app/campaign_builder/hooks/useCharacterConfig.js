@@ -78,7 +78,7 @@ export function useComponentCatalogue() {
 }
 
 const DEFAULTS_BY_TYPE = {
-  identity: { label: 'Name', secret: false, description: null, input: { kind: 'text', max_length: 60 }, required: true },
+  identity: { label: 'Name', secret: false, description: null, input: { kind: 'text', max_length: 60 }, required: true, is_title: false },
   hit_points: {
     label: 'Hit points',
     secret: false,
@@ -176,12 +176,20 @@ export function useCharacterConfigDraft(state) {
     [seed.components],
   )
 
-  /** A new component of `type`, at the end of the top level — the GM drags it into a group. */
+  /**
+   * A new component of `type`, at the end of the top level — the GM drags it into a group.
+   * The first identity is the title unless the GM says otherwise: a config with a name
+   * that nobody marked would leave every character "Unnamed".
+   */
   const addComponent = useCallback(
     (type) =>
       update((list) => {
         const defaults = DEFAULTS_BY_TYPE[type] || { label: type, secret: false }
-        return [...list, { type, id: nextEntryId(list, type), ...structuredClone(defaults) }]
+        const component = { type, id: nextEntryId(list, type), ...structuredClone(defaults) }
+        if (type === 'identity') {
+          component.is_title = !flatEntries(list).some((entry) => entry.type === 'identity' && entry.is_title)
+        }
+        return [...list, component]
       }),
     [update],
   )

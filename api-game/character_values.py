@@ -126,11 +126,7 @@ def render_value_for_log(configuration, value) -> str:
     exactly this text.
     """
     if configuration.type == "identity":
-        if value.answer.kind == "text":
-            return value.answer.text
-        if value.answer.kind == "single_select":
-            return value.answer.choice
-        return ", ".join(value.answer.choices) or "—"
+        return value.as_text() or "—"
     if configuration.type == "attribute":
         return str(value.score)
     if configuration.type == "hit_points":

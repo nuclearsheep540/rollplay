@@ -361,7 +361,7 @@ def make_character_config():
 
     def _make(version: int = 1, hp_maximum: int = 20):
         return CharacterConfig(version=version, components=[
-            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
+            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput(), is_title=True),
             HitPointsConfiguration(id="hit_points_1", label="Vitality",
                                    rules=IntHitPointsRules(minimum=0, maximum=hp_maximum)),
             AttributeConfiguration(id="attribute_1", label="Strength", minimum=1, maximum=20, default=10),

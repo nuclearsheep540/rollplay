@@ -39,7 +39,7 @@ from modules.characters.domain.character_aggregate import UNNAMED, CharacterAggr
 
 def make_config(*, names=(("identity_1", "Name", True),), attributes=(("attribute_1", "Strength"),)):
     components = [
-        IdentityConfiguration(id=component_id, label=label, input=TextIdentityInput(), required=required)
+        IdentityConfiguration(id=component_id, label=label, input=TextIdentityInput(), required=required, is_title=True)
         for component_id, label, required in names
     ]
     components.append(HitPointsConfiguration(
@@ -117,21 +117,24 @@ class TestCreate:
         with pytest.raises(ValidationError):
             make_character(values=values)
 
-    def test_select_identities_are_not_part_of_the_display_name(self):
-        """A class or a set of roles is an identity, not a name."""
+    def test_only_title_identities_make_the_display_name(self):
+        """The GM says which identities are the title: a marked house joins the name in
+        config order, an unmarked Profession — text or not — stays off it."""
         config = CharacterConfig(version=1, components=[
-            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
-            IdentityConfiguration(id="identity_2", label="Class",
-                                  input=SingleSelectIdentityInput(options=["Rogue", "Mage"])),
-            IdentityConfiguration(id="identity_3", label="Roles", required=False,
+            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput(), is_title=True),
+            IdentityConfiguration(id="identity_2", label="Profession", input=TextIdentityInput(), required=False),
+            IdentityConfiguration(id="identity_3", label="House", is_title=True,
+                                  input=SingleSelectIdentityInput(options=["Vell", "Marr"])),
+            IdentityConfiguration(id="identity_4", label="Roles", required=False,
                                   input=MultiSelectIdentityInput(options=["Guard", "Cook"])),
         ])
         values = {
             "identity_1": IdentityValue(component_id="identity_1", answer=TextIdentityAnswer(text="Brannoc")),
-            "identity_2": IdentityValue(component_id="identity_2", answer=SingleSelectIdentityAnswer(choice="Rogue")),
-            "identity_3": IdentityValue(component_id="identity_3", answer=MultiSelectIdentityAnswer(choices=["Guard", "Cook"])),
+            "identity_2": IdentityValue(component_id="identity_2", answer=TextIdentityAnswer(text="Tugship Pilot")),
+            "identity_3": IdentityValue(component_id="identity_3", answer=SingleSelectIdentityAnswer(choice="Vell")),
+            "identity_4": IdentityValue(component_id="identity_4", answer=MultiSelectIdentityAnswer(choices=["Guard", "Cook"])),
         }
-        assert make_character(config=config, values=values).display_name == "Brannoc"
+        assert make_character(config=config, values=values).display_name == "Brannoc Vell"
 
     def test_required_multi_select_with_no_choice_is_refused(self):
         config = CharacterConfig(version=1, components=[
@@ -223,7 +226,7 @@ class TestTableMembership:
 class TestWeightedRepresentation:
     def test_weighted_hit_points_pair_and_store(self):
         config = CharacterConfig(version=1, components=[
-            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput()),
+            IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput(), is_title=True),
             HitPointsConfiguration(id="hit_points_1", label="Resolve", rules=WeightedHitPointsRules(
                 starting_weight=1.0,
                 scale=[ScaleStep(weight=1.0, label="Full"),

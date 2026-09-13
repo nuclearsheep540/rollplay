@@ -8,12 +8,12 @@ component id and name no rule.
 """
 
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from shared_contracts.character_config import CharacterConfig
+from shared_contracts.character_config import CharacterConfig, ComponentChange
 from shared_contracts.components import ComponentValue
 
 
@@ -79,6 +79,11 @@ class CharacterResponse(BaseModel):
     # Enrichment, filled by the helper in endpoints.py — not by this schema.
     avatar_url: Optional[str] = None
     campaign_title: Optional[str] = None
+    # How far the campaign has moved on since this character was built: the newest
+    # published version and what differs from the snapshot. None / empty when the
+    # character is on the latest version or is a keepsake. Information, never a block.
+    latest_version: Optional[int] = None
+    version_changes: List[ComponentChange] = []
 
 
 class CharacterRuntimeBundle(BaseModel):

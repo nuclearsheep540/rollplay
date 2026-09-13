@@ -62,7 +62,7 @@ def build_keepsake(row, ability_rows):
     current = _clamp(int(row["hp_current"] or 0), 0, maximum)
 
     components = [
-        IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput(max_length=NAME_MAX_LENGTH), required=True),
+        IdentityConfiguration(id="identity_1", label="Name", input=TextIdentityInput(max_length=NAME_MAX_LENGTH), required=True, is_title=True),
         HitPointsConfiguration(
             id="hit_points_1",
             label="Hit points",

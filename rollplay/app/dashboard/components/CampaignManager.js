@@ -16,7 +16,6 @@ import EditGameModal from './EditGameModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
 import ScheduleGameModal from './ScheduleGameModal'
 import CampaignInviteModal from './CampaignInviteModal'
-import CharacterSelectionModal from './CharacterSelectionModal'
 import HeroBackground from './HeroBackground'
 import S3Image from '@/app/shared/components/S3Image'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -44,13 +43,12 @@ import { Button, Badge } from './shared/Button'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCampaigns } from '../hooks/useCampaigns'
 import { useInvitedCampaignMembers } from '../hooks/useInvitedCampaignMembers'
-import { useCharacters } from '../hooks/useCharacters'
 import { useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
 import { useStartGame, useEndGame, useUpdateGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
 import { countPlayedGames, findCurrentSession, findOpenGame } from '../utils/homeRanking'
 import { gameStatusLine } from '../utils/gameStatusLine'
 import { formatDuration, formatScheduledTime } from '@/app/shared/utils/formatTime'
-import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
+import { useEjectCharacter } from '@/app/characters/hooks/useCharacterMutations'
 import { useAssets } from '@/app/asset_library/hooks/useAssets'
 import { useCampaignAssetsMetadata } from '@/app/asset_library/hooks/useCampaignAssetsMetadata'
 import { AvatarWedge } from './shared/AvatarWedge'
@@ -127,16 +125,16 @@ function PlayerCardAction({ isDm, canRemove, onRemove, canRelease, onRelease, re
     )
   }
 
-  // The current user's own card: eject their character from the campaign (release, not delete).
-  // stopPropagation because the card itself is clickable (opens the swap modal). Disabled while a
-  // game is running — the backend enforces the same rule.
+  // The current user's own card: leave the party. The character is ejected, not deleted —
+  // it becomes a keepsake. stopPropagation because the card itself is clickable (opens
+  // the character). Held while a game is running: leaving mid-game is runtime work.
   if (canRelease) {
     return (
       <button
         onClick={(e) => { e.stopPropagation(); if (!releaseDisabled) onRelease?.() }}
         disabled={releaseDisabled}
-        title={releaseDisabled ? 'Cannot release your character while a game is running' : 'Remove your character from this campaign'}
-        aria-label="Remove your character from this campaign"
+        title={releaseDisabled ? 'Cannot leave the party while a game is running' : 'Leave the party'}
+        aria-label="Leave the party"
         style={{
           color: '#dc2626',
           backgroundColor: 'rgba(220, 38, 38, 0.1)',
@@ -276,7 +274,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   } = useInvitedCampaignMembers(selectedInvitedCampaignId)
 
   // Characters query
-  const { data: characters = [] } = useCharacters()
 
   // ── Mutation hooks ──
   const deleteCampaignMutation = useDeleteCampaign()
@@ -288,12 +285,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const endGameMutation = useEndGame()
   const scheduleGameMutation = useScheduleGame()
   const updateGameMutation = useUpdateGame()
-  const releaseCharacterMutation = useReleaseCharacter()
+  const ejectCharacterMutation = useEjectCharacter()
 
   // ── UI-only state ──
   const [error, setError] = useState(null)
-  const [showCharacterModal, setShowCharacterModal] = useState(false)
-  const [characterModalCampaign, setCharacterModalCampaign] = useState(null)
 
   const gameSessionsPanelRef = useRef(null)
   const campaignCardRef = useRef(null)
@@ -523,22 +518,23 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }
 
-  // Handle character selection for a campaign
-  const handleSelectCharacter = (campaign) => {
-    setCharacterModalCampaign(campaign)
-    setShowCharacterModal(true)
+  // The viewer's own party tile. Creating a character IS joining the party, so a member
+  // without one goes to the create form for this campaign's table; a member with one goes
+  // to that character. There is no picking from a list: a character exists for a table.
+  const handleOpenOwnCharacter = (campaign, member) => {
+    if (member.character_id) {
+      router.push(`/character/${member.character_id}`)
+      return
+    }
+    const sessionId = campaign.sessions?.[0]?.id
+    router.push(sessionId ? `/character/new?session_id=${sessionId}` : '/character/new')
   }
 
-  // Handle character selection success — mutation in CharacterSelectionModal invalidates ['campaigns'] and ['characters']
-  const handleCharacterSelected = () => {
-    setShowCharacterModal(false)
-    setCharacterModalCampaign(null)
-  }
-
-  // Handle releasing character from campaign
-  const handleReleaseCharacter = async (campaign) => {
+  // Leaving the party ejects the character: it becomes a keepsake, and the player is free
+  // to build another straight away.
+  const handleLeaveParty = async (characterId) => {
     try {
-      await releaseCharacterMutation.mutateAsync(campaign.id)
+      await ejectCharacterMutation.mutateAsync(characterId)
     } catch (err) {
       setError(err.message)
     }
@@ -586,23 +582,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }, [expandCampaignId, campaigns, loading])
 
-  // Auto-open character modal from sessionStorage (after returning from character creation)
-  useEffect(() => {
-    if (selectedCampaign && !loading) {
-      try {
-        const storedCampaignId = sessionStorage.getItem('openCharacterModalForCampaign')
-        if (storedCampaignId && storedCampaignId === selectedCampaign.id) {
-          sessionStorage.removeItem('openCharacterModalForCampaign')
-          // Force fresh character data — user just created a character on /character/create
-          queryClient.invalidateQueries({ queryKey: ['characters'] })
-          setCharacterModalCampaign(selectedCampaign)
-          setShowCharacterModal(true)
-        }
-      } catch (e) {
-        // sessionStorage blocked - gracefully degrade
-      }
-    }
-  }, [selectedCampaign, loading])
 
   // Notify parent when expanded state changes (either drawer)
   useEffect(() => {
@@ -1812,37 +1791,35 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     </div>
                                   )
                                 }
-                                // The current user can click their own tile to
-                                // open the character-selection modal — picking
-                                // a character if they have none, or swapping
-                                // if they do. DMs/mods don't hold characters,
-                                // so the tile stays non-interactive for them.
+                                // The current user can click their own tile:
+                                // to build a character for this table if they
+                                // have none, or to open it if they do. DMs and
+                                // mods don't hold characters, so the tile stays
+                                // non-interactive for them.
                                 const isCurrentUser = member.user_id === user.id
-                                const canSelectCharacter = isCurrentUser && !member.is_host && member.campaign_role !== 'mod'
-                                // Second line: role-specific descriptor for
-                                // DM/mod/spectator (who don't hold a
-                                // character), or the player's character
-                                // summary if they've selected one.
+                                const canOpenCharacter = isCurrentUser && !member.is_host && member.campaign_role !== 'mod'
+                                // Second line: role descriptor for DM/mod, or
+                                // the character in the party (dead ones say so).
                                 const characterLine = member.is_host
                                   ? 'Dungeon Master'
                                   : member.campaign_role === 'mod'
                                     ? 'Moderator'
                                     : member.character_id
-                                      ? `${member.character_name} · Lv ${member.character_level} ${member.character_class}`
-                                      : canSelectCharacter
-                                        ? 'Select a character →'
-                                        : 'No character selected'
+                                      ? `${member.character_display_name}${member.character_is_alive === false ? ' · Dead' : ''}`
+                                      : canOpenCharacter
+                                        ? 'Create a character →'
+                                        : 'No character yet'
                                 return (
                                   <PartyMemberCard
                                     key={member.user_id}
                                     member={member}
                                     characterLine={characterLine}
-                                    canSelectCharacter={canSelectCharacter}
-                                    onSelect={() => handleSelectCharacter(campaign)}
+                                    canSelectCharacter={canOpenCharacter}
+                                    onSelect={() => handleOpenOwnCharacter(campaign, member)}
                                     canRemove={!member.is_host && campaign.host_id === user.id}
                                     onRemove={() => setRemovePlayerTarget({ campaign, member })}
-                                    canRelease={isCurrentUser && !member.is_host && member.campaign_role !== 'mod' && !!member.character_id}
-                                    onRelease={() => handleReleaseCharacter(campaign)}
+                                    canRelease={canOpenCharacter && !!member.character_id}
+                                    onRelease={() => handleLeaveParty(member.character_id)}
                                     releaseDisabled={hasRunningGame(campaign.id)}
                                   />
                                 )
@@ -2091,26 +2068,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         />
       )}
 
-      {/* Character Selection Modal */}
-      {showCharacterModal && characterModalCampaign && (
-        <CharacterSelectionModal
-          campaign={characterModalCampaign}
-          characters={characters}
-          currentCharacterId={characterModalCampaign.members?.find(m => m.user_id === user.id)?.character_id ?? null}
-          sessionActive={hasRunningGame(characterModalCampaign.id)}
-          onClose={() => {
-            setShowCharacterModal(false)
-            setCharacterModalCampaign(null)
-          }}
-          onCharacterSelected={handleCharacterSelected}
-          onCreateCharacter={() => {
-            const sessionId = characterModalCampaign.sessions?.[0]?.id
-            setShowCharacterModal(false)
-            setCharacterModalCampaign(null)
-            router.push(sessionId ? `/character/new?session_id=${sessionId}` : '/character/new')
-          }}
-        />
-      )}
 
       {/* Remove Player Confirmation Modal */}
       <Modal open={!!removePlayerTarget} onClose={removePlayerMutation.isPending ? () => {} : () => setRemovePlayerTarget(null)} size="md">

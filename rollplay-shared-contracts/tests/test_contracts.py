@@ -73,10 +73,10 @@ from shared_contracts.character_config import (
 
 
 def make_identity(component_id="identity_1", label="Name", **overrides):
-    """A text identity — a name — unless `input` says otherwise."""
+    """A text identity — a name, part of the title — unless overridden."""
     input_ = overrides.pop("input", TextIdentityInput(max_length=overrides.pop("max_length", 60)))
     fields = {"id": component_id, "label": label, "secret": False, "input": input_, "required": True,
-              "description": None}
+              "description": None, "is_title": True}
     fields.update(overrides)
     return IdentityConfiguration(**fields)
 
@@ -1355,6 +1355,16 @@ class TestIdentityComponent:
     def test_multi_select_choices_distinct(self):
         with pytest.raises(ValidationError):
             MultiSelectIdentityAnswer(choices=["Guard", "Guard"])
+
+    def test_is_title_defaults_off(self):
+        """Nothing is a title unless the GM says so — a Profession must not join the name."""
+        assert IdentityConfiguration(id="identity_1", label="Trade", input=TextIdentityInput()).is_title is False
+
+    def test_as_text_per_kind(self):
+        assert make_text_answer("identity_1", "  Brannoc ").as_text() == "Brannoc"
+        assert IdentityValue(component_id="identity_1", answer=SingleSelectIdentityAnswer(choice="Rogue")).as_text() == "Rogue"
+        assert IdentityValue(component_id="identity_1", answer=MultiSelectIdentityAnswer(choices=["Guard", "Cook"])).as_text() == "Guard, Cook"
+        assert IdentityValue(component_id="identity_1", answer=MultiSelectIdentityAnswer(choices=[])).as_text() == ""
 
     def test_is_populated_per_kind(self):
         assert make_text_answer("identity_1", "Brannoc").is_populated()

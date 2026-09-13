@@ -9,9 +9,11 @@ is answered:
   single_select  — one choice from the GM's list (a class).
   multi_select   — any number of choices from the list (roles, trades).
 
-A campaign may configure any number of Identity components (or none). The platform derives
-a character's display name by joining every text-kind Identity value in config order with
-single spaces; see api-site's CharacterAggregate.derive_display_name.
+A campaign may configure any number of Identity components (or none). The GM marks the
+ones that make up the character's title (`is_title`); the platform derives the display
+name by joining those values in config order with single spaces — "First name" and
+"Family name" read as one name, a Profession stays off it. See api-site's
+CharacterAggregate.derive_display_name.
 """
 
 from typing import Annotated, List, Literal, Optional, Union
@@ -80,6 +82,9 @@ class IdentityConfiguration(ContractModel):
     description: Optional[str] = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     input: IdentityInput
     required: bool = True
+    # Part of the character's display name. Any kind may be: a chosen house or calling
+    # can be as much the title as a name.
+    is_title: bool = False
 
 
 class TextIdentityAnswer(ContractModel):
@@ -125,3 +130,12 @@ class IdentityValue(ContractModel):
         if self.answer.kind == "single_select":
             return bool(self.answer.choice)
         return len(self.answer.choices) > 0
+
+    def as_text(self) -> str:
+        """The answer as one short string: the text, the choice, or the choices joined.
+        Empty when unanswered. What the display name and the adventure log show."""
+        if self.answer.kind == "text":
+            return self.answer.text.strip()
+        if self.answer.kind == "single_select":
+            return self.answer.choice
+        return ", ".join(self.answer.choices)
