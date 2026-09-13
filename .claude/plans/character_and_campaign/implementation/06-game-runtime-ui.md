@@ -1,5 +1,10 @@
 # 06 — Game runtime UI: render what you are given
 
+> **Boundary (2026-09-13).** `RUNTIME_TYPE_ORDER` is the *in-game* rule only — seat card
+> and mid-play sheet, read under pressure. The site's character page renders the config
+> as arranged: groups as named sections, config order (`layoutBlocks`, shared with the
+> create form). Do not bring the type order back onto the character page.
+
 > Read `00-agent-brief.md` first. Depends on PRs 3 and 5. Paths relative to `rollplay/`.
 > This PR makes the seat card and the in-game sheet mappers over the component registry,
 > wires the component write, and deletes every D&D surface in the game.

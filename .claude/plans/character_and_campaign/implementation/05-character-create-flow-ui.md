@@ -161,6 +161,9 @@ create card → `/character/new`. `HomeManager.js:63`: drop the `active_campaign
 > tile goes to `/character/new?session_id=…` when they have no character and to
 > `/character/{id}` when they do; the eject control on that tile is "Leave the party"
 > via `POST /api/characters/{id}/eject`. The character page shows a version-drift panel.
+> The character page keeps main's two-column shell: `CharacterAvatarPane` (restored) at
+> 33vw on the left, full-height wedge; the sheet scrolls on the right, values laid out by
+> the config's groups. `AvatarPlate` is the create form's, not this page's.
 
 - `characterLine` (1893-1901): `character_display_name`, plus "· dead" when
   `character_is_alive === false`. Remove level/class.

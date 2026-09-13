@@ -78,9 +78,10 @@ export function CharacterFormFields({ config, values, errors, onChange, children
 /**
  * The form's blocks, in the GM's order: each group is one block, and each run of bare
  * components between groups is one. A group published empty has nothing to ask, so it
- * is left out rather than shown as a heading over nothing.
+ * is left out rather than shown as a heading over nothing. Shared with the character
+ * page, which is the same document read back.
  */
-function layoutBlocks(entries) {
+export function layoutBlocks(entries) {
   const blocks = []
   for (const entry of entries) {
     if (entry.type === 'group') {
