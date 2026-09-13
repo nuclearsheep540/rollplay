@@ -576,7 +576,16 @@ export default function GameContent() {
     // derived centrally from playerMetadata + seat layout
     const backendPlayerMetadata = res["player_metadata"] || {};
 
-    setPlayerMetadata(backendPlayerMetadata);
+    // The HTTP read strips component values on purpose (it has no viewer to filter for);
+    // the socket's initial_state carries them, filtered for this viewer. The two races,
+    // so this merge must never overwrite values the socket has already delivered.
+    setPlayerMetadata(prev => {
+      const merged = {};
+      for (const [userId, meta] of Object.entries(backendPlayerMetadata)) {
+        merged[userId] = prev[userId]?.values ? { ...meta, values: prev[userId].values } : meta;
+      }
+      return merged;
+    });
 
     // Create unified seat structure — userId is identity, playerName is display
     const initialSeats = [];
