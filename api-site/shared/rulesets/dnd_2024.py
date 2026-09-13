@@ -163,7 +163,7 @@ class Dnd2024Ruleset(RulesetStrategy):
 
         Each class's ASI count is the number of entries in its ``asi_levels`` list
         that are ≤ the character's level in that class. ASIs spent are tracked
-        on the character via :class:`FeatAcquisition` rows with source ``ASI``.
+        on the character by the framework preset that will consume this table.
         """
         unlocked = 0
         for entry in character.class_entries:

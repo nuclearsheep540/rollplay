@@ -93,7 +93,7 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
     <div className="relative flex-shrink-0 pointer-events-none" style={shellStyle}>
       <button
         type="button"
-        aria-label={`View ${char.character_name || 'Unnamed'}`}
+        aria-label={`View ${char.display_name || 'Unnamed character'}`}
         onClick={onSelect}
         className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer"
         style={{
@@ -145,7 +145,7 @@ function CharacterStripCard({ char, shellStyle, isResizing, onSelect, isFirst = 
             color: THEME.textOnDark,
           }}
         >
-          {char.character_name || 'Unnamed'}
+          {char.display_name || 'Unnamed character'}
         </h3>
       </button>
     </div>
@@ -296,7 +296,7 @@ export default function CharacterManager({ user }) {
       <button
         type="button"
         aria-label="Create New Character"
-        onClick={() => router.push('/character/create')}
+        onClick={() => router.push('/character/new')}
         className="group absolute inset-y-0 left-0 pointer-events-auto cursor-pointer"
         style={{
           width: `${STRIP_BOX_WIDTH_PERCENT}%`,

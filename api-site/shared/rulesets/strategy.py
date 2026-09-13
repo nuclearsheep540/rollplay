@@ -24,7 +24,13 @@ if TYPE_CHECKING:
 
 
 class RulesetStrategy(ABC):
-    """Per-edition rules math. Implementations are singletons held by the registry."""
+    """Per-edition rules math. Implementations are singletons held by the registry.
+    Scope note (2026-09-12): the methods that took a character were removed with the
+    system-agnostic rewrite. A character is now whatever its campaign's config says it is,
+    so nothing here can read one. What remains is the edition's pure rules math — level and
+    XP tables, proficiency bonus, ability modifier, hit dice, ASI levels — which, with the
+    seed data and the registry, is the raw material for the D&D framework preset.
+    """
 
     #: The edition_code this strategy belongs to (e.g. "srd_5_2_1").
     edition_code: str

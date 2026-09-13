@@ -1,15 +1,16 @@
 # 03 — api-game: configs in the room, component writes, secret filtering, removals, prompt-all
 
-> Read `00-agent-brief.md` first. Depends on PR 1. Pin `rollplay-shared-contracts==0.4.0`
-> in `api-game/requirements.txt` and rebuild the image before starting. Paths are relative
-> to `api-game/`. Every database call is awaited; every write is a dotted `$set`.
+> Read `00-agent-brief.md` first. Depends on PR 1. Contracts installs by path and is not
+> pinned; rebuild the api-game image after PR 1 so the container has the new package.
+> Paths are relative to `api-game/`. Every database call is awaited; every write is a
+> dotted `$set`.
 
 ## What api-game knows after this PR
 
 Three generic facts, and nothing about any component's meaning:
 
 1. The room holds every `CharacterConfig` version in play, keyed by version id.
-2. Each seated player has `config_version_id` and a `values` map.
+2. Each player holding a character has `config_version_id` and a `values` map.
 3. A component value is valid iff it pairs with that player's config (via
    `CharacterSheet`), and it is visible to a viewer iff the viewer is its owner, the GM, or
    the configuration is not `secret`.
@@ -59,7 +60,8 @@ shared_contracts.CharacterSheet, strips secret values per viewer, and writes by 
 COMPONENT_VALUE_ADAPTER = TypeAdapter(ComponentValue)
 
 def config_for_player(room: dict, user_id: str) -> Optional[CharacterConfig]:
-    """The CharacterConfig this player was built against, or None when unseated or unknown."""
+    """The CharacterConfig this player was built against, or None when they hold no
+    character, or are unknown to the room."""
 
 def validate_value_for_player(room: dict, user_id: str, value: ComponentValue) -> None:
     """Raises ValueError when the player has no config, or when CharacterSheet pairing fails
@@ -127,23 +129,52 @@ produce identical text.
 mechanism and keeps iterating whatever fields arrive — **delete the docstring's D&D field
 list** and describe the identity + values shape instead.
 
-## 5. Seat changes during a game
+## 5. Character changes during a game
 
-**`PUT /game/{room_id}/player/character` (907-985)**: the body is now
-`CharacterRuntimeBundle` (from api-site, §3.4 of `02-api-site.md`). Behaviour:
+("Seat" below means what it has always meant in api-game — a place in `seat_layout` where a
+player's meta is drawn. api-site has no seats; see `02-api-site.md` §0.)
 
-1. If `player_metadata.<user_id>.character_id == bundle.character_id` already, write only
-   identity fields (`display_name`, `color`, `avatar_asset_id`) — **never overwrite
-   `values`**; the room is authoritative while the game is open.
-2. Otherwise write identity + `config_version_id` + `values` from the bundle, and
-   `$set character_configs.<config_version_id>` if that key is absent.
-3. Broadcast `player_character_changed` with identity + `config_version_id` + the values
-   filtered per recipient. Delete the explicit D&D field list at 958-970.
+**`PUT /game/{room_id}/player/character` (907-985)** is the **only** way a player's
+character changes from outside the room, and it carries the player's whole state. The body is
+`PlayerCharacterUpdate` (api-site declares it, §3.4 of `02-api-site.md`; declare a copy in
+`schemas/session_schemas.py` — same duplication note as `CharacterRuntimeBundle`, recorded
+in `08-followups.md`): identity always, character half optional. Three callers, one shape —
+a late joiner accepting an invite mid-game (identity only), a player creating a character
+and joining the party (identity + character), a player being ejected from the party
+(identity only).
 
-**New route `DELETE /game/{room_id}/player/{user_id}/character`**: `$unset` the player's
-`character_id`, `display_name`, `config_version_id`, `values`, `avatar_asset_id` (keep
-`color`, `player_name`, `campaign_role`); broadcast `player_character_changed` with
-`character_id: null`. Called by api-site's `GameNotifier.unseat_character`.
+Behaviour, in this order:
+
+1. **Identity fields** (`player_name`, `campaign_role`, and `color` when present) are
+   written by path every time.
+2. **`character_id` absent** → `$unset` `character_id`, `display_name`,
+   `config_version_id`, `values`, `avatar_asset_id`. Keep `color`, `player_name`,
+   `campaign_role` — the person is still in the room, they just hold no character.
+   Broadcast `player_character_changed` with `character_id: null`.
+3. **`character_id` equal to what the room already holds** → write identity only.
+   **Never overwrite `values`**: the room is authoritative while the game is open, and this
+   call cannot know what has happened tonight.
+4. **`character_id` new** → write identity + `config_version_id` + `values`, and
+   `$set character_configs.<config_version_id>` when that key is absent. Broadcast
+   `player_character_changed` with identity + `config_version_id` + the values filtered per
+   recipient.
+
+Delete the explicit D&D field list at 958-970. There is **no** DELETE route: a player with
+no character is a PUT with no character half, which is what makes "send the complete object"
+true here rather than a slogan.
+
+### 5.1 Reading a player's values back — `GET /game/{room_id}/players/{user_id}/values`
+
+New route, returning `{"values": {<component_id>: <ComponentValue as dict>}}`, `404` when
+the room or the player is unknown. api-site calls it before ejecting a player from a
+running game, because the room owns their values and End will not see them once the player
+holds no character (`02-api-site.md` §3.3).
+
+**It must not filter secret values.** This is a server-to-server read whose only purpose is
+a cold write; running it through `filter_values_for_viewer` would silently drop exactly the
+values the GM and player agreed were private. Say so in the docstring, next to the note
+that this is the one place `player_metadata.<uid>.values` leaves the process unfiltered,
+and keep it on the Docker network the way `/internal/*` routes are kept (nginx 404s it).
 
 **Reconnect (`websocket_handlers/websocket_events.py:320-331`)**: today a `seat_change`
 carrying a `character_id` fetches a summary from api-site and overwrites the player. New
@@ -198,8 +229,12 @@ Replace `initiative_prompt_all` with a `group_prompt` event, same dispatch shape
   GM PUT allowed; third player 403; invalid value 400; broadcast reaches the owner and GM
   but not a third player for a secret component.
 - `test_seat_bundle.py`: `PUT player/character` with the same `character_id` leaves
-  `values` untouched; with a new one writes values and adds the config key; `DELETE
-  player/{uid}/character` unsets the five fields and keeps colour.
+  `values` untouched; with a new one writes values and adds the config key; **with no
+  character half unsets the five fields and keeps colour, player_name and campaign_role**;
+  with identity only against a player who never had a character is a clean no-op on the
+  character fields; a body with `character_id` but no `config` is rejected 422 by the
+  all-or-nothing validator. `GET players/{uid}/values` returns secret values unfiltered and
+  404s for an unknown player.
 - `test_services_roundtrip.py` (extend, skip without Mongo): `create_session` writes
   `character_configs` and per-player `values`; `end_session` returns them in `PlayerState`.
 - `test_event_dispatch.py`: `group_prompt` present, `combat_state` and

@@ -51,6 +51,7 @@ from modules.session.repositories.session_repository import SessionRepository
 from modules.session.domain.token_merge import merge_token_boards
 from modules.session.domain.session_events import SessionEvents
 from modules.user.repositories.user_repository import UserRepository
+from modules.characters.application.commands import WriteCharacterValuesFromGame
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.repositories.campaign_repository import CampaignRepository
@@ -96,15 +97,27 @@ class StartGame:
         self.asset_repo = asset_repository
         self.s3_service = s3_service
 
-    def _build_session_users(self, session, campaign) -> List[SessionUser]:
-        """Build SessionUser DTOs from the campaign's CURRENT members.
+    def _build_session_users(self, session, campaign):
+        """Build SessionUser DTOs, plus the config versions they were built against.
 
         The campaign is the source of truth at game start (cold→hot ETL) — NOT the frozen
         session roster snapshot, which misses anyone who joined while no game was running
-        (and keeps anyone who has since left the campaign). Character data is optional
-        (moderators/spectators have none).
+        (and keeps anyone who has since left the campaign). A character is optional:
+        moderators, spectators and anyone who has not built one have none.
+
+        Returns:
+            (session_users, character_configs) — the configs keyed by version id, one entry
+            per distinct version in the party, so two players built against different
+            versions both resolve in the room.
         """
         session_users = []
+        character_configs = {}
+
+        # The party, read once. A character's session_id IS its party membership.
+        party_by_user_id = {
+            character.user_id: character
+            for character in self.character_repo.get_party_for_session(session.id)
+        }
 
         member_ids = campaign.get_all_member_ids() if campaign else list(session.joined_users)
         for user_id in member_ids:
@@ -118,25 +131,40 @@ class StartGame:
             # user for a missing name — that would silently un-enroll them from the game.
             player_name = user.screen_name or ""
 
-            role = campaign.get_role(user_id) if campaign else CampaignRole.SPECTATOR
+            character = party_by_user_id.get(user_id)
 
-            # Character is optional — moderators and spectators don't have one
+            # 'player' is derived from having a character in the party, never stored —
+            # the only two writers of the stored role were deleted with campaign-level
+            # character selection.
+            if character is not None:
+                campaign_role = CampaignRole.PLAYER.value
+            else:
+                role = campaign.get_role(user_id) if campaign else CampaignRole.SPECTATOR
+                campaign_role = role.value if role else CampaignRole.SPECTATOR.value
+
             character_contract = None
-            character = self.character_repo.get_user_character_for_campaign(user_id, session.campaign_id)
-            if character:
-                class_names = [entry.class_code for entry in character.class_entries]
+            if character is not None:
+                if character.config_version_id is None:
+                    logger.warning(
+                        f"CHARACTER_ETL party character {character.id} has no config version; "
+                        f"entering on its own snapshot"
+                    )
+                # The snapshot is what the character was built against — identical to the
+                # version row by construction, and one fewer read.
+                version_key = (
+                    str(character.config_version_id)
+                    if character.config_version_id
+                    else f"snapshot:{character.id}"
+                )
+                character_configs[version_key] = character.config_snapshot
                 character_contract = PlayerCharacter(
                     user_id=str(user_id),
                     player_name=player_name,
-                    campaign_role=role.value,
+                    campaign_role=campaign_role,
                     character_id=str(character.id),
-                    character_name=character.character_name,
-                    character_class=class_names,
-                    character_race=character.species_code,
-                    level=character.level,
-                    hp_current=character.hp_current,
-                    hp_max=character.hp_max,
-                    ac=character.ac,
+                    display_name=character.display_name,
+                    config_version_id=version_key,
+                    values=character.values,
                     color=character.color,
                     avatar_asset_id=str(character.avatar_asset_id) if character.avatar_asset_id else None,
                 )
@@ -145,13 +173,16 @@ class StartGame:
                 SessionUser(
                     user_id=str(user_id),
                     player_name=player_name,
-                    campaign_role=role.value,
+                    campaign_role=campaign_role,
                     character=character_contract,
                 )
             )
 
-        logger.info(f"Built {len(session_users)} session user DTOs for session {session.id}")
-        return session_users
+        logger.info(
+            f"Built {len(session_users)} session user DTOs and {len(character_configs)} "
+            f"character config versions for session {session.id}"
+        )
+        return session_users, character_configs
 
     async def _generate_presigned_urls_parallel(self, assets):
         """
@@ -552,7 +583,7 @@ class StartGame:
             map_token_boards, map_token_seed = self._restore_map_token_state(previous_game, asset_lookup)
             map_config_for_game = self._restore_map_config(previous_game, asset_lookup, url_map)
             image_config_for_game = self._restore_image_config(previous_game, asset_lookup, url_map)
-            session_users_for_game = self._build_session_users(session, campaign)
+            session_users_for_game, character_configs_for_game = self._build_session_users(session, campaign)
             # After the merge AND the roster: pc tokens re-stamp their avatar
             # refs before token_images collects ids (decision 39 — the board
             # scan below must see fresh refs, not the last game's).
@@ -575,6 +606,9 @@ class StartGame:
                 # the session_user DTOs (both from get_all_member_ids), not the frozen roster.
                 joined_user_ids=[str(uid) for uid in campaign.get_all_member_ids()],
                 session_users=session_users_for_game,
+                # One entry per distinct config version in the party, so players built
+                # against different versions both resolve in the room.
+                character_configs=character_configs_for_game,
                 assets=[
                     AssetRef(
                         id=str(asset.id),
@@ -823,23 +857,29 @@ async def _extract_and_sync_game_state(
                     logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
             logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volume, looping, effects)")
 
-        # Sync character colors back to PostgreSQL (ETL: hot → cold). Color is
-        # character-owned: the hot game carries it on player_metadata and the
-        # character row is its durable home — the seat never stores it.
+        # Bring characters home (ETL: hot → cold). api-game is authoritative for component
+        # values while a game is open, so this is the only path by which the night's play
+        # reaches the character row. Colour comes back the same way: character-owned, held
+        # on player_metadata while hot, durable here.
         if character_repo:
-            synced_colors = 0
+            write_values = WriteCharacterValuesFromGame(character_repo)
+            synced_characters = 0
             for player in final_state.players:
-                if not player.character_id or player.color is None:
+                if not player.character_id:
                     continue
                 try:
-                    character = character_repo.get_by_id(UUID(player.character_id))
-                    if character and character.color != player.color:
-                        character.set_color(player.color)
-                        character_repo.save(character)
-                        synced_colors += 1
-                except Exception as e:
-                    logger.warning(f"Failed to sync color for character {player.character_id}: {e}")
-            logger.info(f"Synced {synced_colors} character colors to PostgreSQL")
+                    write_values.execute(
+                        character_id=UUID(player.character_id),
+                        values=player.values,
+                        color=player.color,
+                    )
+                    synced_characters += 1
+                except Exception as failure:
+                    # One player's bad document must not cost the rest of the table theirs.
+                    logger.warning(
+                        f"CHARACTER_ETL failed to write character {player.character_id}: {failure}"
+                    )
+            logger.info(f"CHARACTER_ETL wrote {synced_characters} characters to PostgreSQL")
 
         # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
         audio_config = {}
@@ -1298,22 +1338,14 @@ class DisconnectFromGame:
 
     **This command must never write character state, and the tests guard that.**
 
-    It used to copy `hp_current` out of the room's `player_metadata` onto the
-    character row. That was backwards. The in-game sheet patches HP straight to
-    api-site (`PATCH /api/characters/{id}/runtime`) and nothing pushes the result
-    back into the room, so the room's copy is a snapshot taken at character
-    selection and goes stale from the first hit. Writing it cold on disconnect
-    therefore overwrote a fresh value with an old one — it lost HP rather than
-    saving it.
+    api-game is authoritative for component values while a game is open, and End writes
+    them cold for everyone — including the players who left early. A disconnect that wrote
+    the room's copy would be writing a value it does not own, which is how this used to
+    lose hit points: it copied a stale snapshot over a fresher row.
 
-    The real fix is to make the room authoritative for combat state during play
-    and sync it at End: `.claude/plans/TODO-runtime-character-state-authority.md`,
-    option B. Under that design disconnect still writes nothing — End does the
-    ETL for everyone, including the players who left early.
-
-    So this stays a validated no-op: the route and its checks are the placeholder
-    for whatever per-player work a disconnect eventually needs, and api-game has
-    no caller for it today.
+    So this stays a validated no-op: the route and its checks are the placeholder for
+    whatever per-player work a disconnect eventually needs, and api-game has no caller for
+    it today.
     """
 
     def __init__(
@@ -1354,10 +1386,10 @@ class DisconnectFromGame:
         if not character.is_owned_by(user_id):
             raise ValueError("Character not owned by user")
 
-        # The campaign is read off the game's own denormalised column — no
-        # session load needed for a check about which table this character sits at.
-        if character.active_campaign != game.campaign_id:
-            raise ValueError("Character not locked to this campaign")
+        # The campaign is read off the game's own denormalised column — no session load
+        # needed for a check about which table this character sits at.
+        if character.campaign_id != game.campaign_id:
+            raise ValueError("Character is not at this campaign's table")
 
         # NO WRITE, and no save. The room's copy of this character's runtime
         # state is older than the character row's, so persisting it here would

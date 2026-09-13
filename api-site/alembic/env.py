@@ -23,19 +23,9 @@ try:
     from modules.user.model.friend_code_model import FriendCode
     from modules.characters.model.character_model import Character
     from modules.characters.model.edition_model import Edition
-    from modules.characters.model.character_class_model import CharacterClassEntry
-    from modules.characters.model.dnd_ability_model import DndAbility
-    from modules.characters.model.character_ability_model import CharacterAbilityScore
-    from modules.characters.model.character_save_model import CharacterSaveProficiency
-    from modules.characters.model.character_skill_model import CharacterSkillProficiency
-    from modules.characters.model.character_feat_model import CharacterFeatAcquisition
-    from modules.characters.model.character_spell_model import CharacterSpell
-    from modules.characters.model.character_resource_model import CharacterResource
-    from modules.characters.model.character_subclass_model import CharacterSubclass
-    from modules.characters.model.character_inventory_model import CharacterInventoryItem
-    from modules.characters.model.character_choices_log_model import CharacterChoiceLog
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.campaign_member_model import CampaignMember
+    from modules.campaign.model.character_config_version_model import CharacterConfigVersion
     from modules.session.model.session_model import Session, SessionJoinedUser
     from modules.game.model.game_model import Game
     from modules.friendship.model.friend_request_model import FriendRequestModel

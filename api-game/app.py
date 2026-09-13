@@ -40,10 +40,23 @@ from shared_contracts.session import (
     SessionStats,
 )
 from pydantic import ValidationError
+
+from character_values import (
+    COMPONENT_VALUE_ADAPTER,
+    config_for_player,
+    filter_component_change_for_viewer,
+    filter_values_for_viewer,
+    render_value_for_log,
+    validate_value_for_player,
+)
 from shared_contracts.map import MapConfig, PC_TOKEN_SCALE_MAX, PC_TOKEN_SCALE_MIN
 from shared_contracts.map_token import MapToken
 from shared_contracts.image import ImageConfig
-from schemas.session_schemas import SessionEndRequest
+from schemas.session_schemas import (
+    ComponentValueBody,
+    PlayerCharacterUpdate,
+    SessionEndRequest,
+)
 from datetime import datetime, timezone
 from mongo_service import mongo_service
 
@@ -341,6 +354,13 @@ async def gameservice_get(room_id):
         # hydrate both from the per-socket initial_state anyway.
         check_room.pop("map_token_state", None)
         check_room.pop("token_images", None)
+        # Secret component values go for the same reason and are hydrated the same way:
+        # this endpoint has no viewer to filter for, and guessing would either leak a
+        # player's private values or silently hide their own from them.
+        check_room["player_metadata"] = {
+            user_id: {key: value for key, value in metadata.items() if key != "values"}
+            for user_id, metadata in (check_room.get("player_metadata") or {}).items()
+        }
         return {
             **check_room,
             "current_seat_layout": seat_layout,
@@ -568,8 +588,18 @@ async def create_session(request: SessionStartPayload):
                     "campaign_role": session_user.campaign_role,
                 }
                 if session_user.character:
-                    entry.update(session_user.character.model_dump())
+                    # Spread, never a whitelist: a new contract field travels without
+                    # anyone listing it here. This is how display_name, config_version_id
+                    # and values arrive without changing this loop.
+                    entry.update(session_user.character.model_dump(mode="json"))
                 player_metadata[session_user.user_id] = entry
+
+        # Every config version in the party, keyed by id. Players built against different
+        # versions both resolve, so a GM's edit never forces anyone to rebuild.
+        character_configs = {
+            version_id: config.model_dump(mode="json")
+            for version_id, config in request.character_configs.items()
+        }
 
         # Restore the DM's Spotify BGM block from the previous session. The SpotifyState
         # contract supplies defaults for anything unset (notably channel_level = -12 dB),
@@ -599,6 +629,7 @@ async def create_session(request: SessionStartPayload):
             available_assets=available_assets,
             campaign_id=request.campaign_id,
             player_metadata=player_metadata,
+            character_configs=character_configs,
             audio_state={k: v.model_dump() for k, v in request.audio_config.items()} if request.audio_config else {},
             audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {},
             spotify=spotify_restore,
@@ -716,13 +747,34 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         if isinstance(player_metadata, dict):
             for metadata_user_id, meta in player_metadata.items():
                 # Display name from metadata only — never fall back to the user_id (a UUID = PII)
-                players.append(PlayerState(
-                    user_id=metadata_user_id,
-                    player_name=meta.get("player_name") or "Unknown Adventurer",
-                    seat_position=seat_index_by_user.get(metadata_user_id),
-                    character_id=meta.get("character_id"),
-                    color=meta.get("color"),
-                ))
+                # PlayerState.values is typed, so building it validates every stored
+                # value. One corrupt document must not fail End for the whole table:
+                # log it and send that player home with no values rather than none of
+                # them getting home at all.
+                try:
+                    values = meta.get("values") or {}
+                    players.append(PlayerState(
+                        user_id=metadata_user_id,
+                        player_name=meta.get("player_name") or "Unknown Adventurer",
+                        seat_position=seat_index_by_user.get(metadata_user_id),
+                        character_id=meta.get("character_id"),
+                        config_version_id=meta.get("config_version_id"),
+                        values=values,
+                        color=meta.get("color"),
+                    ))
+                except ValidationError as invalid:
+                    logger.error(
+                        f"CHARACTER_ETL unreadable values for {metadata_user_id} in room "
+                        f"{room_id}; sending them home without values: {invalid}"
+                    )
+                    players.append(PlayerState(
+                        user_id=metadata_user_id,
+                        player_name=meta.get("player_name") or "Unknown Adventurer",
+                        seat_position=seat_index_by_user.get(metadata_user_id),
+                        character_id=meta.get("character_id"),
+                        config_version_id=meta.get("config_version_id"),
+                        color=meta.get("color"),
+                    ))
 
         # Calculate session duration
         created_at = room.get("created_at")
@@ -905,82 +957,195 @@ async def delete_session(game_id: str, keep_logs: bool = True):
 
 
 @app.put("/game/{room_id}/player/character")
-async def update_player_character(room_id: str, character_data: dict):
-    """
-    Update a player's character data in the session.
+async def update_player_character(room_id: str, update: PlayerCharacterUpdate):
+    """The whole of what this room should know about one player.
 
-    Called by api-site when a player changes their character mid-session.
-    Updates room player_metadata with character information.
+    Identity always; the character half optional. An absent character half means the player
+    holds no character — a late joiner who has not built one, or a player just ejected from
+    the party — so this one call serves joining, ejecting and late-joiner sync, and there is
+    no DELETE route. Called by api-site.
 
-    Request:
-    {
-        "player_name": "username",
-        "user_id": "uuid",
-        "character_id": "uuid",
-        "character_name": "Aragorn",
-        "character_class": ["Ranger"],
-        "character_race": "Human",
-        "level": 5,
-        "hp_current": 20,
-        "hp_max": 25,
-        "ac": 15
-    }
-
-    Response:
-    {
-        "success": true,
-        "message": "Character updated"
-    }
+    Three cases, in order:
+      * no character_id            -> clear the character fields, keep the person
+      * the same character_id      -> identity only; NEVER overwrite values, because this
+                                      room owns them while the game is open and the caller
+                                      cannot know what has happened tonight
+      * a new character_id         -> identity + config_version_id + values, and the config
+                                      registered if the room has not seen that version
     """
     try:
-        # Verify room exists
         room = await GameService.get_room(room_id)
         if not room:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        # Update the character in room metadata
-        await GameService.update_player_character(room_id, character_data)
+        user_id = update.user_id
+        existing = (room.get("player_metadata") or {}).get(user_id) or {}
+        identity = {
+            "user_id": user_id,
+            "player_name": update.player_name,
+            "campaign_role": update.campaign_role,
+        }
+        if update.color is not None:
+            identity["color"] = update.color
 
-        # Broadcast character change to all clients via WebSocket. Forward the
-        # merged record from MongoDB rather than the inbound delta so the event
-        # carries every field clients need (including campaign_role for the
-        # spectator-derivation effect). Frontend handler merges fields.
+        if update.character_id is None:
+            await GameService.update_player_character(room_id, identity)
+            await GameService.clear_player_character(room_id, user_id)
+        elif existing.get("character_id") == update.character_id:
+            identity["display_name"] = update.display_name
+            if update.avatar_asset_id is not None:
+                identity["avatar_asset_id"] = update.avatar_asset_id
+            await GameService.update_player_character(room_id, identity)
+        else:
+            if update.config_version_id and update.config is not None:
+                await GameService.ensure_character_config(
+                    room_id, update.config_version_id, update.config.model_dump(mode="json"))
+            await GameService.update_player_character(room_id, {
+                **identity,
+                "character_id": update.character_id,
+                "display_name": update.display_name,
+                "config_version_id": update.config_version_id,
+                "values": {
+                    component_id: value.model_dump(mode="json")
+                    for component_id, value in update.values.items()
+                },
+                "avatar_asset_id": update.avatar_asset_id,
+            })
+
+        # Forward the merged record rather than the inbound delta, so the event carries
+        # every field clients need (campaign_role included). Values are filtered per
+        # recipient: a secret component is the player's and the GM's alone.
         refreshed = await GameService.get_room(room_id) or {}
-        merged = (refreshed.get("player_metadata") or {}).get(character_data.get("user_id", "")) or character_data
-        player_name = merged.get("player_name", "unknown")
-        character_name = merged.get("character_name", "unknown")
+        merged = (refreshed.get("player_metadata") or {}).get(user_id) or identity
 
-        change_message = {
-            "event_type": "player_character_changed",
-            "data": {
-                "user_id": merged.get("user_id"),
-                "player_name": player_name,
-                "campaign_role": merged.get("campaign_role"),
-                "character_id": merged.get("character_id"),
-                "character_name": character_name,
-                "character_class": merged.get("character_class"),
-                "character_race": merged.get("character_race"),
-                "level": merged.get("level"),
-                "hp_current": merged.get("hp_current"),
-                "hp_max": merged.get("hp_max"),
-                "ac": merged.get("ac"),
-                "color": merged.get("color"),
-            }
+        base_event = {
+            "user_id": merged.get("user_id"),
+            "player_name": merged.get("player_name"),
+            "campaign_role": merged.get("campaign_role"),
+            "character_id": merged.get("character_id"),
+            "display_name": merged.get("display_name"),
+            "config_version_id": merged.get("config_version_id"),
+            "config": (refreshed.get("character_configs") or {}).get(
+                merged.get("config_version_id") or ""),
+            "color": merged.get("color"),
+            "avatar_asset_id": merged.get("avatar_asset_id"),
         }
+        for viewer_id in list(connection_manager.room_users.get(room_id, {})):
+            visible_values = (
+                filter_values_for_viewer(refreshed, viewer_id).get(user_id, {}).get("values", {})
+                if merged.get("character_id") else {}
+            )
+            await connection_manager.send_to_player(room_id, viewer_id, {
+                "event_type": "player_character_changed",
+                "data": {**base_event, "values": visible_values},
+            })
 
-        await connection_manager.update_room_data(room_id, change_message)
-        logger.info(f"Updated character for {player_name} to {character_name} in room {room_id}")
-
-        return {
-            "success": True,
-            "message": "Character updated successfully"
-        }
+        logger.info(
+            f"Updated player {user_id} in room {room_id} "
+            f"(character {merged.get('character_id') or 'none'})"
+        )
+        return {"success": True, "message": "Player updated successfully"}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update character: {e}")
+        logger.error(f"Failed to update player: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/game/{room_id}/players/{user_id}/components/{component_id}")
+async def update_player_component(room_id: str, user_id: str, component_id: str,
+                                  body: ComponentValueBody, actor_user_id: str = Query(...)):
+    """The only way a component value changes during a game.
+
+    Server-authoritative: client -> HTTP -> MongoDB -> WebSocket broadcast. There is no
+    websocket event for this, deliberately.
+
+    Allowed for the value's owner or the GM. The value is validated against that player's
+    own config, so a wrong type or representation is a 400 — but a value merely outside the
+    configuration's range is written, because that is a version difference the GM is shown
+    rather than a rule the app enforces.
+    """
+    room = await GameService.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    is_game_master = (room.get("dungeon_master") or {}).get("user_id") == actor_user_id
+    if actor_user_id != user_id and not is_game_master:
+        raise HTTPException(status_code=403, detail="Only the player or the GM can change that")
+
+    if body.value.component_id != component_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Body targets {body.value.component_id!r}, path targets {component_id!r}",
+        )
+
+    try:
+        validate_value_for_player(room, user_id, body.value)
+    except ValueError as mismatch:
+        raise HTTPException(status_code=400, detail=str(mismatch))
+
+    configuration = config_for_player(room, user_id).configuration_by_id()[component_id]
+    previous_raw = ((room.get("player_metadata") or {}).get(user_id, {}).get("values") or {}).get(component_id)
+
+    value_document = body.value.model_dump(mode="json")
+    matched = await GameService.update_player_component(room_id, user_id, component_id, value_document)
+    if matched == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # One system line per change, composed here so every client renders the same sentence.
+    display_name = (room.get("player_metadata") or {}).get(user_id, {}).get("display_name") or "Someone"
+    after_text = render_value_for_log(configuration, body.value)
+    before_text = after_text
+    if previous_raw is not None:
+        try:
+            before_text = render_value_for_log(
+                configuration, COMPONENT_VALUE_ADAPTER.validate_python(previous_raw))
+        except ValidationError:
+            before_text = "?"
+    await adventure_log.add_log_entry(
+        room_id=room_id,
+        message=format_message(
+            MESSAGE_TEMPLATES["component_changed"],
+            display_name=display_name, label=configuration.label,
+            before=before_text, after=after_text,
+        ),
+        log_type=LogType.SYSTEM,
+        from_player=display_name,
+    )
+
+    # Per recipient: a secret component is the player's and the GM's alone.
+    for viewer_id in list(connection_manager.room_users.get(room_id, {})):
+        if not filter_component_change_for_viewer(room, user_id, component_id, viewer_id):
+            continue
+        await connection_manager.send_to_player(room_id, viewer_id, {
+            "event_type": "player_component_changed",
+            "data": {"user_id": user_id, "component_id": component_id, "value": value_document},
+        })
+
+    return {"success": True}
+
+
+@app.get("/game/{room_id}/players/{user_id}/values")
+async def get_player_values(room_id: str, user_id: str):
+    """A player's component values, straight out of the room.
+
+    **Deliberately unfiltered.** This is a server-to-server read whose only purpose is a
+    cold write (api-site calls it before ejecting a player from a running game). Running it
+    through filter_values_for_viewer would silently drop exactly the values the GM and the
+    player agreed were private, and they would be lost rather than saved. This is the one
+    place a player's values leave the process unfiltered; nginx 404s it at the edge, so it
+    is reachable only from inside the Docker network.
+    """
+    room = await GameService.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    metadata = (room.get("player_metadata") or {}).get(user_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Player not in this game")
+
+    return {"values": metadata.get("values") or {}}
 
 
 @app.put("/game/{room_id}/seat-layout")
@@ -1028,7 +1193,7 @@ async def update_seat_layout(room_id: str, request: dict):
         if non_empty_seats:  # Only log if there are actual players
             def _seat_name(uid):
                 meta = player_metadata.get(uid, {}) if isinstance(player_metadata, dict) else {}
-                return meta.get("character_name") or meta.get("player_name") or "Unknown Adventurer"
+                return meta.get("display_name") or meta.get("player_name") or "Unknown Adventurer"
 
             player_list = ", ".join(_seat_name(uid) for uid in non_empty_seats)
             log_message = format_message(MESSAGE_TEMPLATES["party_updated"], players=player_list)

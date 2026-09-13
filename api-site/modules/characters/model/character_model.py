@@ -9,24 +9,26 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
-    Integer,
+    Index,
     SmallInteger,
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import text
 
 from shared.dependencies.db import Base
 
 
 class Character(Base):
-    """Character aggregate root (v2 schema).
+    """Character aggregate root.
 
-    Edition-locked: every character belongs to exactly one ruleset edition for
-    life. Species, background and class codes reference content in the JSON
-    seed data loaded by the :class:`RulesetRegistry` at boot — no FKs into
-    SRD lookup tables, because that content lives outside the DB.
+    User-owned; in one session's party (its table) and built from one campaign's published
+    character config, a whole copy of which is embedded so the character still renders
+    after the campaign, its sessions and its version rows are gone — a keepsake. Component
+    values live in ``values``, keyed by component id. There are no rules columns: what a
+    character is made of is the campaign's decision, not the schema's.
     """
 
     __tablename__ = "characters"
@@ -40,54 +42,45 @@ class Character(Base):
         # assignment in the application layer.
         UniqueConstraint("user_id", "slot", name="uq_characters_user_slot"),
         CheckConstraint("slot IS NULL OR (slot >= 0 AND slot < 8)", name="ck_characters_slot_range"),
+        # One character per user per party, alive or dead. Deliberately NOT qualified by
+        # is_alive: a dead character keeps its place until someone ejects it, so aliveness
+        # must not free the slot or a user could hold a dead character and a living one and
+        # the party would be ambiguous for them. This index IS the "one at a time" rule;
+        # no application code repeats it.
+        Index(
+            "uq_characters_one_per_party",
+            "session_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("session_id IS NOT NULL AND NOT is_deleted"),
+            sqlite_where=text("session_id IS NOT NULL AND NOT is_deleted"),
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     slot = Column(SmallInteger, nullable=True)  # NULL = soft-deleted (not occupying capacity)
-    edition_id = Column(Integer, ForeignKey("editions.id"), nullable=False)
-    active_in_campaign_id = Column(
+
+    # Provenance: which campaign's config built this character. NULL = a keepsake.
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True)
+    # The table this character is in the party of. NULL = not at a table (keepsake).
+    # Party membership IS this column; there is no join table and no roster pointer.
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
+    config_version_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        ForeignKey("character_config_versions.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # A whole copy of the config version this was built against. Never reassembled from
+    # rows; this is what makes keepsakes free — no join, ever.
+    config_snapshot = Column(JSONB, nullable=False, server_default='{"version": 1, "components": []}')
+    # component_id -> ComponentValue. The player's instances of the GM's configurations.
+    values = Column(JSONB, nullable=False, server_default="{}")
+    # Every Name value in config order, space-joined. Derived, stored so lists and the game
+    # runtime never have to open the snapshot to show who this is.
+    display_name = Column(String(200), nullable=False, server_default="Unnamed character")
 
-    character_name = Column(String(50), nullable=False)
-    species_code = Column(String(50), nullable=False)
-    background_code = Column(String(50), nullable=False)
-
-    level = Column(Integer, nullable=False, default=1, server_default="1")
-    xp = Column(Integer, nullable=False, default=0, server_default="0")
-
-    hp_max = Column(Integer, nullable=False)
-    hp_current = Column(Integer, nullable=False)
-    hp_temp = Column(Integer, nullable=False, default=0, server_default="0")
-    ac = Column(Integer, nullable=False)
-
-    death_save_successes = Column(SmallInteger, nullable=False, default=0, server_default="0")
-    death_save_failures = Column(SmallInteger, nullable=False, default=0, server_default="0")
-    inspiration = Column(Boolean, nullable=False, default=False, server_default="false")
-    status_effects = Column(ARRAY(String), nullable=False, server_default="{}")
-    exhaustion_level = Column(SmallInteger, nullable=False, default=0, server_default="0")
-    currency = Column(JSONB, nullable=False, server_default="{}")  # coin_code -> quantity (J.2)
     is_alive = Column(Boolean, nullable=False, default=True, server_default="true")
-
-    speed = Column(Integer, nullable=False)
-    size = Column(String(10), nullable=False)
-    languages = Column(ARRAY(String), nullable=False, server_default="{}")
-
-    is_draft = Column(Boolean, nullable=False, default=True, server_default="true")
-    creation_step = Column(String(30), nullable=True)
-
-    # Provenance of the current ability_scores: which mode the wizard used
-    # ('point_buy' / 'standard_array' / 'rolled' / 'manual'). NULL until the
-    # player completes the ability_scores step. ``ability_roll_details`` holds
-    # the per-ability 4d6 breakdown when ``method == 'rolled'`` so the wizard
-    # can re-display the original dice on resume / refresh without us having to
-    # re-roll (which would change the values).
-    ability_score_method = Column(String(20), nullable=True)
-    ability_roll_details = Column(JSONB, nullable=True)
-    species_sub_choices = Column(JSONB, nullable=False, server_default="{}")  # lineage/ancestry/size picks
 
     # FK to the MediaAsset (asset_type='image') used as this character's
     # avatar. NULL ⇒ frontend renders /heroes.png default. SET NULL on the
@@ -111,70 +104,5 @@ class Character(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False)
     is_deleted = Column(Boolean, nullable=False, default=False, server_default="false")
 
-    edition = relationship("Edition", lazy="joined")
-    class_entries = relationship(
-        "CharacterClassEntry",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    ability_score_entries = relationship(
-        "CharacterAbilityScore",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    save_proficiency_entries = relationship(
-        "CharacterSaveProficiency",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    skill_entries = relationship(
-        "CharacterSkillProficiency",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    feat_entries = relationship(
-        "CharacterFeatAcquisition",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    spell_entries = relationship(
-        "CharacterSpell",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    resource_entries = relationship(
-        "CharacterResource",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    subclass_entries = relationship(
-        "CharacterSubclass",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    inventory_entries = relationship(
-        "CharacterInventoryItem",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    choice_log_entries = relationship(
-        "CharacterChoiceLog",
-        back_populates="character",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-
     def __repr__(self):
-        return (
-            f"<Character(id={self.id}, name='{self.character_name}', "
-            f"level={self.level}, draft={self.is_draft})>"
-        )
+        return f"<Character(id={self.id}, display_name='{self.display_name}', session_id={self.session_id})>"

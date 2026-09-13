@@ -9,6 +9,8 @@ from .assets import AssetRef
 from .base import ContractModel
 from .audio import AudioChannelState, AudioTrackConfig
 from .character import DungeonMaster, PlayerCharacter, SessionUser
+from .character_config import CharacterConfig
+from .components import ComponentValue
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import MapConfig
@@ -23,6 +25,11 @@ class PlayerState(ContractModel):
     # they still round-trip so character state (color) syncs cold for everyone.
     seat_position: Optional[int] = None
     character_id: Optional[str] = None
+    config_version_id: Optional[str] = None
+    # Every value api-game holds for this player at End; api-site writes them cold in one
+    # update. Empty when the player had no character. api-game is authoritative for these
+    # while the game is open, so this is the only path by which they come home.
+    values: Dict[str, ComponentValue] = {}
     # Character-owned color (hex). None when the player's character has no custom
     # color — display falls back to the seat-index palette client-side.
     color: Optional[str] = None
@@ -66,6 +73,10 @@ class SessionStartPayload(ContractModel):
     max_players: int = 8
     joined_user_ids: List[str] = []
     session_users: List[SessionUser] = []
+    # config version id -> config, one entry per distinct version among session_users.
+    # api-game keeps every entry so players built against different versions both resolve;
+    # a GM's config edit never forces anyone to rebuild.
+    character_configs: Dict[str, CharacterConfig] = {}
     assets: List[AssetRef] = []
     audio_config: Dict[str, AudioChannelState] = {}
     audio_track_config: Dict[str, AudioTrackConfig] = {}

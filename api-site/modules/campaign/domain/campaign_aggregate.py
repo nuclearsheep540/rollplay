@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import UUID
 
+from shared_contracts.character_config import CharacterConfig
+
 from modules.campaign.domain.campaign_role import CampaignRole
 
 
@@ -50,6 +52,9 @@ class CampaignAggregate:
     max_players: int = 8
     session_ids: List[UUID] = field(default_factory=list)
     members: Dict[UUID, CampaignRole] = field(default_factory=dict)
+    # The GM's unpublished working copy of the character config. None until they edit one.
+    # Publishing moves it into an immutable version row and clears it.
+    character_config_draft: Optional[CharacterConfig] = None
 
     @classmethod
     def create(
@@ -90,6 +95,18 @@ class CampaignAggregate:
             session_ids=[],
             members={created_by: CampaignRole.DM},
         )
+
+    def set_character_config_draft(self, config: CharacterConfig, next_version: int) -> None:
+        """Replace the draft. Its version is always the next unpublished number — the caller
+        passes it so the aggregate never has to query — so a GM cannot mint a version by
+        typing one into the payload."""
+        self.character_config_draft = CharacterConfig(version=next_version, components=config.components)
+        self.updated_at = datetime.utcnow()
+
+    def clear_character_config_draft(self) -> None:
+        """Publish has taken the draft into an immutable version row."""
+        self.character_config_draft = None
+        self.updated_at = datetime.utcnow()
 
     @staticmethod
     def _validate_max_players(max_players: int) -> int:

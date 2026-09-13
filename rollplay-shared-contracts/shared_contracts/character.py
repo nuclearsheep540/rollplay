@@ -1,15 +1,25 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Shared character DTOs used at service boundaries."""
+"""Shared character DTOs used at service boundaries.
 
-from typing import List, Optional
+A character is whatever its campaign's character config says it is, so these DTOs carry
+component *values* keyed by component id and never name a rule. The config itself rides
+once per version in SessionStartPayload.character_configs.
+
+The class name DungeonMaster and the field dungeon_master are a cross-service rename that
+is deliberately out of scope here (see the plan's followups); user-facing copy says "Game
+Master" or "GM".
+"""
+
+from typing import Dict, Optional
 
 from .base import ContractModel
+from .components import ComponentValue
 
 
 class DungeonMaster(ContractModel):
-    """DM metadata for session ETL. No character fields — the DM runs the session, not a character."""
+    """GM metadata for session ETL. No character fields — the GM runs the game, not a character."""
 
     user_id: str
     player_name: str
@@ -17,19 +27,22 @@ class DungeonMaster(ContractModel):
 
 
 class PlayerCharacter(ContractModel):
-    """Character metadata for a rostered player in session ETL."""
+    """Character metadata for a party member in game ETL.
+
+    Carries identity plus the character's component values and the id of the config
+    version that built them. No rules fields: api-game renders whatever the values are,
+    by component type, and knows nothing about any game system.
+    """
 
     user_id: str
     player_name: str
     campaign_role: str
     character_id: str
-    character_name: str
-    character_class: List[str]
-    character_race: str
-    level: int
-    hp_current: int
-    hp_max: int
-    ac: int
+    display_name: str
+    config_version_id: str
+    # component_id -> value. The matching config is in
+    # SessionStartPayload.character_configs[config_version_id].
+    values: Dict[str, ComponentValue] = {}
     # Character-owned color (hex). The seat a player occupies *displays* this;
     # it is never stored per-seat. None = no custom color chosen yet.
     color: Optional[str] = None

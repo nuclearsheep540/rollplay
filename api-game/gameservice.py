@@ -25,6 +25,7 @@ class GameSettings(BaseModel):
     spotify: dict = {}  # DM-controlled Spotify BGM anchor snapshot for late-joiner sync
     map_token_state: dict = {}  # asset_id -> list[MapToken] — each map keeps its own board (see shared_contracts.map_token)
     token_images: dict = {}  # image_asset_id -> TokenImageRef dict (signed URL + token focal area) — fixed at session start (decision 27)
+    character_configs: dict = {}  # config_version_id -> CharacterConfig dict — every version in the party, so players on different versions both resolve
     urls_expire_at: str = ""  # ISO-8601 UTC lease deadline for signed asset URLs — countdown display only; api-site enforces
 
 class GameService:
@@ -385,21 +386,12 @@ class GameService:
 
     @staticmethod
     async def update_player_character(room_id: str, character_data: dict):
-        """
-        Update a player's character data in room-level metadata, keyed by user_id.
+        """Update one player's entry in room-level metadata, keyed by user_id.
 
-        character_data should contain:
-        - user_id: str (primary key for metadata lookup)
-        - player_name: str (display name)
-        - campaign_role: str
-        - character_id: str
-        - character_name: str
-        - character_class: list[str] | str
-        - character_race: str
-        - level: int
-        - hp_current: int
-        - hp_max: int
-        - ac: int
+        ``character_data`` carries identity — user_id, player_name, campaign_role — plus,
+        when the player holds a character, character_id, display_name, config_version_id,
+        values, color and avatar_asset_id. api-game never interprets a component: what a
+        character is made of is the campaign's decision, and this writes whatever arrives.
         """
         collection = GameService._get_active_session()
 
@@ -449,6 +441,67 @@ class GameService:
 
         logger.info(f"Updated character for user {user_id} in room {room_id}")
         return True
+
+    @staticmethod
+    async def update_player_component(room_id: str, user_id: str, component_id: str, value: dict):
+        """Write one component value by its own dotted path.
+
+        The unit of atomicity is the operation: one value changing is one key. Writing the
+        whole values map instead would let two players' concurrent edits erase each other,
+        because handlers interleave at every await.
+        """
+        collection = GameService._get_active_session()
+
+        if not is_valid_mongo_key(user_id):
+            raise Exception("user_id is not a valid metadata key")
+        if not is_valid_mongo_key(component_id):
+            raise Exception("component_id is not a valid metadata key")
+
+        result = await collection.update_one(
+            GameService.room_filter(room_id),
+            {"$set": {f"player_metadata.{user_id}.values.{component_id}": value}},
+        )
+        return result.matched_count
+
+    @staticmethod
+    async def clear_player_character(room_id: str, user_id: str):
+        """The player is still in the room; they just hold no character any more.
+
+        Identity stays (player_name, campaign_role, color) so they remain a person in the
+        room rather than vanishing from it.
+        """
+        collection = GameService._get_active_session()
+
+        if not is_valid_mongo_key(user_id):
+            raise Exception("user_id is not a valid metadata key")
+
+        result = await collection.update_one(
+            GameService.room_filter(room_id),
+            {"$unset": {
+                f"player_metadata.{user_id}.character_id": "",
+                f"player_metadata.{user_id}.display_name": "",
+                f"player_metadata.{user_id}.config_version_id": "",
+                f"player_metadata.{user_id}.values": "",
+                f"player_metadata.{user_id}.avatar_asset_id": "",
+            }},
+        )
+        return result.matched_count
+
+    @staticmethod
+    async def ensure_character_config(room_id: str, version_id: str, config: dict):
+        """Add a config version to the room if it is not already there.
+
+        Written by path so adding one player's version never rewrites another's.
+        """
+        collection = GameService._get_active_session()
+
+        if not is_valid_mongo_key(version_id):
+            raise Exception("config version id is not a valid metadata key")
+
+        await collection.update_one(
+            GameService.room_filter(room_id),
+            {"$set": {f"character_configs.{version_id}": config}},
+        )
 
     @staticmethod
     async def update_audio_state(room_id: str, channel_id: str, channel_state: dict):

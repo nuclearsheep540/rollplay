@@ -71,6 +71,7 @@ body {
   /* Content - text */
   --content-primary: #1F1F1F;      /* carbon - on light bg */
   --content-secondary: #B5ADA6;    /* silver - muted, on dark */
+  --content-muted: #6B655E;        /* stone - muted, on LIGHT (silver is unreadable there) */
   --content-on-dark: #F7F4F3;      /* smoke - on dark bg */
   --content-bold: #0B0A09;         /* onyx - strongest */
   --content-accent: #B5ADA6;       /* silver - accent */

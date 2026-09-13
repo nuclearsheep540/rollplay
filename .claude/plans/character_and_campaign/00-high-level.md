@@ -25,14 +25,15 @@ are a later question.
 | Owns | What |
 |---|---|
 | **Campaign** | The world and its baseline: assets, notes, NPC baselines, seats, and the **character config** (shape of a character). Owns no character instances. |
-| **Session** | The table: roster (one seat per user, one character per seat), schedule. The mapping between cold config and hot play. **Characters live here.** |
+| **Session** | The table: the **roster** (which users are here) and the schedule. The **party** — the characters in play — is a query over characters bound to this session, not a column on it. **Characters bind here.** |
 | **Game** | Hot runtime. Owns no data. Consumes the config it is handed. |
 | **User** | Owns their characters outright. |
 
 Decisions locked (2026-09-12):
 - Characters are **bound to** a session (own aggregate, referenced by ID from the roster), never contained by it.
-- **One character per user per session.** A dead character is ejected from the seat; the player joins with a new one.
-- Characters **survive campaign deletion as keepsakes** — readable, unplayable.
+- **One living character per user per session**, enforced by a partial unique index rather than by application code.
+- **Ejecting means leaving the table** (2026-09-12). Eject unbinds the character — session, campaign and version pointers all go null — so the player is free to build another immediately and the UI invites them to. An ejected character is a keepsake and never rejoins a party. It is addressed by character (`POST /api/characters/{id}/eject`), permission read off the character, since the character knows both its table and its owner.
+- Characters **survive campaign deletion as keepsakes** — readable, unplayable. Ejection and the migration backfill produce the same state, so there is **one orphan state reached three ways**, not three flavours of orphan.
 - **Character config is versioned.** A GM edit produces a new version. Characters record the version that built them and keep playing. Difference is information for the GM, never a gate — *the app has no notion of an incompatible character.*
 - **Create eligibility.** A character is created by a session member against that session's campaign config. Zero eligible sessions = nothing to create against; that empty state is designed, not hidden.
 
@@ -46,7 +47,10 @@ Decisions added later on 2026-09-12 (after the mock and the schema discussion):
 - **api-game is authoritative for values while a game is open.** The end ETL writes every player's values cold in one write; reconnect reads the room, never api-site. This closes `existing_plans/TODO-runtime-character-state-authority.md` in the direction Matt preferred (hot-only during play).
 - **Prompt-all is kept and repurposed.** The initiative-specific "prompt all players" becomes a generic group prompt: the GM types what the roll is for. The single-target dice prompt with free-text roll type stays. Every other D&D prompt goes.
 - **Mock corrections applied**: each component card carries a visible "Label" caption before its label input, and a "Secret" toggle.
-- **Existing characters are kept, as keepsakes.** The rewrite does not discard rows. Each old character loses its table (no campaign, no session, no version) and keeps a snapshot built from its name, hit points and ability scores, which is precisely the state a character reaches when its campaign is deleted. Current sessions therefore have no seated characters after the migration. Schema change = additive migration, backfill script, destructive migration; never a hand-written data migration.
+- **A player's whole state in a room travels in one call.** `PUT /game/{room_id}/player/character` carries identity always and the character half optionally; an absent character half means the player holds no character. Late-joiner sync, joining and ejection all use it, so there is no DELETE route and no second identity-only route. Reading the room's values back before an eject is its own small GET, deliberately unfiltered because it feeds a cold write.
+- **There is nothing to choose between, so there is no chooser.** Creating a character joins the party and ejecting leaves it, so a user never holds two at one table. `SelectCharacterForSession`, its endpoint and `CharacterSelectionModal` are deleted rather than rewritten; several characters per table is a later feature with its own verb.
+- **The `player` role is derived, not stored** (2026-09-12). Its only two writers are deleted with the campaign-level character selection; Start computes dm / mod / player (has a party character) / spectator. Being a player is having a character, which the party already says.
+- **Existing characters are kept, as keepsakes.** The rewrite does not discard rows. Each old character loses its table (no campaign, no session, no version) and keeps a snapshot built from its name, hit points and ability scores, which is precisely the state a character reaches when its campaign is deleted. Current sessions therefore have no party after the migration. Schema change = additive migration, backfill script, destructive migration; never a hand-written data migration.
 
 ## Vocabulary (define early, use everywhere)
 
@@ -59,7 +63,9 @@ Decisions added later on 2026-09-12 (after the mock and the schema discussion):
 | **Character config version** | An immutable snapshot of a character config. Characters reference one. | Campaign |
 | **Character create flow** | The player-facing creation form rendered from a character config version. | Derived, not stored |
 | **Character** | User-owned; bound to a session; references a config version; holds component values + runtime state. | User |
-| **Seat / roster** | The session's mapping user → character → role. Party is the roster, a value, not an aggregate (per 07). | Session |
+| **Roster** | Which *users* are at this table. `session_joined_users`. Commands against the roster act on users. | Session |
+| **Party** | Which *characters* are in play at this table, and by ownership the users behind them: every character whose `session_id` is this session. A **query**, never a stored column — the character row already carries the fact. Commands against the party act on characters. Party ⊆ roster, always. | Derived from Characters |
+| **Seat** | A place in a *live game* where a player's meta is drawn — `seat_layout`, `max_players`, the runtime seat card. Hot, api-game's, and used nowhere in api-site. | Game |
 | **Framework preset** | A pre-authored character config (e.g. D&D SRD) a GM copies into a campaign. | Platform content |
 
 Still to define (next pass, not now): how a component declares which runtime surfaces it
@@ -153,7 +159,7 @@ cardinality and values, and Pydantic handles both.
   renderer for, so deploy skew degrades rather than breaks.
 - **Version snapshots are whole documents.** A config version is stored as one validated
   JSON document, never reassembled from rows. Characters and rooms reference it by id, so
-  "built on 1.0.0, campaign is on 1.0.1" is one comparison and no migration.
+  "built on v1, campaign is on v2" is one comparison and no migration.
 - The existing opaque `Dict[str, Any]` escape hatch (`map.py:138`) is **not** the mechanism.
   It would give up validation exactly where we need it most.
 
@@ -177,7 +183,7 @@ the real content. Backend: extend `CreateCampaign` / `UpdateCampaign` with
 **B. Character config → flow → runtime**, proved with **hit points**:
 1. GM configures a hit-points component in the campaign's Character section.
 2. Player, as a session member, opens the character create flow, which renders from the config
-   version, and creates a character bound to the session. The session roster seats it.
+   version, and creates a character bound to the session. That binding is the party.
 3. Player enters a game. The Start ETL sends the config version + component values per
    player instead of the D&D field set (`game/application/commands.py:128-142`).
 4. The runtime seat card and sheet render hit points from the component, and HP edits

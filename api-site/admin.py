@@ -39,17 +39,6 @@ from modules.user.model.user_model import User  # noqa: F401
 from modules.user.model.friend_code_model import FriendCode  # noqa: F401
 from modules.characters.model.character_model import Character  # noqa: F401
 from modules.characters.model.edition_model import Edition  # noqa: F401
-from modules.characters.model.character_class_model import CharacterClassEntry  # noqa: F401
-from modules.characters.model.dnd_ability_model import DndAbility  # noqa: F401
-from modules.characters.model.character_ability_model import CharacterAbilityScore  # noqa: F401
-from modules.characters.model.character_save_model import CharacterSaveProficiency  # noqa: F401
-from modules.characters.model.character_skill_model import CharacterSkillProficiency  # noqa: F401
-from modules.characters.model.character_feat_model import CharacterFeatAcquisition  # noqa: F401
-from modules.characters.model.character_spell_model import CharacterSpell  # noqa: F401
-from modules.characters.model.character_resource_model import CharacterResource  # noqa: F401
-from modules.characters.model.character_subclass_model import CharacterSubclass  # noqa: F401
-from modules.characters.model.character_inventory_model import CharacterInventoryItem  # noqa: F401
-from modules.characters.model.character_choices_log_model import CharacterChoiceLog  # noqa: F401
 from modules.campaign.model.campaign_model import Campaign  # noqa: F401
 from modules.campaign.model.campaign_member_model import CampaignMember  # noqa: F401
 from modules.session.model.session_model import Session, SessionJoinedUser  # noqa: F401

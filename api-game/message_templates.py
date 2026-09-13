@@ -22,12 +22,14 @@ MESSAGE_TEMPLATES = {
     "player_connected": "{player} connected",
     "player_disconnected": "{player} disconnected", 
     "party_updated": "Party updated: {players}",
-    "combat_started": "Combat started by {player}",
-    "combat_ended": "Combat ended by {player}",
     "messages_cleared": "{player} cleared {count} messages",
     "player_kicked": "{player} was removed from the game",
     "dice_prompt": "{target}, roll a {roll_type}",
-    "initiative_prompt": "DM prompted all players for Initiative: {players}",
+    # The GM asks the whole table for something; they say what.
+    "group_prompt": "{gm_name} asks everyone: {prompt_text}",
+    # One component value changed. Rendered generically from the value's shape — never an
+    # interpretation of what the number means.
+    "component_changed": "{display_name} — {label}: {before} → {after}",
     # Map tokens — cell_suffix is " at D7" on an addressable grid, else ""
     "map_token_placed": "{player} placed {token}{cell_suffix}",
     "map_token_removed": "{player} removed {token}",

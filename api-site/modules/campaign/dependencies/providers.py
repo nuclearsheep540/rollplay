@@ -5,6 +5,13 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from shared.dependencies.db import get_db
 from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.campaign.repositories.character_config_version_repository import (
+    CharacterConfigVersionRepository,
+)
 
 def campaign_repository(db: Session = Depends(get_db)) -> CampaignRepository:
     return CampaignRepository(db)
+
+
+def get_character_config_version_repository(db: Session = Depends(get_db)) -> CharacterConfigVersionRepository:
+    return CharacterConfigVersionRepository(db)

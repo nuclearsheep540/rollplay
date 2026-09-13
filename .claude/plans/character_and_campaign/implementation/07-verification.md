@@ -46,19 +46,20 @@ Note `Resolve` is **secret** in the fixture (the mock shows the toggle; this exe
 
 ## Backend by curl (after PR 2 and PR 3)
 
-0. The character created through the old wizard before PR 2 (`02-api-site.md` §5.0) still
+1. The character created through the old wizard before PR 2 (`02-api-site.md` §5.0) still
    exists: `GET /api/characters/<old id>` returns its old name as `display_name`,
    `is_keepsake: true`, `session_id`, `campaign_id` and `config_version_id` all null, and a
    snapshot with Name, Hit points and one Attribute per ability score. The campaign it was
-   seated in shows an empty seat for that user. Its `slot`, avatar and colour are unchanged.
+   was attached to shows no character for that user. Its `slot`, avatar and colour are
+   unchanged.
 2. As GM: `POST /api/campaigns/` "Secret to Bear"; `PUT …/character-config/draft` with
    config v1; `GET …/character-config` shows `draft`, no `latest`, `pending_changes` = six
    `added`. `POST …/publish` → `latest.version == 1`, `draft == null`, `versions` has one.
 3. `POST …/publish` again → 400 "No changes since v1".
 4. As Player (after accepting the invite): `POST /api/characters/` with the session id and
    Brannoc's values → 201, `display_name == "Brannoc Vell"`, `config_version_id` set,
-   `config_snapshot.version == 1`. `GET /api/sessions/{id}/party` shows Brannoc seated with
-   no `values` key. Second `POST` with the same session → 400 "already have a living
+   `config_snapshot.version == 1`. `GET /api/sessions/{id}/party` shows Brannoc with
+   no `values` key, and `session_joined_users` has **no** character column at all. Second `POST` with the same session → 400 "already have a living
    character".
 5. As GM: `POST /api/games/` (Start). `GET` the api-game room (`/api/game/{game_id}`) as
    Player: `character_configs` has one key; Player's `values` has six entries. As a **third**
@@ -89,13 +90,21 @@ Note `Resolve` is **secret** in the fixture (the mock shows the toggle; this exe
     Accept the invite (from Home or the chooser's "Waiting on you"), open `/character/new`
     again → "Secret to Bear · v1" row enabled.
 13. Click it → the form: plate reads "Built against v1 · run by <GM>", six inputs in GM
-    order with attributes grouped. Enter Brannoc's values, Take a seat → toast "Seated at
-    Secret to Bear", lands on `/character/<id>` showing the name, `v1`, and the values.
+    order with attributes grouped. Enter Brannoc's values, Join the party → toast "Joined
+    the party at Secret to Bear", lands on `/character/<id>` showing the name, `v1`, and the values.
 14. Characters tab shows Brannoc with "Secret to Bear"; Home hand shows Brannoc. GM's
     campaign drawer shows Brannoc in the party.
-15. Player: campaign drawer → Eject character → party shows the seat empty; `/character/new?session_id=…`
-    → creating a second character succeeds only after ejecting (try before ejecting → 400
-    toast naming the rule).
+15. Player: with Brannoc in the party, open `/character/new?session_id=…` and submit → 400 toast
+    naming the one-per-table rule. Then campaign drawer → **Eject character**: the confirm
+    dialog warns the character leaves for good, the party row goes, and the drawer now offers
+    "Create a character". `GET /api/characters/<brannoc>` returns `session_id`,
+    `campaign_id` and `config_version_id` all null and `is_keepsake: true`; the Characters
+    tab shows it as a Keepsake with no campaign title and no version tag. Creating a
+    character for that session now succeeds — build Brannoc again with the same fixture
+    values; **that second character is the one the rest of this run uses**. The ejected
+    copy stays in the Characters tab and never reappears in any party or chooser.
+    Also mark Brannoc dead (`PATCH /alive`) and confirm he is **still in the party** and that
+    a second character is still refused — aliveness must not free the slot.
 16. GM edits a value on Brannoc from `/character/<id>` (as host) → saved. Start a game,
     try again → toast "A game is running: edit this character in the game".
 
@@ -116,12 +125,23 @@ Note `Resolve` is **secret** in the fixture (the mock shows the toggle; this exe
     three expected pending changes before publishing.
 22. Start a new game. Brannoc enters on v1: room `character_configs` has one key (v1);
     seat card and sheet unchanged; `GET …/character-config` as GM lists v2 as latest.
-    A new Player character created now builds against v2 and shows Nerve, not Wits; in the
-    same game the room holds two config keys.
+    A third user (or the second browser profile after ejecting) creates a character now: it
+    builds against v2 and shows Nerve, not Wits; in the same game the room holds two config
+    keys.
+    **Eject mid-game.** With that game still running, set the v2 character's Nerve to a
+    value it did not start with, then eject it from the campaign drawer. Check, in order:
+    the confirm dialog appears; the player's card empties on **both** screens without a reload (the
+    room got the identity-only PUT); `GET /api/characters/<that id>` shows the mid-game Nerve
+    value persisted cold, not the value it was created with — this is the one-off ETL, and
+    it is the whole reason eject reads the room before it unbinds; the character is a
+    keepsake. Then stop api-game (`docker stop api-game-dev`), try to eject Brannoc, and
+    confirm the toast says the state could not be saved and Brannoc is **still in the
+    party, unchanged** — nothing half-done. Start api-game again.
 23. GM deletes the campaign. Player's Characters tab shows Brannoc marked Keepsake; the
-    detail page renders every value from the snapshot; Seat/Eject actions absent. Brannoc
-    and the migrated character from step 0 now look identical in state: both keepsakes, both
-    without a version tag, both listed with no campaign title.
+    detail page renders every value from the snapshot; the Eject action is absent. Brannoc,
+    the Brannoc ejected in step 15, and the migrated character from step 1 now look
+    identical in state: all keepsakes, none with a version tag, none listed with a campaign
+    title. One orphan state, reached three ways.
 24. Copy sweep: with the game open, search the DOM text (browser find) for "initiative",
     "AC", "class", "level", "spell" — none present.
 

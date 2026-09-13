@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 from .connection_manager import manager, RoomManager
 from .websocket_events import WebsocketEvent
 from map_token_ops import filter_map_token_state_for_player
+from character_values import filter_values_for_viewer
 
 # Wire event type -> handler. Written out EXPLICITLY, never
 # getattr(WebsocketEvent, event_type): the same class also carries
@@ -32,11 +33,10 @@ EVENT_HANDLERS = {
     "player_kicked": WebsocketEvent.player_kicked,
     "role_change": WebsocketEvent.role_change,
     "color_change": WebsocketEvent.color_change,
-    "combat_state": WebsocketEvent.combat_state,
     "dice_roll": WebsocketEvent.dice_roll,
     "dice_prompt": WebsocketEvent.dice_prompt,
     "dice_prompt_clear": WebsocketEvent.dice_prompt_clear,
-    "initiative_prompt_all": WebsocketEvent.initiative_prompt_all,
+    "group_prompt": WebsocketEvent.group_prompt,
     "clear_system_messages": WebsocketEvent.clear_system_messages,
     "clear_all_messages": WebsocketEvent.clear_all_messages,
     "remote_audio_play": WebsocketEvent.remote_audio_play,
@@ -99,10 +99,13 @@ def register_websocket_routes(app: FastAPI):
                     "data": {
                         "seat_layout": room.get("seat_layout", []),
                         "dungeon_master": room.get("dungeon_master", {}),
-                        "combat_active": room.get("combat_active", False),
                         "max_players": room.get("max_players", 8),
                         "campaign_id": room.get("campaign_id", ""),
-                        "player_metadata": room.get("player_metadata", {}),
+                        # Secret component values never reach a third player — same
+                        # per-socket rule as the hidden tokens above, and the same reason:
+                        # this send is already addressed to one viewer, so filter here.
+                        "player_metadata": filter_values_for_viewer(room, user_id),
+                        "character_configs": room.get("character_configs", {}),
                         "audio_state": room.get("audio_state", {}),
                         "spotify": room.get("spotify", {}),
                         "map_token_state": map_token_state,

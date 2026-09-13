@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -29,6 +29,9 @@ class Campaign(Base):
     # Seats at the table (1-8). Read into the start payload every time a game
     # starts, so an edit during a live game applies to the next one.
     max_players = Column(Integer, nullable=False, server_default='8')
+    # GM's working copy of the character config (a shared_contracts CharacterConfig).
+    # NULL = never edited. Cleared by publish, which mints an immutable version row.
+    character_config_draft = Column(JSONB, nullable=True)
 
     # Relationships
     sessions = relationship("Session", back_populates="campaign", cascade="all, delete-orphan")

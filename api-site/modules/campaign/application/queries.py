@@ -77,11 +77,22 @@ class GetCampaignMembers:
         # Imports here to avoid circular dependencies between modules
         from modules.user.model.user_model import User
         from modules.characters.model.character_model import Character
-        from modules.characters.model.character_class_model import CharacterClassEntry
+        from modules.session.model.session_model import Session as SessionModel
 
         campaign = self.campaign_repo.get_by_id(campaign_id)
         if not campaign:
             return []
+
+        # The party, read once: a character's session_id is its party membership, so this
+        # is the campaign's session joined to characters, keyed by owner.
+        session_row = self.db.query(SessionModel).filter(SessionModel.campaign_id == campaign_id).first()
+        party_by_user_id = {}
+        if session_row is not None:
+            for character in self.db.query(Character).filter(
+                Character.session_id == session_row.id,
+                Character.is_deleted == False,  # noqa: E712
+            ).all():
+                party_by_user_id[character.user_id] = character
 
         # Get all active members (excludes INVITED)
         active_member_ids = campaign.get_all_member_ids()
@@ -95,26 +106,7 @@ class GetCampaignMembers:
             if not user:
                 continue
 
-            # Get character locked to THIS campaign (not just any character owned by user)
-            character = (
-                self.db.query(Character)
-                .options(selectinload(Character.class_entries))
-                .filter(
-                    and_(
-                        Character.user_id == member_id,
-                        Character.active_in_campaign_id == campaign_id,
-                        Character.is_deleted == False
-                    )
-                )
-                .first()
-            )
-
-            # Format multi-class as "Barbarian / Rogue" (code title-cased).
-            character_class_str = None
-            if character and character.class_entries:
-                character_class_str = ' / '.join(
-                    entry.class_code.replace("_", " ").title() for entry in character.class_entries
-                )
+            character = party_by_user_id.get(member_id)
 
             members.append({
                 'user_id': str(user.id),
@@ -122,13 +114,8 @@ class GetCampaignMembers:
                 'account_tag': user.account_tag,
                 'campaign_role': role.value if role else 'spectator',
                 'character_id': str(character.id) if character else None,
-                'character_name': character.character_name if character else None,
-                'character_level': character.level if character else None,
-                'character_class': character_class_str,
-                'character_race': (
-                    character.species_code.replace("_", " ").title()
-                    if character and character.species_code else None
-                ),
+                'character_display_name': character.display_name if character else None,
+                'character_is_alive': character.is_alive if character else None,
                 # Raw S3 key - the endpoint layer resolves a presigned URL
                 # (avatar_asset is lazy="joined", so no extra query here)
                 'character_avatar_s3_key': (

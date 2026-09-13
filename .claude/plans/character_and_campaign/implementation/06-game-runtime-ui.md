@@ -80,7 +80,7 @@ Every commit builds the full value object and calls `onChange(componentId, value
 
 The sheet opens where `CharacterSheet` opened (left drawer `character` tab, 2222); it
 shows for `getCharacterData(thisUserId)`; the GM additionally gets a member picker above
-it (a `Dropdown` of seated players) to open anyone's sheet. Delete `CharacterSheet.js`,
+it (a `Dropdown` of players holding a character) to open anyone's sheet. Delete `CharacterSheet.js`,
 `LevelUpModal.js`, `ModeratorControls.formatCharacterSummary` (59-66; the summary line is
 now `display_name` only).
 
@@ -103,6 +103,15 @@ v1. `describeChange` in the registry exists for the pending-state tooltip only
   dismisses it. `DMDicePrompt.js` shows active group prompts with a Clear button.
 - Delete `HorizontalInitiativeTracker.js` and its render (2502), and the
   `DMControlCenter` stale export in `app/game/components/index.js:9-19`.
+
+## Muted text on the dark drawer
+
+The registry's pieces were written for the character detail page, which is light, so their
+muted text uses `text-content-muted` (`#6B655E`). The game's drawer is dark, where that is
+unreadable — `text-content-secondary` (`#B5ADA6`) is the on-dark muted colour, which is why
+`hit_points/SeatCompact.js` already uses it. When `SheetFull` starts rendering in the game,
+either switch those four files' muted class or give the pieces a `tone` prop; do not leave
+one surface unreadable to spare the other.
 
 ## Copy sweep
 

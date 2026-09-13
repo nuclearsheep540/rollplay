@@ -1,383 +1,206 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Aggregate behaviour tests — vitals, death saves, level-up, skills, draft."""
+"""The character aggregate after the system-agnostic rewrite.
 
-from datetime import datetime
-from uuid import uuid4
+The aggregate knows what a component *is* — it can pair a value with a configuration and
+read a Name — and nothing about what any component *means*. There is no damage, no death,
+no level. Its one derived fact is the display name.
+"""
+
+import uuid
 
 import pytest
-
-from modules.characters.domain.character_aggregate import (
-    AbilityScores,
-    CharacterAggregate,
-    ClassEntry,
-    FeatAcquisition,
-    SkillProficiency,
+from pydantic import ValidationError
+from shared_contracts.character_config import CharacterConfig
+from shared_contracts.components.attribute import AttributeConfiguration, AttributeValue
+from shared_contracts.components.hit_points import (
+    HitPointsConfiguration,
+    HitPointsValue,
+    IntHitPointsRules,
+    IntHitPointsState,
+    ScaleStep,
+    WeightedHitPointsRules,
+    WeightedHitPointsState,
 )
+from shared_contracts.components.name import NameConfiguration, NameValue
+
+from modules.characters.domain.character_aggregate import UNNAMED, CharacterAggregate
 
 
-def _make(**overrides) -> CharacterAggregate:
-    now = datetime.utcnow()
-    defaults = dict(
-        id=uuid4(),
-        user_id=uuid4(),
-        edition_id=1,
-        edition_code="srd_5_2_1",
-        active_campaign=None,
-        character_name="Test",
-        species_code="human",
-        background_code="soldier",
-        class_entries=[ClassEntry("fighter", 1, True)],
-        ability_scores=AbilityScores.default(),
-        origin_ability_bonuses={},
-        save_proficiencies=frozenset(),
-        skills=[],
-        feats=[],
-        level=1,
-        xp=0,
-        hp_max=20,
-        hp_current=20,
-        hp_temp=0,
-        ac=14,
-        death_save_successes=0,
-        death_save_failures=0,
-        inspiration=False,
-        status_effects=[],
-        is_alive=True,
-        speed=30,
-        size="Medium",
-        languages=["Common"],
-        is_draft=False,
-        creation_step=None,
-        created_at=now,
-        updated_at=now,
+def make_config(*, names=(("name_1", "Name", True),), attributes=(("attribute_1", "Strength"),)):
+    components = [
+        NameConfiguration(id=component_id, label=label, required=required)
+        for component_id, label, required in names
+    ]
+    components.append(HitPointsConfiguration(
+        id="hit_points_1", label="Vitality",
+        rules=IntHitPointsRules(minimum=0, maximum=20, starting=10)))
+    components.extend(
+        AttributeConfiguration(id=component_id, label=label, minimum=1, maximum=20, default=10)
+        for component_id, label in attributes
     )
-    defaults.update(overrides)
-    return CharacterAggregate(**defaults)
+    return CharacterConfig(version=1, components=components)
 
 
-class TestDraftAndFinalize:
-    def test_create_draft_populates_minimum_fields(self):
-        uid = uuid4()
-        c = CharacterAggregate.create_draft(user_id=uid, edition_id=1, edition_code="srd_5_2_1", character_name="Draft", slot=0)
-        assert c.is_draft is True
-        assert c.creation_step == "edition"
-        assert c.user_id == uid
-        assert c.character_name == "Draft"
-        assert c.species_code == ""
-        assert c.class_entries == []
-
-    def test_create_draft_rejects_blank_name(self):
-        with pytest.raises(ValueError, match="required"):
-            CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="   ", slot=0)
-
-    def test_finalize_fails_with_missing_fields(self):
-        c = CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="Draft", slot=0)
-        with pytest.raises(ValueError, match="species_code"):
-            c.finalize()
-
-    def test_finalize_succeeds_when_complete(self):
-        c = CharacterAggregate.create_draft(user_id=uuid4(), edition_id=1, edition_code="srd_5_2_1", character_name="Done", slot=0)
-        c.species_code = "human"
-        c.background_code = "soldier"
-        c.class_entries = [ClassEntry("fighter", 1, True)]
-        c.hp_max = 10
-        c.finalize()
-        assert c.is_draft is False
-        assert c.creation_step is None
+def make_values(name_texts=("Brannoc Vell",), score=14):
+    values = {}
+    for index, text in enumerate(name_texts, start=1):
+        values[f"name_{index}"] = NameValue(component_id=f"name_{index}", text=text)
+    values["hit_points_1"] = HitPointsValue(
+        component_id="hit_points_1", state=IntHitPointsState(current=10))
+    values["attribute_1"] = AttributeValue(component_id="attribute_1", score=score)
+    return values
 
 
-class TestVitals:
-    def test_take_damage_reduces_hp(self):
-        c = _make(hp_current=20, hp_max=20)
-        c.take_damage(5)
-        assert c.hp_current == 15
-
-    def test_temp_hp_absorbs_first(self):
-        c = _make(hp_current=20, hp_temp=5)
-        c.take_damage(3)
-        assert c.hp_temp == 2
-        assert c.hp_current == 20
-
-    def test_damage_through_temp_hp(self):
-        c = _make(hp_current=20, hp_temp=3)
-        c.take_damage(7)
-        assert c.hp_temp == 0
-        assert c.hp_current == 16
-
-    def test_damage_to_zero_caps_at_zero(self):
-        c = _make(hp_current=5)
-        c.take_damage(100)
-        assert c.hp_current == 0
-
-    def test_heal_caps_at_hp_max(self):
-        c = _make(hp_current=10, hp_max=20)
-        c.heal(50)
-        assert c.hp_current == 20
-
-    def test_heal_from_zero_resets_death_saves(self):
-        c = _make(hp_current=0, death_save_successes=2, death_save_failures=1, is_alive=True)
-        c.heal(5)
-        assert c.death_save_successes == 0
-        assert c.death_save_failures == 0
-        assert c.hp_current == 5
-        assert c.is_alive is True
-
-    def test_set_temp_hp_replaces_does_not_stack(self):
-        # 5e rule: temp HP doesn't stack.
-        c = _make(hp_temp=8)
-        c.set_temp_hp(3)
-        assert c.hp_temp == 3
+def make_character(config=None, values=None, **overrides):
+    fields = {
+        "user_id": uuid.uuid4(),
+        "campaign_id": uuid.uuid4(),
+        "session_id": uuid.uuid4(),
+        "config_version_id": uuid.uuid4(),
+        "config": config or make_config(),
+        "values": values if values is not None else make_values(),
+        "slot": 0,
+    }
+    fields.update(overrides)
+    return CharacterAggregate.create(**fields)
 
 
-class TestDeathSaves:
-    def test_three_successes_stabilise(self):
-        c = _make(hp_current=0)
-        c.roll_death_save_success()
-        c.roll_death_save_success()
-        c.roll_death_save_success()
-        # Counters reset after stabilising at 0 HP.
-        assert c.death_save_successes == 0
-        assert c.death_save_failures == 0
-        assert c.is_alive is True
+class TestCreate:
+    def test_pairs_and_derives_the_display_name(self):
+        character = make_character()
+        assert character.display_name == "Brannoc Vell"
+        assert character.is_alive is True
 
-    def test_three_failures_kill(self):
-        c = _make(hp_current=0)
-        c.roll_death_save_failure()
-        c.roll_death_save_failure()
-        c.roll_death_save_failure()
-        assert c.is_alive is False
-        assert c.hp_current == 0
+    def test_two_name_components_join_with_a_space(self):
+        config = make_config(names=(("name_1", "First name", True), ("name_2", "Family name", False)))
+        character = make_character(config=config, values=make_values(("Brannoc", "Vell")))
+        assert character.display_name == "Brannoc Vell"
+
+    def test_no_name_components_falls_back(self):
+        config = CharacterConfig(version=1, components=[
+            AttributeConfiguration(id="attribute_1", label="Strength", minimum=1, maximum=20)])
+        character = make_character(
+            config=config,
+            values={"attribute_1": AttributeValue(component_id="attribute_1", score=10)})
+        assert character.display_name == UNNAMED
+
+    def test_missing_required_name_is_refused_by_label(self):
+        with pytest.raises(ValueError, match="Missing required: Name"):
+            make_character(values={"hit_points_1": HitPointsValue(
+                component_id="hit_points_1", state=IntHitPointsState(current=10))})
+
+    def test_blank_required_name_is_refused(self):
+        values = make_values()
+        values["name_1"] = NameValue(component_id="name_1", text="   ")
+        with pytest.raises(ValueError, match="Missing required"):
+            make_character(values=values)
+
+    def test_optional_name_may_be_absent(self):
+        config = make_config(names=(("name_1", "First name", True), ("name_2", "Nickname", False)))
+        character = make_character(config=config, values=make_values(("Brannoc",)))
+        assert character.display_name == "Brannoc"
+
+    def test_type_mismatch_is_a_hard_block(self):
+        values = make_values()
+        values["hit_points_1"] = NameValue(component_id="hit_points_1", text="nope")
+        with pytest.raises(ValidationError):
+            make_character(values=values)
+
+    def test_values_are_copied_not_aliased(self):
+        """The caller's dict must not become the aggregate's state."""
+        values = make_values()
+        character = make_character(values=values)
+        values["attribute_1"] = AttributeValue(component_id="attribute_1", score=1)
+        assert character.values["attribute_1"].score == 14
 
 
-class TestStatusAndInspiration:
-    def test_add_status_dedupes(self):
-        c = _make()
-        c.add_status("Poisoned")
-        c.add_status("Poisoned")
-        assert c.status_effects == ["Poisoned"]
+class TestSetComponentValue:
+    def test_replaces_one_value_and_redirves_the_name(self):
+        character = make_character()
+        character.set_component_value(NameValue(component_id="name_1", text="Someone Else"))
+        assert character.display_name == "Someone Else"
+        assert character.values["attribute_1"].score == 14
 
-    def test_remove_status_noop_if_absent(self):
-        c = _make(status_effects=["Poisoned"])
-        c.remove_status("Frightened")
-        assert c.status_effects == ["Poisoned"]
+    def test_mismatched_representation_raises(self):
+        character = make_character()
+        with pytest.raises(ValidationError):
+            character.set_component_value(HitPointsValue(
+                component_id="hit_points_1", state=WeightedHitPointsState(current_weight=1.0)))
 
-    def test_add_status_strips_whitespace_and_rejects_empty(self):
-        c = _make()
-        c.add_status("  Frightened  ")
-        assert c.status_effects == ["Frightened"]
-        with pytest.raises(ValueError):
-            c.add_status("   ")
+    def test_unknown_component_raises(self):
+        character = make_character()
+        with pytest.raises(ValidationError):
+            character.set_component_value(AttributeValue(component_id="attribute_9", score=3))
 
-    def test_set_inspiration(self):
-        c = _make()
-        c.set_inspiration(True)
-        assert c.inspiration is True
+    def test_out_of_range_score_is_accepted(self):
+        """Axis 2: the GM narrowed the range after this character was built. Information,
+        not a gate — the aggregate must not be the thing that blocks it."""
+        character = make_character()
+        character.set_component_value(AttributeValue(component_id="attribute_1", score=99))
+        assert character.values["attribute_1"].score == 99
+
+    def test_zero_hit_points_is_just_a_value(self):
+        """Reaching the zero point renders as empty and does nothing else. No auto-death."""
+        character = make_character()
+        character.set_component_value(HitPointsValue(
+            component_id="hit_points_1", state=IntHitPointsState(current=0)))
+        assert character.is_alive is True
 
 
-class TestXpAndLeveling:
-    def test_award_xp_accumulates(self):
-        c = _make(xp=100)
-        c.award_xp(250)
-        assert c.xp == 350
+class TestReplaceValues:
+    def test_whole_document_replace_rederives(self):
+        character = make_character()
+        character.replace_values(make_values(("New Name",), score=3))
+        assert character.display_name == "New Name"
+        assert character.values["attribute_1"].score == 3
 
-    def test_apply_level_gain_bumps_class_and_total(self):
-        c = _make(level=4, hp_max=30, hp_current=20)
-        c.apply_level_gain(class_code="fighter", hp_gained=6)
-        assert c.level == 5
-        assert c.class_entries[0].level == 2
-        assert c.hp_max == 36
-        assert c.hp_current == 26
+    def test_pairing_still_applies(self):
+        character = make_character()
+        with pytest.raises(ValidationError):
+            character.replace_values({"attribute_9": AttributeValue(component_id="attribute_9", score=1)})
 
-    def test_apply_level_gain_preserves_choice_records(self):
-        # Regression: skills are a projection of ClassEntry.chosen_skills, so a level bump must
-        # NOT drop chosen_skills / sub_choices (else L1 skills silently vanish on level-up).
-        c = _make(
-            level=2,
-            class_entries=[ClassEntry("barbarian", 2, True,
-                                      {"barbarian_weapon_mastery": ["greataxe"]},
-                                      ["athletics", "perception"])],
-        )
-        c.apply_level_gain(class_code="barbarian", hp_gained=7)
-        entry = c.class_entries[0]
-        assert entry.level == 3
-        assert entry.chosen_skills == ["athletics", "perception"]
-        assert entry.sub_choices == {"barbarian_weapon_mastery": ["greataxe"]}
 
-    def test_apply_level_gain_caps_at_level_20(self):
-        c = _make(level=20)
-        with pytest.raises(ValueError, match="max level"):
-            c.apply_level_gain(class_code="fighter", hp_gained=5)
+class TestTableMembership:
+    def test_a_new_character_is_not_a_keepsake(self):
+        assert make_character().is_keepsake is False
 
-    def test_apply_level_gain_rejects_unknown_class(self):
-        c = _make()
-        with pytest.raises(ValueError, match="multi-classing"):
-            c.apply_level_gain(class_code="wizard", hp_gained=5)
+    def test_unbind_makes_a_keepsake_and_keeps_everything_else(self):
+        character = make_character()
+        character.unbind_from_table()
+        assert character.is_keepsake is True
+        assert character.session_id is None
+        assert character.campaign_id is None
+        assert character.config_version_id is None
+        assert character.display_name == "Brannoc Vell"
+        assert character.values["attribute_1"].score == 14
+        assert len(character.config_snapshot.components) == 3
 
-    def test_add_class_promotes_to_multiclass(self):
-        c = _make(level=3, class_entries=[ClassEntry("fighter", 3, True)])
-        c.add_class("rogue")
-        assert c.level == 4
-        assert len(c.class_entries) == 2
-        rogue = next(e for e in c.class_entries if e.class_code == "rogue")
-        assert rogue.level == 1
+    def test_a_dead_character_is_still_at_its_table(self):
+        """Aliveness and membership are different facts; only ejecting removes a character."""
+        character = make_character()
+        character.set_alive(False)
+        assert character.is_alive is False
+        assert character.session_id is not None
+        assert character.is_keepsake is False
 
-    def test_add_class_demotion_preserves_choice_records(self):
-        # Demoting a primary when multiclassing must keep its chosen_skills / sub_choices.
-        c = _make(level=3, class_entries=[
-            ClassEntry("fighter", 3, True, {"fighter_fighting_style": ["defense"]}, ["athletics", "intimidation"]),
+
+class TestWeightedRepresentation:
+    def test_weighted_hit_points_pair_and_store(self):
+        config = CharacterConfig(version=1, components=[
+            NameConfiguration(id="name_1", label="Name"),
+            HitPointsConfiguration(id="hit_points_1", label="Resolve", rules=WeightedHitPointsRules(
+                starting_weight=1.0,
+                scale=[ScaleStep(weight=1.0, label="Full"),
+                       ScaleStep(weight=0.6, label="Mid"),
+                       ScaleStep(weight=0.0, label="Zero")])),
         ])
-        c.add_class("rogue", is_primary=True)
-        fighter = next(e for e in c.class_entries if e.class_code == "fighter")
-        assert fighter.is_primary is False
-        assert fighter.chosen_skills == ["athletics", "intimidation"]
-        assert fighter.sub_choices == {"fighter_fighting_style": ["defense"]}
-
-    def test_add_class_blocks_duplicate(self):
-        c = _make()
-        with pytest.raises(ValueError, match="already has"):
-            c.add_class("fighter")
-
-
-class TestSubclass:
-    def test_pick_subclass_records_choice(self):
-        c = _make(level=3, class_entries=[ClassEntry("barbarian", 3, True)])
-        c.pick_subclass("barbarian", "path_of_the_berserker", at_level=3)
-        assert len(c.subclasses) == 1
-        entry = c.subclasses[0]
-        assert entry.class_code == "barbarian"
-        assert entry.subclass_code == "path_of_the_berserker"
-        assert entry.chosen_at_level == 3
-
-    def test_pick_subclass_replaces_on_repick(self):
-        c = _make(level=3, class_entries=[ClassEntry("cleric", 3, True)])
-        c.pick_subclass("cleric", "life_domain")
-        c.pick_subclass("cleric", "life_domain", at_level=3)  # re-pick same class → one row
-        assert len(c.subclasses) == 1
-
-    def test_pick_subclass_requires_the_class(self):
-        c = _make(class_entries=[ClassEntry("fighter", 1, True)])
-        with pytest.raises(ValueError, match="no class"):
-            c.pick_subclass("wizard", "evoker")
-
-
-class TestAsi:
-    def test_apply_asi_two_into_one_ability(self):
-        c = _make(ability_scores=AbilityScores(10, 14, 12, 10, 10, 10))
-        c.apply_asi({"strength": 2})
-        assert c.ability_scores.strength == 12
-
-    def test_apply_asi_one_one(self):
-        c = _make(ability_scores=AbilityScores(10, 14, 12, 10, 10, 10))
-        c.apply_asi({"strength": 1, "constitution": 1})
-        assert c.ability_scores.strength == 11
-        assert c.ability_scores.constitution == 13
-
-    def test_apply_asi_rejects_wrong_total(self):
-        c = _make()
-        with pytest.raises(ValueError, match="exactly 2"):
-            c.apply_asi({"strength": 1})
-
-    def test_apply_asi_caps_at_twenty(self):
-        c = _make(ability_scores=AbilityScores(20, 10, 10, 10, 10, 10))
-        with pytest.raises(ValueError, match="above 20"):
-            c.apply_asi({"strength": 2})
-
-
-class TestSkillsAndSaves:
-    def test_add_skill_proficiency_dedupes(self):
-        c = _make()
-        c.add_skill_proficiency("athletics", "CLASS")
-        c.add_skill_proficiency("athletics", "CLASS")
-        assert len(c.skills) == 1
-
-    def test_add_skill_replaces_with_different_source(self):
-        c = _make()
-        c.add_skill_proficiency("athletics", "CLASS")
-        c.add_skill_proficiency("athletics", "FEAT", expertise=True)
-        assert len(c.skills) == 1
-        assert c.skills[0].source == "FEAT"
-        assert c.skills[0].expertise is True
-
-    def test_remove_skill(self):
-        c = _make(skills=[SkillProficiency("athletics", "CLASS")])
-        c.remove_skill_proficiency("athletics")
-        assert c.skills == []
-
-    def test_set_save_proficiencies(self):
-        c = _make()
-        c.set_save_proficiencies({"strength", "constitution"})
-        assert c.save_proficiencies == frozenset({"strength", "constitution"})
-
-    def test_invalid_save_ability_rejected(self):
-        c = _make()
-        with pytest.raises(KeyError):
-            c.set_save_proficiencies({"strength", "wisdomx"})
-
-
-class TestLockingAndDeletion:
-    def test_lock_then_unlock(self):
-        c = _make()
-        cid = uuid4()
-        c.lock_to_campaign(cid)
-        assert c.active_campaign == cid
-        assert c.is_locked() is True
-        c.unlock_from_campaign()
-        assert c.active_campaign is None
-
-    def test_cannot_delete_when_locked(self):
-        c = _make()
-        c.lock_to_campaign(uuid4())
-        assert c.can_be_deleted() is False
-
-    def test_double_lock_raises(self):
-        c = _make()
-        c.lock_to_campaign(uuid4())
-        with pytest.raises(ValueError, match="already locked"):
-            c.lock_to_campaign(uuid4())
-
-
-class TestCurrencyAndInventoryReplace:
-    """Whole-map / whole-list replace used by the runtime PATCH (J.2/J.3)."""
-
-    OLD = datetime(2000, 1, 1)
-
-    def test_replace_currency_drops_absent_coins(self):
-        c = _make(currency={"gp": 3, "sp": 10})
-        c.replace_currency({"gp": 5})
-        assert c.currency == {"gp": 5}  # sp dropped by whole-map replace
-
-    def test_replace_currency_refreshes_timestamp(self):
-        c = _make(currency={"gp": 3})
-        c.updated_at = self.OLD
-        c.replace_currency({"gp": 5})
-        assert c.updated_at > self.OLD
-
-    def test_replace_currency_empty_map_refreshes_timestamp(self):
-        c = _make(currency={"gp": 3})
-        c.updated_at = self.OLD
-        c.replace_currency({})  # clearing all coins must still touch
-        assert c.currency == {}
-        assert c.updated_at > self.OLD
-
-    def test_replace_inventory_drops_absent_items(self):
-        c = _make()
-        c.replace_inventory([{"item_code": "rope", "quantity": 2}])
-        c.replace_inventory([{"item_code": "torch", "quantity": 5}])
-        assert [i.item_code for i in c.inventory] == ["torch"]
-        assert c.inventory[0].quantity == 5
-
-    def test_replace_inventory_defaults_quantity_and_notes(self):
-        c = _make()
-        c.replace_inventory([{"item_code": "rope"}])
-        assert c.inventory[0].quantity == 1
-        assert c.inventory[0].notes == ""
-
-    def test_replace_inventory_empty_list_refreshes_timestamp(self):
-        c = _make()
-        c.replace_inventory([{"item_code": "rope"}])
-        c.updated_at = self.OLD
-        c.replace_inventory([])  # clearing inventory must still touch
-        assert c.inventory == []
-        assert c.updated_at > self.OLD
+        character = make_character(config=config, values={
+            "name_1": NameValue(component_id="name_1", text="Brannoc"),
+            "hit_points_1": HitPointsValue(
+                component_id="hit_points_1", state=WeightedHitPointsState(current_weight=1.0)),
+        })
+        character.set_component_value(HitPointsValue(
+            component_id="hit_points_1", state=WeightedHitPointsState(current_weight=0.6)))
+        assert character.values["hit_points_1"].state.current_weight == 0.6

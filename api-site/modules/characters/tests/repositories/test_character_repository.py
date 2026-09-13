@@ -1,238 +1,134 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""End-to-end repository round-trips via the in-memory SQLite fixture.
+"""Character persistence, and the database fact that one character per user per party is.
 
-Confirms the v2 schema persists every field group (vitals, class entries,
-ability scores, save profs, skill profs, feat acquisitions) and that
-``save`` then ``get_by_id`` returns an equivalent aggregate.
+The partial unique index is the rule — not application code — so these tests go through the
+database rather than around it.
 """
 
-from datetime import datetime
-from uuid import uuid4
+import uuid
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
-from modules.characters.domain.character_aggregate import (
-    AbilityScores,
-    CharacterAggregate,
-    ClassEntry,
-    FeatAcquisition,
-    SkillProficiency,
-)
+from modules.characters.domain.character_aggregate import CharacterAggregate
 
 
-def _make(user_id, edition_id, **overrides) -> CharacterAggregate:
-    now = datetime.utcnow()
-    defaults = dict(
-        id=None,
-        user_id=user_id,
-        edition_id=edition_id,
-        edition_code="srd_5_2_1",
-        active_campaign=None,
-        character_name="Rolfin",
-        species_code="dwarf",
-        background_code="soldier",
-        class_entries=[
-            ClassEntry("fighter", 3, True),
-            ClassEntry("rogue", 2, False),
-        ],
-        ability_scores=AbilityScores(16, 12, 14, 10, 13, 8),
-        origin_ability_bonuses={},
-        save_proficiencies=frozenset({"strength", "constitution"}),
-        skills=[
-            SkillProficiency("athletics", "CLASS"),
-            SkillProficiency("perception", "BACKGROUND", expertise=True),
-        ],
-        feats=[
-            FeatAcquisition("savage_attacker", 1, "BACKGROUND_ORIGIN"),
-            FeatAcquisition("alert", 4, "ASI"),
-        ],
-        level=5,
-        xp=6500,
-        hp_max=42,
-        hp_current=42,
-        hp_temp=0,
-        ac=16,
-        death_save_successes=0,
-        death_save_failures=0,
-        inspiration=False,
-        status_effects=["Poisoned"],
-        is_alive=True,
-        speed=25,
-        size="Medium",
-        languages=["Common", "Dwarvish"],
-        is_draft=False,
-        creation_step=None,
-        created_at=now,
-        updated_at=now,
-        slot=0,
-    )
-    defaults.update(overrides)
-    return CharacterAggregate(**defaults)
+@pytest.fixture
+def host(create_user):
+    return create_user(email="gm@example.com", screen_name="Matt")
 
 
-class TestSaveAndGet:
-    def test_round_trip_preserves_every_field(self, character_repo, create_user, seed_default_edition):
-        user = create_user("rolfin@example.com")
-        original = _make(user.id, seed_default_edition)
-        character_repo.save(original)
-        assert original.id is not None
-
-        fetched = character_repo.get_by_id(original.id)
-        assert fetched is not None
-        assert fetched.character_name == "Rolfin"
-        assert fetched.species_code == "dwarf"
-        assert fetched.background_code == "soldier"
-        assert fetched.level == 5
-        assert fetched.xp == 6500
-        assert fetched.hp_max == 42
-        assert fetched.ac == 16
-        assert fetched.size == "Medium"
-        assert fetched.speed == 25
-        assert sorted(fetched.languages) == ["Common", "Dwarvish"]
-        assert fetched.status_effects == ["Poisoned"]
-        assert fetched.is_draft is False
-
-        assert sorted(e.class_code for e in fetched.class_entries) == ["fighter", "rogue"]
-        primary = next(e for e in fetched.class_entries if e.is_primary)
-        assert primary.class_code == "fighter"
-        assert primary.level == 3
-
-        assert fetched.ability_scores.strength == 16
-        assert fetched.ability_scores.charisma == 8
-
-        assert fetched.save_proficiencies == frozenset({"strength", "constitution"})
-
-        skill_map = {s.skill_code: s for s in fetched.skills}
-        assert skill_map["athletics"].source == "CLASS"
-        assert skill_map["athletics"].expertise is False
-        assert skill_map["perception"].source == "BACKGROUND"
-        assert skill_map["perception"].expertise is True
-
-        feat_map = {f.feat_code: f for f in fetched.feats}
-        assert feat_map["savage_attacker"].source == "BACKGROUND_ORIGIN"
-        assert feat_map["savage_attacker"].level == 1
-        assert feat_map["alert"].source == "ASI"
-        assert feat_map["alert"].level == 4
-
-    def test_save_then_update_replaces_children_cleanly(self, character_repo, create_user, seed_default_edition):
-        user = create_user("update@example.com")
-        c = _make(user.id, seed_default_edition)
-        character_repo.save(c)
-
-        # Replace class entries; the old fighter+rogue rows should be deleted.
-        c.class_entries = [ClassEntry("wizard", 5, True)]
-        c.skills = []
-        c.feats = []
-        c.save_proficiencies = frozenset()
-        character_repo.save(c)
-
-        fetched = character_repo.get_by_id(c.id)
-        assert len(fetched.class_entries) == 1
-        assert fetched.class_entries[0].class_code == "wizard"
-        assert fetched.skills == []
-        assert fetched.feats == []
-        assert fetched.save_proficiencies == frozenset()
+@pytest.fixture
+def player(create_user):
+    return create_user(email="player@example.com", screen_name="Bran")
 
 
-class TestQueries:
-    def test_get_by_user_id_orders_by_updated_at_desc(self, character_repo, create_user, seed_default_edition):
-        user = create_user("two@example.com")
-        first = _make(user.id, seed_default_edition, character_name="First", slot=0)
+@pytest.fixture
+def campaign(create_campaign, host, seed_default_edition):
+    return create_campaign(host_id=host.id, title="Secret to Bear")
+
+
+@pytest.fixture
+def session(create_session, campaign, host):
+    return create_session(campaign_id=campaign.id, host_id=host.id)
+
+
+class TestRoundTrip:
+    def test_snapshot_and_values_survive_the_json_columns(
+            self, character_repo, create_character, player, campaign, session):
+        character = create_character(
+            user_id=player.id, name="Brannoc Vell",
+            campaign_id=campaign.id, session_id=session.id)
+
+        reloaded = character_repo.get_by_id(character.id)
+        assert reloaded.display_name == "Brannoc Vell"
+        assert reloaded.config_snapshot.components[1].rules.maximum == 20
+        assert reloaded.values["attribute_1"].score == 10
+        # The union resolved on the way back out, not a raw dict.
+        assert reloaded.values["hit_points_1"].state.current == 10
+
+    def test_get_by_ids_returns_a_map(self, character_repo, create_character, player):
+        first = create_character(user_id=player.id, name="One", slot=0)
+        second = create_character(user_id=player.id, name="Two", slot=1)
+        found = character_repo.get_by_ids([first.id, second.id, uuid.uuid4()])
+        assert set(found) == {first.id, second.id}
+
+    def test_get_by_ids_with_nothing_asks_nothing(self, character_repo):
+        assert character_repo.get_by_ids([]) == {}
+
+
+class TestPartyReads:
+    def test_party_is_every_character_bound_to_the_session(
+            self, character_repo, create_character, player, host, campaign, session):
+        mine = create_character(user_id=player.id, name="Brannoc", campaign_id=campaign.id, session_id=session.id)
+        theirs = create_character(user_id=host.id, name="Vell", campaign_id=campaign.id, session_id=session.id)
+        create_character(user_id=player.id, name="Keepsake", slot=1)  # unbound
+
+        party = character_repo.get_party_for_session(session.id)
+        assert {character.id for character in party} == {mine.id, theirs.id}
+
+    def test_party_excludes_deleted(self, character_repo, create_character, player, campaign, session):
+        character = create_character(user_id=player.id, campaign_id=campaign.id, session_id=session.id)
+        character.soft_delete()
+        character_repo.save(character)
+        assert character_repo.get_party_for_session(session.id) == []
+
+    def test_get_party_character_finds_that_users_one(
+            self, character_repo, create_character, player, campaign, session):
+        character = create_character(user_id=player.id, campaign_id=campaign.id, session_id=session.id)
+        assert character_repo.get_party_character(session.id, player.id).id == character.id
+
+    def test_get_party_character_is_none_for_a_user_with_none(
+            self, character_repo, player, session):
+        assert character_repo.get_party_character(session.id, player.id) is None
+
+
+class TestOneCharacterPerParty:
+    def test_a_second_character_at_the_same_table_is_refused(
+            self, db_session, character_repo, create_character, player, campaign, session,
+            make_character_config, make_character_values):
+        create_character(user_id=player.id, campaign_id=campaign.id, session_id=session.id, slot=0)
+
+        second = CharacterAggregate.create(
+            user_id=player.id, campaign_id=campaign.id, session_id=session.id,
+            config_version_id=None, config=make_character_config(),
+            values=make_character_values(name="Interloper"), slot=1)
+        with pytest.raises(IntegrityError):
+            character_repo.save(second)
+        db_session.rollback()
+
+    def test_aliveness_does_not_free_the_slot(
+            self, db_session, character_repo, create_character, player, campaign, session,
+            make_character_config, make_character_values):
+        """A dead character keeps its place until someone ejects it — so the index must not
+        be qualified by is_alive, or a user could hold a dead one and a living one."""
+        first = create_character(user_id=player.id, campaign_id=campaign.id, session_id=session.id, slot=0)
+        first.set_alive(False)
         character_repo.save(first)
-        second = _make(user.id, seed_default_edition, character_name="Second", slot=1)
-        character_repo.save(second)
 
-        results = character_repo.get_by_user_id(user.id)
-        assert [c.character_name for c in results] == ["Second", "First"]
+        second = CharacterAggregate.create(
+            user_id=player.id, campaign_id=campaign.id, session_id=session.id,
+            config_version_id=None, config=make_character_config(),
+            values=make_character_values(name="Replacement"), slot=1)
+        with pytest.raises(IntegrityError):
+            character_repo.save(second)
+        db_session.rollback()
 
-    def test_get_by_active_campaign(self, character_repo, create_user, seed_default_edition):
-        user = create_user("camp@example.com")
-        campaign_id = uuid4()
-        attached = _make(user.id, seed_default_edition, character_name="Attached")
-        attached.lock_to_campaign(campaign_id)
-        character_repo.save(attached)
+    def test_ejecting_frees_the_slot(
+            self, character_repo, create_character, player, campaign, session):
+        first = create_character(user_id=player.id, campaign_id=campaign.id, session_id=session.id, slot=0)
+        first.unbind_from_table()
+        character_repo.save(first)
 
-        unattached = _make(user.id, seed_default_edition, character_name="Unattached", slot=1)
-        character_repo.save(unattached)
+        second = create_character(
+            user_id=player.id, name="Replacement",
+            campaign_id=campaign.id, session_id=session.id, slot=1)
+        assert character_repo.get_party_character(session.id, player.id).id == second.id
 
-        results = character_repo.get_by_active_campaign(campaign_id)
-        assert len(results) == 1
-        assert results[0].character_name == "Attached"
-
-    def test_get_user_character_for_campaign_returns_only_locked_one(
-        self, character_repo, create_user, seed_default_edition
-    ):
-        user_a = create_user("a@example.com")
-        user_b = create_user("b@example.com")
-        campaign_id = uuid4()
-
-        a_char = _make(user_a.id, seed_default_edition, character_name="A")
-        a_char.lock_to_campaign(campaign_id)
-        character_repo.save(a_char)
-
-        b_char = _make(user_b.id, seed_default_edition, character_name="B")
-        b_char.lock_to_campaign(campaign_id)
-        character_repo.save(b_char)
-
-        result = character_repo.get_user_character_for_campaign(user_a.id, campaign_id)
-        assert result is not None
-        assert result.character_name == "A"
-
-
-class TestDelete:
-    def test_soft_delete_hides_from_get_by_id(self, character_repo, create_user, seed_default_edition):
-        user = create_user("delete@example.com")
-        c = _make(user.id, seed_default_edition)
-        character_repo.save(c)
-        assert character_repo.delete(c.id) is True
-        assert character_repo.get_by_id(c.id) is None
-
-    def test_delete_blocked_when_locked(self, character_repo, create_user, seed_default_edition):
-        user = create_user("locked@example.com")
-        c = _make(user.id, seed_default_edition)
-        c.lock_to_campaign(uuid4())
-        character_repo.save(c)
-        with pytest.raises(ValueError, match="locked"):
-            character_repo.delete(c.id)
-
-
-class TestSlotVisibility:
-    """Capacity slots: the roster shows only slots below the user's max_slots."""
-
-    def test_shrunk_max_slots_hides_high_slot_characters(
-        self, character_repo, user_repo, create_user, seed_default_edition
-    ):
-        user = create_user("slots-owner@example.com")
-        for slot_number in range(3):
-            character_repo.save(_make(
-                user.id, seed_default_edition,
-                character_name=f"Slotted {slot_number}", slot=slot_number,
-            ))
-
-        assert len(character_repo.get_by_user_id(user.id)) == 3
-
-        user.set_max_slots(2)
-        user_repo.save(user)
-
-        visible = character_repo.get_by_user_id(user.id)
-        assert len(visible) == 2
-        assert all(character.slot < 2 for character in visible)
-
-        # Nothing was deleted — raising capacity brings them back.
-        user.set_max_slots(4)
-        user_repo.save(user)
-        assert len(character_repo.get_by_user_id(user.id)) == 3
-
-    def test_soft_delete_frees_the_slot(
-        self, character_repo, create_user, seed_default_edition
-    ):
-        user = create_user("slots-free@example.com")
-        character_id = character_repo.save(_make(
-            user.id, seed_default_edition, character_name="Doomed", slot=0,
-        ))
-
-        assert character_repo.get_occupied_slots(user.id) == [0]
-        character_repo.delete(character_id)
-        assert character_repo.get_occupied_slots(user.id) == []
+    def test_two_users_may_each_hold_one(
+            self, character_repo, create_character, player, host, campaign, session):
+        create_character(user_id=player.id, campaign_id=campaign.id, session_id=session.id)
+        create_character(user_id=host.id, campaign_id=campaign.id, session_id=session.id)
+        assert len(character_repo.get_party_for_session(session.id)) == 2

@@ -67,23 +67,24 @@ async def request_role_change(
         raise Exception(f"Failed to connect to api-site: {e}")
 
 
-async def fetch_character_summary(character_id: str):
-    """Pull a character's session snapshot from api-site (Phase I).
+async def fetch_character_bundle(character_id: str):
+    """Pull a character's config and values from api-site, for putting it into a live room.
 
-    Best-effort: returns the snapshot dict on success, or ``None`` on any error so a stale
-    snapshot never breaks a seat update. Reduces to the player_metadata fields.
+    Best-effort: returns the bundle dict on success, or ``None`` on any error, so an
+    unreachable api-site never breaks a seat update — the room keeps what it has, which
+    while a game is open is the authoritative copy anyway.
     """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
-                f"{API_SITE_URL}/api/characters/internal/{character_id}/summary"
+                f"{API_SITE_URL}/api/characters/internal/{character_id}/runtime-bundle"
             )
             if response.status_code == 200:
                 return response.json()
             logger.warning(
-                f"Character summary {character_id} → api-site {response.status_code}"
+                f"Character bundle {character_id} → api-site {response.status_code}"
             )
             return None
     except httpx.RequestError as e:
-        logger.warning(f"Network error fetching character summary {character_id}: {e}")
+        logger.warning(f"Network error fetching character bundle {character_id}: {e}")
         return None

@@ -167,7 +167,7 @@ def start_a_game(session, repos, api_game=None, **kwargs):
         game_repository=game_repo,
         session_repository=session_repo,
         user_repository=user_repo,
-        character_repository=MagicMock(get_user_character_for_campaign=lambda *a: None),
+        character_repository=MagicMock(get_party_for_session=lambda *a: []),
         campaign_repository=campaign_repo,
         event_manager=event_manager,
         asset_repository=None,
@@ -380,7 +380,7 @@ class TestStartGame:
             run(StartGame(
                 game_repository=game_repo_, session_repository=session_repo_,
                 user_repository=user_repo,
-                character_repository=MagicMock(get_user_character_for_campaign=lambda *a: None),
+                character_repository=MagicMock(get_party_for_session=lambda *a: []),
                 campaign_repository=campaign_repo, event_manager=event_manager,
             ).execute(session.id, session.host_id))
 
@@ -414,7 +414,7 @@ class TestStartGame:
             run(StartGame(
                 game_repository=game_repo_, session_repository=session_repo_,
                 user_repository=user_repo,
-                character_repository=MagicMock(get_user_character_for_campaign=lambda *a: None),
+                character_repository=MagicMock(get_party_for_session=lambda *a: []),
                 campaign_repository=campaign_repo, event_manager=event_manager,
             ).execute(session.id, session.host_id))
 
@@ -939,47 +939,48 @@ class TestUpdateGame:
 class TestDisconnectFromGame:
     """A leaver's disconnect validates and writes NOTHING.
 
-    These are clobber guards. The room's player_metadata carries an HP snapshot
-    taken when the character was selected, while the in-game sheet patches HP
-    straight to PostgreSQL — so the room's copy is always the older of the two.
-    Writing it back on disconnect lost every hit the player had taken. If someone
-    reintroduces that write, the first two tests here fail.
+    These are clobber guards. api-game owns a player's component values while a game is
+    open and End writes them cold for everyone, leavers included — so a disconnect that
+    wrote anything would be writing a value it does not own. That is how this used to lose
+    hit points. If someone reintroduces the write, the first two tests here fail.
     """
 
-    def _character(self, campaign_id, user_id, hp_current=20):
+    def _character(self, campaign_id, user_id, values=None):
         return MagicMock(
-            hp_current=hp_current,
+            values=values if values is not None else {},
             is_alive=True,
-            active_campaign=campaign_id,
+            campaign_id=campaign_id,
             is_owned_by=lambda uid: uid == user_id,
         )
 
     def test_leaves_the_character_row_untouched(self, session, repos, game_repo, campaign, host):
         game = start_a_game(session, repos)
-        character = self._character(campaign.id, host.id, hp_current=7)
+        cold_values = {"hit_points_1": "cold"}
+        character = self._character(campaign.id, host.id, values=cold_values)
         character_repo = MagicMock(get_by_id=lambda _id: character)
 
         DisconnectFromGame(game_repo, character_repo).execute(
             game_id=game.id, user_id=host.id, character_id=uuid4(),
         )
 
-        # 7 is what the sheet wrote cold during play. The room still believes 20.
-        assert character.hp_current == 7
+        # Whatever the room believes, the row is not touched here — End owns that ETL.
+        assert character.values == cold_values
         character_repo.save.assert_not_called()
+        character.replace_values.assert_not_called()
 
     def test_does_not_kill_a_character_the_room_thinks_is_down(
         self, session, repos, game_repo, campaign, host
     ):
-        """A stale zero in the room must not mark a healed character dead."""
+        """Reaching a zero point is rendered, never acted on — least of all here."""
         game = start_a_game(session, repos)
-        character = self._character(campaign.id, host.id, hp_current=12)
+        character = self._character(campaign.id, host.id)
         character_repo = MagicMock(get_by_id=lambda _id: character)
 
         DisconnectFromGame(game_repo, character_repo).execute(
             game_id=game.id, user_id=host.id, character_id=uuid4(),
         )
 
-        character.mark_dead.assert_not_called()
+        character.set_alive.assert_not_called()
 
     def test_refused_when_no_game_is_running(self, session, repos, game_repo, campaign, host):
         game = start_a_game(session, repos)
@@ -1002,13 +1003,13 @@ class TestDisconnectFromGame:
                 game_id=game.id, user_id=player.id, character_id=uuid4(),
             )
 
-    def test_refused_for_a_character_locked_to_another_campaign(
+    def test_refused_for_a_character_at_another_table(
         self, session, repos, game_repo, host
     ):
         game = start_a_game(session, repos)
         character_repo = MagicMock(get_by_id=lambda _id: self._character(uuid4(), host.id))
 
-        with pytest.raises(ValueError, match="not locked to this campaign"):
+        with pytest.raises(ValueError, match="not at this campaign's table"):
             DisconnectFromGame(game_repo, character_repo).execute(
                 game_id=game.id, user_id=host.id, character_id=uuid4(),
             )

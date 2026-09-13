@@ -40,6 +40,101 @@ from shared_contracts.session import (
     SessionStats,
 )
 from shared_contracts.spotify import SPOTIFY_DEFAULT_CHANNEL_LEVEL, SpotifyState
+from shared_contracts.components.attribute import AttributeConfiguration, AttributeValue
+from shared_contracts.components.hit_points import (
+    HitPointsConfiguration,
+    HitPointsValue,
+    IntHitPointsRules,
+    IntHitPointsState,
+    ScaleStep,
+    WeightedHitPointsRules,
+    WeightedHitPointsState,
+)
+from shared_contracts.components.name import NameConfiguration, NameValue
+from shared_contracts.character_config import (
+    CharacterConfig,
+    CharacterSheet,
+    ComponentChange,
+    diff_configs,
+)
+
+
+# --- Component factories: a fresh object per call, never a module constant ---
+
+
+def make_name(component_id="name_1", label="Name", **overrides):
+    fields = {"id": component_id, "label": label, "secret": False, "max_length": 60, "required": True}
+    fields.update(overrides)
+    return NameConfiguration(**fields)
+
+
+def make_int_hit_points(component_id="hit_points_1", label="Vitality", **overrides):
+    rules = overrides.pop("rules", IntHitPointsRules(minimum=0, maximum=20, starting=10))
+    fields = {"id": component_id, "label": label, "secret": False, "rules": rules}
+    fields.update(overrides)
+    return HitPointsConfiguration(**fields)
+
+
+def make_weighted_hit_points(component_id="hit_points_2", label="Resolve", **overrides):
+    rules = overrides.pop("rules", WeightedHitPointsRules(
+        starting_weight=1.0,
+        scale=[
+            ScaleStep(weight=1.0, label="Full"),
+            ScaleStep(weight=0.8, label="High"),
+            ScaleStep(weight=0.6, label="Mid"),
+            ScaleStep(weight=0.3, label="Low"),
+            ScaleStep(weight=0.0, label="Zero"),
+        ],
+    ))
+    fields = {"id": component_id, "label": label, "secret": True, "rules": rules}
+    fields.update(overrides)
+    return HitPointsConfiguration(**fields)
+
+
+def make_attribute(component_id="attribute_1", label="Strength", **overrides):
+    fields = {"id": component_id, "label": label, "secret": False, "minimum": 1, "maximum": 20, "default": 10}
+    fields.update(overrides)
+    return AttributeConfiguration(**fields)
+
+
+def make_mock_config():
+    """The design mock's config: Name, Vitality (int 0..20 start 10), Resolve (weighted
+    Full/High/Mid/Low/Zero = 1.0/0.8/0.6/0.3/0.0, secret), Strength/Agility/Wits (1..20
+    default 10)."""
+    return CharacterConfig(version=1, components=[
+        make_name(),
+        make_int_hit_points(),
+        make_weighted_hit_points(),
+        make_attribute("attribute_1", "Strength"),
+        make_attribute("attribute_2", "Agility"),
+        make_attribute("attribute_3", "Wits"),
+    ])
+
+
+def make_mock_values():
+    """Brannoc Vell: name, Vitality 10, Resolve 1.0, Strength 14, Agility 10, Wits 8."""
+    return {
+        "name_1": NameValue(component_id="name_1", text="Brannoc Vell"),
+        "hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(current=10)),
+        "hit_points_2": HitPointsValue(component_id="hit_points_2", state=WeightedHitPointsState(current_weight=1.0)),
+        "attribute_1": AttributeValue(component_id="attribute_1", score=14),
+        "attribute_2": AttributeValue(component_id="attribute_2", score=10),
+        "attribute_3": AttributeValue(component_id="attribute_3", score=8),
+    }
+
+
+def make_player_character(**overrides):
+    fields = {
+        "user_id": "u1",
+        "player_name": "alice",
+        "campaign_role": "player",
+        "character_id": "char-1",
+        "display_name": "Brannoc Vell",
+        "config_version_id": "ver-1",
+        "values": make_mock_values(),
+    }
+    fields.update(overrides)
+    return PlayerCharacter(**fields)
 
 
 # --- ContractModel base class ---
@@ -502,21 +597,7 @@ class TestSessionRoundTrip:
                     user_id="u1",
                     player_name="alice",
                     campaign_role="player",
-                    character=PlayerCharacter(
-                        user_id="u1",
-                        player_name="alice",
-                        campaign_role="player",
-                        character_id="char-1",
-                        character_name="Aelwyn",
-                        character_class=["Wizard"],
-                        character_race="Elf",
-                        level=5,
-                        hp_current=22,
-                        hp_max=28,
-                        ac=14,
-                        color="#3b82f6",
-                        avatar_asset_id="img-asset-1",
-                    ),
+                    character=make_player_character(color="#3b82f6", avatar_asset_id="img-asset-1"),
                 ),
                 SessionUser(
                     user_id="u2",
@@ -679,6 +760,60 @@ class TestMapShapeConformance:
         assert required_keys.issubset(set(GridConfig.model_fields.keys()))
 
 
+class TestCharacterConfigEtl:
+    def test_start_payload_carries_config_versions(self):
+        payload = SessionStartPayload(
+            game_id="s1",
+            campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
+            character_configs={"ver-1": make_mock_config()},
+        )
+        revalidated = SessionStartPayload.model_validate_json(payload.model_dump_json())
+        assert revalidated.character_configs["ver-1"] == make_mock_config()
+
+    def test_start_payload_defaults_to_no_configs(self):
+        payload = SessionStartPayload(
+            game_id="s1",
+            campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
+        )
+        assert payload.character_configs == {}
+
+    def test_start_payload_rejects_a_config_that_is_not_one(self):
+        with pytest.raises(ValidationError):
+            SessionStartPayload(
+                game_id="s1",
+                campaign_id="c1",
+                dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
+                character_configs={"ver-1": {"version": 1, "components": "not a list"}},
+            )
+
+    def test_two_players_on_two_versions_both_travel(self):
+        """A config edit must not force anyone to rebuild: both versions ride along."""
+        older = make_mock_config()
+        newer = CharacterConfig(version=2, components=[make_name()])
+        payload = SessionStartPayload(
+            game_id="s1",
+            campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
+            character_configs={"ver-1": older, "ver-2": newer},
+        )
+        assert set(payload.character_configs) == {"ver-1", "ver-2"}
+
+    def test_player_state_round_trips_values_home(self):
+        state = PlayerState(
+            user_id="u1", player_name="alice", character_id="char-1",
+            config_version_id="ver-1", values=make_mock_values(), color="#3b82f6")
+        revalidated = PlayerState.model_validate_json(state.model_dump_json())
+        assert revalidated == state
+        assert revalidated.values["hit_points_1"].state.current == 10
+
+    def test_player_state_defaults_for_a_player_with_no_character(self):
+        state = PlayerState(user_id="u2", player_name="bob")
+        assert state.config_version_id is None
+        assert state.values == {}
+
+
 class TestSessionShapeConformance:
     def test_session_start_payload_has_required_fields(self):
         required_keys = {
@@ -693,33 +828,38 @@ class TestCharacterShapeConformance:
     def test_player_character_has_required_fields(self):
         required_keys = {
             "user_id", "player_name", "campaign_role", "character_id",
-            "character_name", "character_class", "character_race", "level",
-            "hp_current", "hp_max", "ac",
+            "display_name", "config_version_id", "values",
         }
         assert required_keys.issubset(set(PlayerCharacter.model_fields.keys()))
+
+    def test_player_character_carries_no_ruleset_fields(self):
+        """The runtime renders whatever the values are, by component type. A payload
+        carrying the old D&D field set must fail loudly, not be silently ignored."""
+        for dead_field in ("character_name", "character_class", "character_race",
+                           "level", "hp_current", "hp_max", "ac"):
+            assert dead_field not in PlayerCharacter.model_fields
+            with pytest.raises(ValidationError):
+                make_player_character(**{dead_field: 1})
+
+    def test_player_character_round_trips_values(self):
+        character = make_player_character()
+        revalidated = PlayerCharacter.model_validate_json(character.model_dump_json())
+        assert revalidated == character
+        assert revalidated.values["attribute_1"].score == 14
 
     def test_player_character_avatar_defaults_none(self):
         # tokens v3 (decision 30): avatar is optional wire baggage — old
         # payloads without it must revalidate cleanly, and its absence
         # means "color disc" downstream.
-        character = PlayerCharacter(
-            user_id="u1",
-            player_name="alice",
-            campaign_role="player",
-            character_id="char-1",
-            character_name="Aelwyn",
-            character_class=["Wizard"],
-            character_race="Elf",
-            level=5,
-            hp_current=22,
-            hp_max=28,
-            ac=14,
-        )
+        character = make_player_character()
         assert character.avatar_asset_id is None
         stamped = PlayerCharacter.model_validate(
             {**character.model_dump(), "avatar_asset_id": "img-1"}
         )
         assert stamped.avatar_asset_id == "img-1"
+
+    def test_player_character_defaults_to_no_values(self):
+        assert make_player_character(values={}).values == {}
 
     def test_session_end_final_state_has_required_fields(self):
         required_keys = {
@@ -1094,3 +1234,309 @@ class TestGridMath:
         # Math.round(2.5) === 3 in JS; Python's round() is banker's — the
         # shared math must match the client's snapTokenCenter.
         assert snap_axis_nearest(250.0, 0, 100.0, 2) == 300.0
+
+
+# --- Character components ---
+
+
+class TestNameComponent:
+    def test_configuration_round_trip(self):
+        configuration = make_name(label="First name", max_length=40)
+        assert NameConfiguration.model_validate(configuration.model_dump()) == configuration
+
+    def test_value_round_trip(self):
+        value = NameValue(component_id="name_1", text="Brannoc Vell")
+        assert NameValue.model_validate(value.model_dump()) == value
+
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            NameConfiguration(id="name_1", label="Name", nickname="nope")
+        with pytest.raises(ValidationError):
+            NameValue(component_id="name_1", text="x", nickname="nope")
+
+    def test_max_length_above_platform_ceiling_rejected(self):
+        with pytest.raises(ValidationError):
+            make_name(max_length=201)
+
+    def test_empty_label_rejected(self):
+        with pytest.raises(ValidationError):
+            make_name(label="")
+
+
+class TestIntHitPoints:
+    def test_round_trip(self):
+        configuration = make_int_hit_points()
+        assert HitPointsConfiguration.model_validate(configuration.model_dump()) == configuration
+
+    def test_minimum_not_below_maximum_rejected(self):
+        with pytest.raises(ValidationError):
+            IntHitPointsRules(minimum=10, maximum=10, starting=10)
+
+    def test_starting_outside_range_rejected(self):
+        with pytest.raises(ValidationError):
+            IntHitPointsRules(minimum=0, maximum=20, starting=21)
+
+    def test_state_round_trip(self):
+        state = IntHitPointsState(current=7)
+        assert IntHitPointsState.model_validate(state.model_dump()) == state
+
+    def test_state_accepts_current_outside_any_range(self):
+        """The value model is range-blind by design. A current that no longer fits its
+        configuration is a version difference (axis 2, surfaced by diff_configs), never a
+        data invariant — so the leaf must accept it."""
+        assert IntHitPointsState(current=-40).current == -40
+        assert IntHitPointsState(current=9999).current == 9999
+
+
+class TestWeightedHitPoints:
+    def test_round_trip(self):
+        configuration = make_weighted_hit_points()
+        assert HitPointsConfiguration.model_validate(configuration.model_dump()) == configuration
+
+    def test_first_weight_must_be_one(self):
+        with pytest.raises(ValidationError):
+            WeightedHitPointsRules(starting_weight=0.9, scale=[
+                ScaleStep(weight=0.9, label="High"), ScaleStep(weight=0.0, label="Zero")])
+
+    def test_last_weight_must_be_zero(self):
+        with pytest.raises(ValidationError):
+            WeightedHitPointsRules(starting_weight=1.0, scale=[
+                ScaleStep(weight=1.0, label="Full"), ScaleStep(weight=0.2, label="Low")])
+
+    def test_non_descending_weights_rejected(self):
+        with pytest.raises(ValidationError):
+            WeightedHitPointsRules(starting_weight=1.0, scale=[
+                ScaleStep(weight=1.0, label="Full"),
+                ScaleStep(weight=0.5, label="Mid"),
+                ScaleStep(weight=0.5, label="Also mid"),
+                ScaleStep(weight=0.0, label="Zero")])
+
+    def test_starting_weight_off_scale_rejected(self):
+        with pytest.raises(ValidationError):
+            WeightedHitPointsRules(starting_weight=0.4, scale=[
+                ScaleStep(weight=1.0, label="Full"), ScaleStep(weight=0.0, label="Zero")])
+
+    def test_fewer_than_two_steps_rejected(self):
+        with pytest.raises(ValidationError):
+            WeightedHitPointsRules(starting_weight=1.0, scale=[ScaleStep(weight=1.0, label="Full")])
+
+    def test_scale_survives_json_round_trip_as_a_list(self):
+        configuration = make_weighted_hit_points()
+        revalidated = HitPointsConfiguration.model_validate_json(configuration.model_dump_json())
+        assert isinstance(revalidated.rules.scale, list)
+        assert [step.label for step in revalidated.rules.scale] == ["Full", "High", "Mid", "Low", "Zero"]
+
+    def test_state_accepts_weight_not_on_any_scale(self):
+        """Range-blind for the same reason as the int state."""
+        assert WeightedHitPointsState(current_weight=0.45).current_weight == 0.45
+
+
+class TestHitPointsDiscriminators:
+    def test_int_rules_resolve_from_json(self):
+        payload = {"type": "hit_points", "id": "hit_points_1", "label": "Vitality", "secret": False,
+                   "rules": {"representation": "int", "minimum": 0, "maximum": 20, "starting": 10}}
+        configuration = HitPointsConfiguration.model_validate(payload)
+        assert isinstance(configuration.rules, IntHitPointsRules)
+
+    def test_weighted_rules_resolve_from_json(self):
+        payload = {"type": "hit_points", "id": "hit_points_2", "label": "Resolve", "secret": True,
+                   "rules": {"representation": "weighted", "starting_weight": 1.0,
+                             "scale": [{"weight": 1.0, "label": "Full"}, {"weight": 0.0, "label": "Zero"}]}}
+        configuration = HitPointsConfiguration.model_validate(payload)
+        assert isinstance(configuration.rules, WeightedHitPointsRules)
+
+    def test_states_resolve_from_json(self):
+        int_value = HitPointsValue.model_validate({
+            "type": "hit_points", "component_id": "hit_points_1",
+            "state": {"representation": "int", "current": 3}})
+        weighted_value = HitPointsValue.model_validate({
+            "type": "hit_points", "component_id": "hit_points_2",
+            "state": {"representation": "weighted", "current_weight": 0.6}})
+        assert isinstance(int_value.state, IntHitPointsState)
+        assert isinstance(weighted_value.state, WeightedHitPointsState)
+
+    def test_rules_without_representation_rejected(self):
+        with pytest.raises(ValidationError):
+            HitPointsConfiguration.model_validate({
+                "type": "hit_points", "id": "hit_points_1", "label": "Vitality",
+                "rules": {"minimum": 0, "maximum": 20, "starting": 10}})
+
+    def test_unknown_representation_rejected(self):
+        with pytest.raises(ValidationError):
+            HitPointsConfiguration.model_validate({
+                "type": "hit_points", "id": "hit_points_1", "label": "Vitality",
+                "rules": {"representation": "percentage", "minimum": 0, "maximum": 20}})
+
+
+class TestAttributeComponent:
+    def test_round_trip(self):
+        configuration = make_attribute()
+        assert AttributeConfiguration.model_validate(configuration.model_dump()) == configuration
+
+    def test_minimum_not_below_maximum_rejected(self):
+        with pytest.raises(ValidationError):
+            make_attribute(minimum=20, maximum=20)
+
+    def test_default_outside_range_rejected(self):
+        with pytest.raises(ValidationError):
+            make_attribute(minimum=1, maximum=20, default=21)
+
+    def test_default_none_accepted(self):
+        assert make_attribute(default=None).default is None
+
+    def test_value_round_trip(self):
+        value = AttributeValue(component_id="attribute_1", score=14)
+        assert AttributeValue.model_validate(value.model_dump()) == value
+
+
+class TestCharacterConfig:
+    def test_empty_components_accepted(self):
+        """A campaign that has published nothing is a legal config, not an error."""
+        assert CharacterConfig(version=1).components == []
+
+    def test_three_hit_points_components_accepted(self):
+        """Cardinality is the GM's call. The contract never says how many of a type."""
+        config = CharacterConfig(version=1, components=[
+            make_int_hit_points("hit_points_1", "Body"),
+            make_int_hit_points("hit_points_2", "Mind"),
+            make_weighted_hit_points("hit_points_3", "Spirit"),
+        ])
+        assert len(config.components) == 3
+
+    def test_duplicate_component_ids_rejected(self):
+        with pytest.raises(ValidationError):
+            CharacterConfig(version=1, components=[make_name("name_1"), make_name("name_1", label="Other")])
+
+    def test_version_below_one_rejected(self):
+        with pytest.raises(ValidationError):
+            CharacterConfig(version=0)
+
+    def test_configuration_by_id_returns_every_component(self):
+        config = make_mock_config()
+        by_id = config.configuration_by_id()
+        assert set(by_id) == {"name_1", "hit_points_1", "hit_points_2",
+                              "attribute_1", "attribute_2", "attribute_3"}
+
+    def test_mock_config_json_round_trip(self):
+        config = make_mock_config()
+        assert CharacterConfig.model_validate_json(config.model_dump_json()) == config
+
+    def test_unknown_component_type_rejected(self):
+        with pytest.raises(ValidationError):
+            CharacterConfig.model_validate({"version": 1, "components": [
+                {"type": "alignment", "id": "alignment_1", "label": "Alignment"}]})
+
+
+class TestCharacterSheet:
+    def test_mock_config_and_values_validate(self):
+        sheet = CharacterSheet(config=make_mock_config(), values=make_mock_values())
+        assert len(sheet.values) == 6
+
+    def test_values_key_must_match_component_id(self):
+        values = make_mock_values()
+        values["wrong_key"] = values.pop("name_1")
+        with pytest.raises(ValidationError):
+            CharacterSheet(config=make_mock_config(), values=values)
+
+    def test_unknown_component_id_rejected(self):
+        values = make_mock_values()
+        values["attribute_9"] = AttributeValue(component_id="attribute_9", score=10)
+        with pytest.raises(ValidationError):
+            CharacterSheet(config=make_mock_config(), values=values)
+
+    def test_type_mismatch_rejected(self):
+        """A name value against a hit-points configuration is a data invariant: hard block."""
+        values = make_mock_values()
+        values["hit_points_1"] = NameValue(component_id="hit_points_1", text="nope")
+        with pytest.raises(ValidationError):
+            CharacterSheet(config=make_mock_config(), values=values)
+
+    def test_representation_mismatch_rejected(self):
+        values = make_mock_values()
+        values["hit_points_1"] = HitPointsValue(
+            component_id="hit_points_1", state=WeightedHitPointsState(current_weight=1.0))
+        with pytest.raises(ValidationError):
+            CharacterSheet(config=make_mock_config(), values=values)
+
+    def test_name_longer_than_configured_max_rejected(self):
+        config = CharacterConfig(version=1, components=[make_name(max_length=5)])
+        with pytest.raises(ValidationError):
+            CharacterSheet(config=config, values={"name_1": NameValue(component_id="name_1", text="far too long")})
+
+    def test_attribute_above_configured_maximum_accepted(self):
+        """Axis 2: a GM raised or lowered the range after the character was built. That is a
+        version difference the GM is shown, never a block."""
+        values = make_mock_values()
+        values["attribute_1"] = AttributeValue(component_id="attribute_1", score=99)
+        assert CharacterSheet(config=make_mock_config(), values=values).values["attribute_1"].score == 99
+
+    def test_hit_points_current_above_configured_maximum_accepted(self):
+        """Axis 2, same reasoning as the attribute above."""
+        values = make_mock_values()
+        values["hit_points_1"] = HitPointsValue(
+            component_id="hit_points_1", state=IntHitPointsState(current=500))
+        assert CharacterSheet(config=make_mock_config(), values=values).values["hit_points_1"].state.current == 500
+
+    def test_weight_no_longer_on_the_scale_accepted(self):
+        """Axis 2: the GM edited the scale under a character that had picked a step."""
+        values = make_mock_values()
+        values["hit_points_2"] = HitPointsValue(
+            component_id="hit_points_2", state=WeightedHitPointsState(current_weight=0.45))
+        assert CharacterSheet(config=make_mock_config(), values=values).values["hit_points_2"].state.current_weight == 0.45
+
+    def test_missing_value_for_configured_component_accepted(self):
+        """Absence is not an error: a secret value stripped for this viewer, or a draft."""
+        values = make_mock_values()
+        del values["attribute_3"]
+        assert "attribute_3" not in CharacterSheet(config=make_mock_config(), values=values).values
+
+    def test_empty_values_accepted(self):
+        assert CharacterSheet(config=make_mock_config()).values == {}
+
+
+class TestDiffConfigs:
+    def test_identical_configs_report_nothing(self):
+        assert diff_configs(make_mock_config(), make_mock_config()) == []
+
+    def test_mock_v1_to_v2(self):
+        """Vitality maximum 20->25, Wits removed, Nerve added — in the documented order."""
+        older = make_mock_config()
+        newer = CharacterConfig(version=2, components=[
+            make_name(),
+            make_int_hit_points(rules=IntHitPointsRules(minimum=0, maximum=25, starting=10)),
+            make_weighted_hit_points(),
+            make_attribute("attribute_1", "Strength"),
+            make_attribute("attribute_2", "Agility"),
+            make_attribute("attribute_4", "Nerve"),
+        ])
+        changes = diff_configs(older, newer)
+        assert [(change.component_id, change.kind) for change in changes] == [
+            ("attribute_3", "removed"),
+            ("hit_points_1", "changed"),
+            ("attribute_4", "added"),
+        ]
+        assert changes[1].fields == ["rules.maximum"]
+        assert changes[0].label == "Wits"
+        assert changes[2].label == "Nerve"
+
+    def test_label_only_change(self):
+        older = CharacterConfig(version=1, components=[make_attribute(label="Strength")])
+        newer = CharacterConfig(version=2, components=[make_attribute(label="Might")])
+        changes = diff_configs(older, newer)
+        assert len(changes) == 1
+        assert changes[0].fields == ["label"]
+
+    def test_weighted_scale_change_reports_one_path(self):
+        older = CharacterConfig(version=1, components=[make_weighted_hit_points()])
+        newer = CharacterConfig(version=2, components=[make_weighted_hit_points(
+            rules=WeightedHitPointsRules(starting_weight=1.0, scale=[
+                ScaleStep(weight=1.0, label="Full"),
+                ScaleStep(weight=0.5, label="Half"),
+                ScaleStep(weight=0.0, label="Zero")]))])
+        changes = diff_configs(older, newer)
+        assert changes[0].fields == ["rules.scale"]
+
+    def test_change_is_information_not_a_verdict(self):
+        """diff_configs returns descriptions. Nothing in the contract ranks or blocks them."""
+        change = ComponentChange(component_id="x", kind="changed", label="X", fields=["label"])
+        assert set(change.model_dump()) == {"component_id", "kind", "label", "fields"}

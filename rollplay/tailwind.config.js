@@ -24,6 +24,7 @@ module.exports = {
         content: {
           primary: 'var(--content-primary)',
           secondary: 'var(--content-secondary)',
+          muted: 'var(--content-muted)',
           'on-dark': 'var(--content-on-dark)',
           bold: 'var(--content-bold)',
           accent: 'var(--content-accent)',

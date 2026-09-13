@@ -18,7 +18,8 @@ jobs:
 
       - name: Check all contract modules have test imports
         run: |
-          for module in $(find rollplay-shared-contracts/shared_contracts -name '*.py' ! -name '__init__.py' -exec basename {} .py \;); do
+          for file in $(find rollplay-shared-contracts/shared_contracts -name '*.py' ! -name '__init__.py'); do
+            module=$(echo "$file" | sed 's#^rollplay-shared-contracts/shared_contracts/##; s#\.py$##; s#/#.#g')
             if ! grep -q "from shared_contracts.${module} import" rollplay-shared-contracts/tests/test_contracts.py; then
               echo "ERROR: No import for shared_contracts.${module} in test_contracts.py"
               exit 1

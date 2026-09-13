@@ -27,7 +27,6 @@ function DashboardContent() {
   const tabParam = searchParams.get('tab')
   const inviteCampaignId = searchParams.get('invite_campaign_id')
   const expandCampaignId = searchParams.get('expand_campaign_id')
-  const openCreateCampaign = searchParams.get('create_campaign') === '1'
   const [activeSection, setActiveSection] = useState(
     VALID_TABS.includes(tabParam) ? tabParam : 'home'
   )
@@ -83,15 +82,6 @@ function DashboardContent() {
     router.replace(newUrl)
   }
 
-  // Clear create_campaign param from URL (called by CampaignManager after
-  // opening the form). Mirrors the expand flows.
-  const clearOpenCreateCampaign = () => {
-    const current = new URLSearchParams(searchParams.toString())
-    current.delete('create_campaign')
-    const newUrl = current.toString() ? `/dashboard?${current.toString()}` : '/dashboard'
-    router.replace(newUrl)
-  }
-
   // Handle setup completion - update user state with new account info and screen name
   const handleSetupComplete = (accountResult, screenNameValue) => {
     if (user) {
@@ -131,8 +121,6 @@ function DashboardContent() {
             clearInviteCampaignId={clearInviteCampaignId}
             expandCampaignId={expandCampaignId}
             clearExpandCampaignId={clearExpandCampaignId}
-            openCreateCampaign={openCreateCampaign}
-            clearOpenCreateCampaign={clearOpenCreateCampaign}
             showToast={showToast}
           />
         </section>

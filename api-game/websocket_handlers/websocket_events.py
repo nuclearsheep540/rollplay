@@ -18,7 +18,7 @@ from imageservice import ImageService, ImageSettings
 from gameservice import GameService
 from map_token_ops import VALID_MAP_TOKEN_OPS, filter_hidden_tokens, grid_cell_label, is_valid_asset_key
 from map_token_holds import MapTokenHolds
-from site_client import fetch_character_summary
+from site_client import fetch_character_bundle
 from shared_contracts.image import ImageConfig
 from shared_contracts.grid_math import grid_geometry_changed, grid_usable, resnap_token_position
 from shared_contracts.map import MapConfig
@@ -251,7 +251,7 @@ class WebsocketEvent():
         return metadata.get("player_name") or "Unknown Adventurer"
 
     @staticmethod
-    async def _character_name_for_prompt(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
+    async def _prompt_target_name(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
         if not user_id:
             return "Unknown Adventurer"
 
@@ -260,7 +260,7 @@ class WebsocketEvent():
 
         metadata = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
         # Never fall through to user_id (UUID = PII).
-        return metadata.get("character_name") or metadata.get("player_name") or "Unknown Adventurer"
+        return metadata.get("display_name") or metadata.get("player_name") or "Unknown Adventurer"
 
     @staticmethod
     async def player_connection(websocket, data, event_data, user_id, client_id, manager):
@@ -317,18 +317,30 @@ class WebsocketEvent():
             is_in_party = uid in seat_layout
             manager.update_party_status(client_id, uid, is_in_party)
 
-        # Phase I: pull this player's latest character snapshot from api-site so runtime changes
-        # (level-up, HP, AC) flow into player_metadata on the next seat interaction. Best-effort.
+        # If the room already holds this character, leave it alone: while a game is open
+        # the room owns the values, and re-fetching would overwrite tonight's play with
+        # whatever was last written cold. Only a character the room does not know is pulled.
         try:
             metadata = await WebsocketEvent._get_player_metadata(client_id) or {}
-            character_id = (metadata.get(user_id) or {}).get("character_id")
-            if character_id:
-                summary = await fetch_character_summary(character_id)
-                if summary:
-                    summary["user_id"] = user_id
-                    await GameService.update_player_character(client_id, summary)
+            entry = metadata.get(user_id) or {}
+            character_id = entry.get("character_id")
+            if character_id and not entry.get("values"):
+                bundle = await fetch_character_bundle(character_id)
+                if bundle:
+                    if bundle.get("config_version_id") and bundle.get("config"):
+                        await GameService.ensure_character_config(
+                            client_id, bundle["config_version_id"], bundle["config"])
+                    await GameService.update_player_character(client_id, {
+                        "user_id": user_id,
+                        "character_id": bundle["character_id"],
+                        "display_name": bundle["display_name"],
+                        "config_version_id": bundle.get("config_version_id"),
+                        "values": bundle.get("values") or {},
+                        "color": bundle.get("color"),
+                        "avatar_asset_id": bundle.get("avatar_asset_id"),
+                    })
         except Exception as e:
-            print(f"⚠️ Character snapshot refresh failed for {user_id}: {e}")
+            print(f"CHARACTER_ETL character refresh failed for {user_id}: {e}")
 
         broadcast_message = {
             "event_type": "seat_change",
@@ -346,7 +358,7 @@ class WebsocketEvent():
         prompt_id = event_data.get("prompt_id")
 
         player_metadata = await WebsocketEvent._get_player_metadata(client_id)
-        target_character = await WebsocketEvent._character_name_for_prompt(client_id, prompted_player, player_metadata)
+        target_character = await WebsocketEvent._prompt_target_name(client_id, prompted_player, player_metadata)
         prompted_by_name = await WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
 
         # Log the prompt to adventure log with prompt_id for later removal
@@ -376,55 +388,45 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=broadcast_message)
     
     @staticmethod
-    async def initiative_prompt_all(websocket, data, event_data, user_id, client_id, manager):
-        players_to_prompt = event_data.get("players", [])  # user_ids
-        if not players_to_prompt:
-            # Nothing to prompt. Silent by design — the router dropped this
-            # before dispatch and never answered the sender, so returning no
-            # broadcast keeps the behaviour identical.
-            logger.warning("No players provided for initiative prompt")
-            return WebsocketEventResult(broadcast_message=None)
+    async def group_prompt(websocket, data, event_data, user_id, client_id, manager):
+        """The GM asks the whole table for something, and says what.
+
+        The repurposed prompt-all: group prompts are common and the GM knows what they are
+        asking for far better than the app does, so the prompt text is theirs to type.
+        Cleared by the existing dice_prompt_clear, by prompt_id.
+        """
+        prompt_text = (event_data.get("prompt_text") or "").strip()
+        if not prompt_text:
+            return WebsocketEventResult.error("Say what the roll is for")
+        if len(prompt_text) > 120:
+            return WebsocketEventResult.error("Keep the prompt under 120 characters")
 
         prompted_by = event_data.get("prompted_by", user_id)
-                
-        # Generate unique initiative prompt ID for potential removal
-        initiative_prompt_id = f"initiative_all_{int(time.time() * 1000)}"
-
         player_metadata = await WebsocketEvent._get_player_metadata(client_id)
+        gm_name = await WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
 
-        character_targets = [
-            await WebsocketEvent._character_name_for_prompt(client_id, player, player_metadata)
-            for player in players_to_prompt
-        ]
-        
-        # Log ONE adventure log entry for the collective action
-        log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(character_targets))
-        
-        prompted_by_name = await WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
+        prompt_id = f"group_prompt_{int(time.time() * 1000)}"
+        log_message = format_message(
+            MESSAGE_TEMPLATES["group_prompt"], gm_name=gm_name, prompt_text=prompt_text)
 
         await adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
-            from_player=prompted_by_name,
-            prompt_id=initiative_prompt_id
+            from_player=gm_name,
+            prompt_id=prompt_id,
         )
 
-        print(f"⚡ {prompted_by} prompted all players for initiative: {', '.join(players_to_prompt)}")
-        
-        # Single broadcast with player list - clients check if they're in the list
         broadcast_message = {
-            "event_type": "initiative_prompt_all",
+            "event_type": "group_prompt",
             "data": {
-                "players_to_prompt": players_to_prompt,
-                "roll_type": "Initiative",
+                "prompt_id": prompt_id,
+                "prompt_text": prompt_text,
+                "from": gm_name,
                 "prompted_by": prompted_by,
-                "prompt_id": initiative_prompt_id,  # Use the same ID for tracking
-                "initiative_prompt_id": initiative_prompt_id,  # Add specific field for frontend tracking
-                "log_message": log_message  # Include the formatted log message
-            }
+                "log_message": log_message,
+            },
         }
-        
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
@@ -432,7 +434,7 @@ class WebsocketEvent():
         cleared_by = event_data.get("cleared_by", user_id)
         clear_all = event_data.get("clear_all", False)  # New: Support clearing all prompts
         prompt_id = event_data.get("prompt_id")  # New: Support clearing specific prompt by ID
-        initiative_prompt_id = event_data.get("initiative_prompt_id")  # New: Initiative prompt ID for clear all
+        group_prompt_id = event_data.get("group_prompt_id")  # set when clearing a whole-table prompt
         
         # Remove adventure log entries for cancelled prompts
         log_removal_message = None
@@ -453,23 +455,23 @@ class WebsocketEvent():
                     }
             except Exception as e:
                 print(f"❌ Failed to remove adventure log for cancelled prompt {prompt_id}: {e}")
-        elif clear_all and initiative_prompt_id:
-            # Remove initiative prompt log entry when clearing all
+        elif clear_all and group_prompt_id:
+            # Remove the group prompt's log entry when clearing all
             try:
-                deleted_count = await adventure_log.remove_log_by_prompt_id(client_id, initiative_prompt_id)
+                deleted_count = await adventure_log.remove_log_by_prompt_id(client_id, group_prompt_id)
                 if deleted_count > 0:
-                    print(f"🗑️ Removed initiative prompt log entry {initiative_prompt_id}")
+                    print(f"PROMPT removed group prompt log entry {group_prompt_id}")
                     
                     # Prepare log removal message
                     log_removal_message = {
                         "event_type": "adventure_log_removed",
                         "data": {
-                            "prompt_id": initiative_prompt_id,
+                            "prompt_id": group_prompt_id,
                             "removed_by": cleared_by
                         }
                     }
             except Exception as e:
-                print(f"❌ Failed to remove initiative prompt log {initiative_prompt_id}: {e}")
+                print(f"PROMPT failed to remove group prompt log {group_prompt_id}: {e}")
         
         if clear_all:
             print(f"🎲 {cleared_by} cleared all dice prompts")
@@ -551,7 +553,7 @@ class WebsocketEvent():
                 }
             }
         elif player:
-            # For initiative prompts, clear by player name since we might not have exact prompt_id
+            # For group prompts, clear by player name when no exact prompt_id is known
             clear_prompt_message = {
                 "event_type": "dice_prompt_clear",
                 "data": {
@@ -567,29 +569,6 @@ class WebsocketEvent():
             clear_prompt_message=clear_prompt_message
         )
 
-    @staticmethod
-    async def combat_state(websocket, data, event_data, user_id, client_id, manager):
-        """Handle combat state changes"""
-        combat_active = event_data.get("combatActive", False)
-        action = "started" if combat_active else "ended"
-        display_name = await WebsocketEvent._display_name(client_id, user_id)
-
-        template_key = "combat_started" if action == "started" else "combat_ended"
-        log_message = format_message(MESSAGE_TEMPLATES[template_key], player=display_name)
-
-        await adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=display_name
-        )
-        
-        broadcast_message = {
-            "event_type": "combat_state",
-            "data": event_data
-        }
-        
-        return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
     async def player_displaced(websocket, data, event_data, user_id, client_id, manager):
@@ -1677,7 +1656,7 @@ class WebsocketEvent():
         owner_user_id = token.get("owner_user_id") or ""
         owner_metadata = player_metadata.get(owner_user_id, {}) if isinstance(player_metadata, dict) else {}
         fallback = "an NPC" if token.get("kind") == "npc" else "Unknown Adventurer"
-        return owner_metadata.get("character_name") or token.get("label") or fallback
+        return owner_metadata.get("display_name") or token.get("label") or fallback
 
     @staticmethod
     async def _map_token_place_cell_suffix(room_id: str, asset_id: str, token: Dict[str, Any]) -> str:

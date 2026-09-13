@@ -61,7 +61,7 @@ export default function WorkingOnCard({ campaign }) {
         </p>
         <button
           type="button"
-          onClick={() => router.push('/dashboard?tab=campaigns&create_campaign=1')}
+          onClick={() => router.push('/campaign/new')}
           className="mt-1 rounded-lg border px-5 py-2.5 text-[13px] font-semibold tracking-wider transition-colors hover:bg-black/5"
           style={{ borderColor: COLORS.graphite, color: COLORS.graphite }}
         >

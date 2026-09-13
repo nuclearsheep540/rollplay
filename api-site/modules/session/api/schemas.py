@@ -37,15 +37,37 @@ class ScheduleSessionRequest(BaseModel):
 
 
 class RosterPlayerResponse(BaseModel):
-    """Roster player information with character details"""
+    """One user on the roster, and the character they have in the party (if any).
+
+    All character fields are None for a roster member who has not built one — the roster is
+    users, the party is characters, and they are not the same list.
+    """
     user_id: UUID
     username: str  # screen_name or email
     character_id: Optional[UUID] = None
-    character_name: Optional[str] = None
-    character_level: Optional[int] = None
-    character_class: Optional[str] = None
-    character_race: Optional[str] = None
+    display_name: Optional[str] = None
+    is_alive: Optional[bool] = None
     joined_at: datetime
+
+
+class PartyMemberResponse(BaseModel):
+    """One character in a session's party, and who owns it.
+
+    Component values are deliberately not here: a party list says who is playing, not what
+    their sheets say, and secret values must never reach a third player.
+    """
+    user_id: UUID
+    screen_name: str
+    campaign_role: str
+    is_host: bool
+    character_id: UUID
+    display_name: str
+    is_alive: bool
+    color: Optional[str] = None
+    avatar_url: Optional[str] = None
+    avatar_asset_id: Optional[UUID] = None
+    avatar_focal_area: Optional[dict] = None
+    config_version: Optional[int] = None
 
 
 class SessionResponse(BaseModel):

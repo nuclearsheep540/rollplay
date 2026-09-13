@@ -1,17 +1,16 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Character read-side queries."""
+"""Character reads."""
 
 from typing import List, Optional
 from uuid import UUID
 
 from modules.characters.domain.character_aggregate import CharacterAggregate
-from modules.characters.repositories.character_repository import CharacterRepository
 
 
 class GetCharacterById:
-    def __init__(self, repository: CharacterRepository):
+    def __init__(self, repository):
         self.repository = repository
 
     def execute(self, character_id: UUID) -> Optional[CharacterAggregate]:
@@ -19,7 +18,7 @@ class GetCharacterById:
 
 
 class GetCharactersByUser:
-    def __init__(self, repository: CharacterRepository):
+    def __init__(self, repository):
         self.repository = repository
 
     def execute(self, user_id: UUID) -> List[CharacterAggregate]:

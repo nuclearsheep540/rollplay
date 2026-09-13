@@ -42,13 +42,6 @@ from modules.user.model.friend_code_model import FriendCode  # noqa: F401
 # before SQLite create_all in the db_session fixture.
 from modules.characters.model.edition_model import Edition  # noqa: F401
 from modules.characters.model.character_model import Character as _CharacterModel  # noqa: F401
-from modules.characters.model.character_class_model import CharacterClassEntry as _CCE  # noqa: F401
-from modules.characters.model.character_ability_model import CharacterAbilityScore as _CAS  # noqa: F401
-from modules.characters.model.character_save_model import CharacterSaveProficiency as _CSP  # noqa: F401
-from modules.characters.model.character_skill_model import CharacterSkillProficiency as _CSkill  # noqa: F401
-from modules.characters.model.character_feat_model import CharacterFeatAcquisition as _CFA  # noqa: F401
-from modules.characters.model.character_choices_log_model import CharacterChoiceLog as _CCL  # noqa: F401
-from modules.characters.model.dnd_ability_model import DndAbility as _DndAbility  # noqa: F401
 # Cross-aggregate model imports so SQLite create_all sees every FK target in
 # its initial metadata pass.
 from modules.library.model.asset_model import MediaAsset as _MediaAsset  # noqa: F401
@@ -58,6 +51,7 @@ from modules.library.model.sfx_asset_model import SfxAssetModel as _SfxAssetMode
 from modules.library.model.image_asset_model import ImageAssetModel as _ImageAssetModel  # noqa: F401
 from modules.library.model.collection_model import AssetCollectionModel as _AssetCollectionModel  # noqa: F401
 from modules.events.model.notification_model import Notification as _Notification  # noqa: F401
+from modules.campaign.model.character_config_version_model import CharacterConfigVersion as _CCV  # noqa: F401
 from modules.notes.model.note_model import Note as _Note  # noqa: F401
 from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
@@ -68,11 +62,7 @@ from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.session.domain.session_aggregate import SessionEntity
 from modules.game.domain.game_aggregate import GameAggregate, GameStatus
-from modules.characters.domain.character_aggregate import (
-    AbilityScores,
-    CharacterAggregate,
-    ClassEntry,
-)
+from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 
@@ -168,6 +158,15 @@ def db_session():
         poolclass=StaticPool,
     )
 
+    # SQLite ignores foreign keys unless asked, per connection. Without this the
+    # ON DELETE SET NULL that turns a character into a keepsake when its campaign is
+    # deleted is invisible here, and a test asserting it would pass for the wrong reason.
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     # Create all tables
     Base.metadata.create_all(engine)
 
@@ -183,26 +182,7 @@ def db_session():
 
 
 @pytest.fixture
-def seed_dnd_abilities(db_session: Session) -> dict[str, int]:
-    """Seed the dnd_abilities lookup table for tests that touch character ability rows.
-
-    Returns a name → id map so test factories can populate join tables directly
-    without an extra round-trip.
-    """
-    from modules.characters.model.dnd_ability_model import DndAbility
-    names = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
-    mapping: dict[str, int] = {}
-    for name in names:
-        row = DndAbility(name=name)
-        db_session.add(row)
-        db_session.flush()
-        mapping[name] = row.id
-    db_session.commit()
-    return mapping
-
-
-@pytest.fixture
-def seed_default_edition(db_session: Session, seed_dnd_abilities) -> int:
+def seed_default_edition(db_session: Session) -> int:
     """Seed the editions table with the default D&D 2024 row; return its id."""
     from modules.characters.model.edition_model import Edition
     edition = Edition(
@@ -368,58 +348,76 @@ def create_game(game_repo: GameRepository):
 
 
 @pytest.fixture
-def create_character(character_repo: CharacterRepository, seed_default_edition):
+def make_character_config():
+    """A fresh CharacterConfig per call — Name, Hit points, one Attribute.
+
+    Never a module constant: a test that mutated a shared config would be writing to every
+    other test's fixture.
+    """
+    from shared_contracts.character_config import CharacterConfig
+    from shared_contracts.components.attribute import AttributeConfiguration
+    from shared_contracts.components.hit_points import HitPointsConfiguration, IntHitPointsRules
+    from shared_contracts.components.name import NameConfiguration
+
+    def _make(version: int = 1, hp_maximum: int = 20):
+        return CharacterConfig(version=version, components=[
+            NameConfiguration(id="name_1", label="Name"),
+            HitPointsConfiguration(id="hit_points_1", label="Vitality",
+                                   rules=IntHitPointsRules(minimum=0, maximum=hp_maximum, starting=10)),
+            AttributeConfiguration(id="attribute_1", label="Strength", minimum=1, maximum=20, default=10),
+        ])
+
+    return _make
+
+
+@pytest.fixture
+def make_character_values():
+    """Values matching make_character_config, fresh per call."""
+    from shared_contracts.components.attribute import AttributeValue
+    from shared_contracts.components.hit_points import HitPointsValue, IntHitPointsState
+    from shared_contracts.components.name import NameValue
+
+    def _make(name: str = "Test Character", current: int = 10, score: int = 10):
+        return {
+            "name_1": NameValue(component_id="name_1", text=name),
+            "hit_points_1": HitPointsValue(component_id="hit_points_1",
+                                           state=IntHitPointsState(current=current)),
+            "attribute_1": AttributeValue(component_id="attribute_1", score=score),
+        }
+
+    return _make
+
+
+@pytest.fixture
+def create_character(character_repo: CharacterRepository, make_character_config, make_character_values):
     """
     Factory fixture to create test characters.
 
     Usage:
         character = create_character(user_id=user.id, name="Test Hero")
+        seated = create_character(user_id=user.id, session_id=session.id, campaign_id=campaign.id)
+
+    With no session_id the character is a keepsake, which is what an unbound character is.
     """
-    edition_id = seed_default_edition
 
     def _create_character(
         user_id: uuid.UUID,
         name: str = "Test Character",
-        class_code: str = "fighter",
-        species_code: str = "human",
-        background_code: str = "soldier",
-        level: int = 1,
+        campaign_id: uuid.UUID = None,
+        session_id: uuid.UUID = None,
+        config_version_id: uuid.UUID = None,
+        config=None,
+        values=None,
+        slot: int = 0,
     ):
-        from datetime import datetime
-        now = datetime.utcnow()
-        character = CharacterAggregate(
-            id=None,
+        character = CharacterAggregate.create(
             user_id=user_id,
-            edition_id=edition_id,
-            edition_code="srd_5_2_1",
-            active_campaign=None,
-            character_name=name,
-            species_code=species_code,
-            background_code=background_code,
-            class_entries=[ClassEntry(class_code=class_code, level=level, is_primary=True)],
-            ability_scores=AbilityScores.default(),
-            origin_ability_bonuses={},
-            save_proficiencies=frozenset(),
-            skills=[],
-            feats=[],
-            level=level,
-            xp=0,
-            hp_max=10,
-            hp_current=10,
-            hp_temp=0,
-            ac=10,
-            death_save_successes=0,
-            death_save_failures=0,
-            inspiration=False,
-            status_effects=[],
-            is_alive=True,
-            speed=30,
-            size="Medium",
-            languages=["Common"],
-            is_draft=False,
-            creation_step=None,
-            created_at=now,
-            updated_at=now,
+            campaign_id=campaign_id,
+            session_id=session_id,
+            config_version_id=config_version_id,
+            config=config or make_character_config(),
+            values=values if values is not None else make_character_values(name=name),
+            slot=slot,
         )
         character_repo.save(character)
         return character

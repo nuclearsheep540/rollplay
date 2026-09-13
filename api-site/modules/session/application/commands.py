@@ -206,7 +206,7 @@ class ScheduleSession:
 
 
 class RemovePlayerFromSession:
-    """Host removes a player from the session roster"""
+    """Host removes a player from the roster — and therefore from the party."""
 
     def __init__(
         self,
@@ -222,11 +222,11 @@ class RemovePlayerFromSession:
         user_id: UUID,
         removed_by: UUID
     ) -> SessionEntity:
-        """
-        Remove player from session roster.
+        """Remove a user from the roster, unbinding their party character if they have one.
 
-        Note: Character locking is at CAMPAIGN level, not session level.
-        Removing from session does NOT unlock the character from the campaign.
+        Party membership requires roster membership, so a user off the roster cannot keep a
+        character at the table. The character survives as a keepsake, exactly as it would
+        if they had ejected it themselves.
         """
         # Get session aggregate
         session = self.session_repo.get_by_id(session_id)
@@ -241,7 +241,12 @@ class RemovePlayerFromSession:
         if not session.has_user(user_id):
             raise ValueError("User is not in session roster")
 
-        # Note: Character stays locked to campaign (not session-level unlocking)
+        # Off the roster means out of the party: unbind their character, which leaves them
+        # a keepsake rather than a row pointing at a table they are not at.
+        character = self.character_repo.get_party_character(session_id, user_id)
+        if character is not None:
+            character.unbind_from_table()
+            self.character_repo.save(character)
 
         # Business logic in aggregate - remove user from joined_users
         session.remove_user(user_id)
@@ -250,70 +255,3 @@ class RemovePlayerFromSession:
         self.session_repo.save(session)
 
         return session
-
-
-class SelectCharacterForSession:
-    """
-    DEPRECATED: Character selection is now at CAMPAIGN level.
-
-    Use SelectCharacterForCampaign command in campaign module instead.
-    This command now just updates the session roster display without locking.
-    """
-
-    def __init__(
-        self,
-        session_repository: SessionRepository,
-        character_repository: CharacterRepository
-    ):
-        self.session_repo = session_repository
-        self.character_repo = character_repository
-
-    def execute(
-        self,
-        session_id: UUID,
-        user_id: UUID,
-        character_id: UUID
-    ) -> CharacterAggregate:
-        """
-        DEPRECATED: Use campaign-level character selection instead.
-
-        This now only updates session roster display - no locking.
-        Character must already be locked to the campaign.
-        """
-        # Get session
-        session = self.session_repo.get_by_id(session_id)
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
-
-        # Verify user is in session roster
-        if not session.has_user(user_id):
-            raise ValueError("User has not joined this session")
-
-        # Get character
-        character = self.character_repo.get_by_id(character_id)
-        if not character:
-            raise ValueError(f"Character {character_id} not found")
-
-        # Verify character ownership
-        if not character.is_owned_by(user_id):
-            raise ValueError("Character not owned by user")
-
-        # Character must be locked to the campaign (not session)
-        # This is a temporary compatibility layer - frontend should use campaign endpoint
-        if not character.is_locked():
-            raise ValueError("Character must be selected for the campaign first. Use campaign character selection.")
-
-        if character.active_campaign != session.campaign_id:
-            raise ValueError("Character is locked to a different campaign")
-
-        # Update session_joined_users.selected_character_id for roster display only
-        db_session = self.session_repo.db
-        db_session.execute(
-            update(SessionJoinedUser)
-            .where(SessionJoinedUser.session_id == session_id)
-            .where(SessionJoinedUser.user_id == user_id)
-            .values(selected_character_id=character_id)
-        )
-        db_session.commit()
-
-        return character

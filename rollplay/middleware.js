@@ -8,6 +8,8 @@ import { API_AUTH_INTERNAL_URL } from './app/shared/config'
 
 // Define protected routes that require authentication
 const PROTECTED_ROUTES = [
+  '/campaign',
+  '/character',
   '/dashboard',
   '/game',
   '/workshop',

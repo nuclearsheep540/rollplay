@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import List
 from uuid import UUID
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 logger = logging.getLogger(__name__)
 
 from .schemas import (
+    PartyMemberResponse,
     ScheduleSessionRequest,
     SessionResponse,
     SessionListResponse
@@ -15,7 +17,6 @@ from .schemas import (
 from modules.session.application.commands import (
     ScheduleSession,
     RemovePlayerFromSession,
-    SelectCharacterForSession,
 )
 from modules.session.application.queries import (
     GetSessionById,
@@ -33,6 +34,7 @@ from modules.campaign.dependencies.providers import campaign_repository
 from modules.game.dependencies.providers import get_game_repository
 from modules.game.repositories.game_repository import GameRepository
 from shared.dependencies.auth import get_current_user_id
+from shared.services.s3_service import S3Service, get_s3_service
 from modules.events.event_manager import EventManager
 from modules.events.dependencies.providers import get_event_manager
 
@@ -138,23 +140,54 @@ async def schedule_game(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# === Character Actions ===
+# === The party ===
 
-@router.post("/{session_id}/select-character", status_code=status.HTTP_204_NO_CONTENT)
-async def select_character_for_session(
+@router.get("/{session_id}/party", response_model=List[PartyMemberResponse])
+def get_party(
     session_id: UUID,
-    character_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository)
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
-    """Select character for a joined session"""
-    try:
-        command = SelectCharacterForSession(session_repo, character_repo)
-        command.execute(
-            session_id=session_id,
-            user_id=user_id,
-            character_id=character_id
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    """The party: one row per character at this table.
+
+    Roster members who have not built a character are NOT here — the roster is users and is
+    already on SessionResponse.joined_users. Values are deliberately absent: a party list is
+    who is playing, not their sheets, and secret values must never reach a third player.
+    """
+    session = session_repo.get_by_id(session_id)
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if not session.has_user(user_id) and session.host_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not at this table")
+
+    campaign = campaign_repo.get_by_id(session.campaign_id)
+    party = []
+    for character in character_repo.get_party_for_session(session_id):
+        owner = user_repo.get_by_id(character.user_id)
+        role = campaign.get_role(character.user_id) if campaign else None
+        avatar_url = None
+        if character.avatar_s3_key:
+            try:
+                avatar_url = s3_service.generate_download_url(character.avatar_s3_key)
+            except Exception:
+                avatar_url = None
+        party.append(PartyMemberResponse(
+            user_id=character.user_id,
+            screen_name=(owner.screen_name if owner else None) or "Unknown",
+            # 'player' is derived from having a character, never stored.
+            campaign_role="player" if role and role.value != "dm" else (role.value if role else "player"),
+            is_host=session.host_id == character.user_id,
+            character_id=character.id,
+            display_name=character.display_name,
+            is_alive=character.is_alive,
+            color=character.color,
+            avatar_url=avatar_url,
+            avatar_asset_id=character.avatar_asset_id,
+            avatar_focal_area=character.avatar_focal_area,
+            config_version=character.config_snapshot.version,
+        ))
+    return party

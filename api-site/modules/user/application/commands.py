@@ -116,21 +116,23 @@ class SetMaxSlots:
         user.set_max_slots(max_slots)
 
         hidden_characters = self.character_repo.get_by_slot_at_or_above(user_id, max_slots)
-        locked = [c for c in hidden_characters if c.active_campaign is not None]
+        at_a_table = [character for character in hidden_characters if character.session_id is not None]
 
-        # All-or-nothing: check every affected campaign before ejecting any.
-        for character in locked:
-            if self.game_repo.get_open_game_for_campaign(character.active_campaign):
+        # All-or-nothing: check every affected campaign before unbinding any.
+        for character in at_a_table:
+            if character.campaign_id and self.game_repo.get_open_game_for_campaign(character.campaign_id):
                 raise ValueError(
-                    f"Cannot reduce slots: character '{character.character_name}' is in a "
-                    f"campaign with a game running. Try again when the table is quiet."
+                    f"Cannot reduce slots: character '{character.display_name}' is at a "
+                    f"table with a game running. Try again when the table is quiet."
                 )
 
-        for character in locked:
-            character.unlock_from_campaign()
+        for character in at_a_table:
+            # Hiding a character behind the capacity limit takes it out of its party too —
+            # otherwise the table would hold a character its owner can no longer see.
+            character.unbind_from_table()
             self.character_repo.save(character)
             logger.info(
-                f"SetMaxSlots: ejected character {character.id} from campaign "
+                f"SetMaxSlots: unbound character {character.id} from its table "
                 f"(slot {character.slot} >= new max {max_slots})"
             )
 

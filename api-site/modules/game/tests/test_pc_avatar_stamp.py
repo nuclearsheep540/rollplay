@@ -25,13 +25,8 @@ def make_session_user(user_id, avatar_asset_id=None, with_character=True):
             player_name="alice",
             campaign_role="player",
             character_id=str(uuid4()),
-            character_name="Aelwyn",
-            character_class=["wizard"],
-            character_race="elf",
-            level=3,
-            hp_current=20,
-            hp_max=20,
-            ac=13,
+            display_name="Aelwyn",
+            config_version_id="ver-1",
             avatar_asset_id=avatar_asset_id,
         )
     return SessionUser(

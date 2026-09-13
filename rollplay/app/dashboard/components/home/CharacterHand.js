@@ -33,7 +33,7 @@ function CharacterCard({ character, onSelect }) {
   return (
     <button
       type="button"
-      aria-label={`View ${character.character_name || 'Unnamed'}`}
+      aria-label={`View ${character.display_name || 'Unnamed character'}`}
       onClick={onSelect}
       className="group relative block h-full w-full cursor-pointer overflow-hidden rounded-md border-0 p-0 text-left"
       style={{
@@ -69,7 +69,7 @@ function CharacterCard({ character, onSelect }) {
             color: COLORS.smoke,
           }}
         >
-          {character.character_name || 'Unnamed'}
+          {character.display_name || 'Unnamed character'}
         </h3>
       </div>
     </button>
@@ -157,7 +157,7 @@ export default function CharacterHand({ characters = [], maxSlots = 4 }) {
             '--hand-depth': 1,
           }}
         >
-          <CreateCharacterCard onSelect={() => router.push('/character/create')} />
+          <CreateCharacterCard onSelect={() => router.push('/character/new')} />
         </div>
       )}
     </div>

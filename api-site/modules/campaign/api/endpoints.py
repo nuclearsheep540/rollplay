@@ -10,18 +10,27 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+from shared_contracts.character_config import CharacterConfig, diff_configs
+
 from .schemas import (
+    CharacterConfigStateResponse,
+    CharacterConfigVersionSummary,
     CampaignCreateRequest,
     CampaignUpdateRequest,
     CampaignResponse,
     CampaignSummaryResponse,
     CampaignMemberResponse,
-    CharacterSelectRequest,
     CampaignSetRoleRequest,
     CampaignSetRoleResponse,
     HeroImageAssetInfo,
 )
-from modules.campaign.dependencies.providers import campaign_repository
+from modules.campaign.dependencies.providers import (
+    campaign_repository,
+    get_character_config_version_repository,
+)
+from modules.campaign.repositories.character_config_version_repository import (
+    CharacterConfigVersionRepository,
+)
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
@@ -32,6 +41,8 @@ from modules.game.domain.game_aggregate import EndReason
 from modules.library.dependencies.providers import get_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.campaign.application.commands import (
+    PublishCharacterConfigVersion,
+    SaveCharacterConfigDraft,
     CreateCampaign,
     UpdateCampaign,
     DeleteCampaign,
@@ -41,8 +52,6 @@ from modules.campaign.application.commands import (
     DeclineCampaignInvite,
     CancelCampaignInvite,
     LeaveCampaign,
-    SelectCharacterForCampaign,
-    ReleaseCharacterFromCampaign,
     SetMemberRole,
 )
 from modules.characters.repositories.character_repository import CharacterRepository
@@ -374,7 +383,7 @@ async def delete_campaign(
             )
             await end_game.execute(open_game.id, host_id=user_id, reason=EndReason.SYSTEM)
 
-        command = DeleteCampaign(campaign_repo, game_repo, character_repo, event_manager)
+        command = DeleteCampaign(campaign_repo, game_repo, event_manager)
         success = await command.execute(campaign_id, user_id)
 
         if success:
@@ -423,11 +432,12 @@ async def remove_player_from_campaign(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    character_repo: CharacterRepository = Depends(get_character_repository)
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
 ):
     """Remove a player from the campaign (host only). Also unlocks their character."""
     try:
-        command = RemovePlayerFromCampaign(campaign_repo, user_repo, event_manager, character_repo)
+        command = RemovePlayerFromCampaign(campaign_repo, user_repo, event_manager, character_repo, session_repo)
         campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
@@ -513,7 +523,8 @@ async def leave_campaign(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    character_repo: CharacterRepository = Depends(get_character_repository)
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
 ):
     """
     Leave a campaign (player only - host cannot leave their own campaign).
@@ -521,7 +532,7 @@ async def leave_campaign(
     Also unlocks any character the player had selected for this campaign.
     """
     try:
-        command = LeaveCampaign(campaign_repo, user_repo, event_manager, character_repo)
+        command = LeaveCampaign(campaign_repo, user_repo, event_manager, character_repo, session_repo)
         await command.execute(
             campaign_id=campaign_id,
             player_id=user_id
@@ -529,6 +540,101 @@ async def leave_campaign(
         return {"message": "Successfully left the campaign"}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+def _character_config_state(
+    campaign,
+    version_repo: CharacterConfigVersionRepository,
+    is_host: bool,
+) -> CharacterConfigStateResponse:
+    """Compose the one read the builder and the create flow both use.
+
+    Enrichment across two repositories, so it lives here rather than on the schema.
+    """
+    versions = version_repo.list_for_campaign(campaign.id)
+    latest = versions[-1] if versions else None
+    draft = campaign.character_config_draft if is_host else None
+
+    pending_changes = []
+    if is_host and draft is not None:
+        # Against the last published version, or against nothing when none exists —
+        # a first draft reads as every component added.
+        baseline = latest.config if latest else CharacterConfig(version=1)
+        pending_changes = diff_configs(baseline, draft)
+
+    return CharacterConfigStateResponse(
+        draft=draft,
+        latest=latest.config if latest else None,
+        latest_version_id=latest.id if latest else None,
+        versions=[
+            CharacterConfigVersionSummary(
+                id=record.id,
+                version=record.version,
+                created_at=record.created_at,
+                component_count=len(record.config.components),
+            )
+            for record in versions
+        ],
+        pending_changes=pending_changes,
+    )
+
+
+@router.get("/{campaign_id}/character-config", response_model=CharacterConfigStateResponse)
+async def get_character_config(
+    campaign_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    version_repo: CharacterConfigVersionRepository = Depends(get_character_config_version_repository),
+):
+    """The campaign's character config: the host's draft, every published version, and the
+    diff between them. Any member may read it — players build against ``latest``."""
+    campaign = campaign_repo.get_by_id(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if not campaign.is_member(user_id) and not campaign.is_invited(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this campaign")
+
+    return _character_config_state(campaign, version_repo, is_host=campaign.created_by == user_id)
+
+
+@router.put("/{campaign_id}/character-config/draft", response_model=CharacterConfigStateResponse)
+async def save_character_config_draft(
+    campaign_id: UUID,
+    config: CharacterConfig,
+    user_id: UUID = Depends(get_current_user_id),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    version_repo: CharacterConfigVersionRepository = Depends(get_character_config_version_repository),
+):
+    """Write the host's working copy. Versions nothing — publish does that."""
+    try:
+        campaign = SaveCharacterConfigDraft(campaign_repo, version_repo).execute(
+            campaign_id=campaign_id, host_id=user_id, config=config)
+    except PermissionError as denied:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(denied))
+    except ValueError as invalid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(invalid))
+
+    return _character_config_state(campaign, version_repo, is_host=True)
+
+
+@router.post("/{campaign_id}/character-config/publish", response_model=CharacterConfigStateResponse)
+async def publish_character_config(
+    campaign_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    version_repo: CharacterConfigVersionRepository = Depends(get_character_config_version_repository),
+):
+    """Mint the next immutable version from the draft and clear it."""
+    try:
+        PublishCharacterConfigVersion(campaign_repo, version_repo).execute(
+            campaign_id=campaign_id, host_id=user_id)
+    except PermissionError as denied:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(denied))
+    except ValueError as invalid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(invalid))
+
+    campaign = campaign_repo.get_by_id(campaign_id)
+    return _character_config_state(campaign, version_repo, is_host=True)
 
 
 @router.get("/{campaign_id}/members", response_model=List[CampaignMemberResponse])
@@ -578,75 +684,6 @@ async def get_campaign_members(
         )
 
 
-# Character selection endpoints
-@router.post("/{campaign_id}/select-character")
-async def select_character_for_campaign(
-    campaign_id: UUID,
-    request: CharacterSelectRequest,
-    user_id: UUID = Depends(get_current_user_id),
-    campaign_repo: CampaignRepository = Depends(campaign_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    event_manager: EventManager = Depends(get_event_manager),
-    game_repo: GameRepository = Depends(get_game_repository)
-):
-    """
-    Select a character for use in this campaign.
-
-    Locks the character to this campaign - it cannot be used in other campaigns
-    until the player leaves the campaign or releases the character.
-
-    Domain Rule: A character can only be active in one campaign at a time.
-    """
-    try:
-        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager, game_repo)
-        character = await command.execute(
-            campaign_id=campaign_id,
-            user_id=user_id,
-            character_id=UUID(request.character_id)
-        )
-        return {
-            "message": "Character selected for campaign",
-            "character_id": str(character.id),
-            "character_name": character.character_name
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.delete("/{campaign_id}/my-character")
-async def release_character_from_campaign(
-    campaign_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
-    campaign_repo: CampaignRepository = Depends(campaign_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    game_repo: GameRepository = Depends(get_game_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    event_manager: EventManager = Depends(get_event_manager)
-):
-    """
-    Release your character from this campaign (stay as member without character).
-
-    Only allowed when no active session exists in the campaign.
-    After releasing, the character can be used in other campaigns.
-
-    Domain Rule: Cannot release character while a session is active.
-    """
-    try:
-        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, game_repo, user_repo, event_manager)
-        character = await command.execute(
-            campaign_id=campaign_id,
-            user_id=user_id
-        )
-        return {
-            "message": "Character released from campaign",
-            "character_id": str(character.id),
-            "character_name": character.character_name
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
 # Internal service-to-service endpoint. Under the /internal path (mirrors /api/users/internal/*),
 # which nginx returns 404 for — reached by api-game over the private network. No JWT: isolation is
 # the boundary.
@@ -655,6 +692,7 @@ async def set_campaign_role(
     request: CampaignSetRoleRequest,
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
     event_manager: EventManager = Depends(get_event_manager),
 ):
     """
@@ -664,7 +702,7 @@ async def set_campaign_role(
     network (http://api-site:8082). All domain rules are enforced here (DM auth, membership, conflicts).
     """
     try:
-        command = SetMemberRole(campaign_repo, character_repo, event_manager)
+        command = SetMemberRole(campaign_repo, character_repo, event_manager, session_repo)
         campaign = await command.execute(
             campaign_id=UUID(request.campaign_id),
             requesting_user_id=UUID(request.requesting_user_id),

@@ -19,21 +19,24 @@ from shared.dependencies.db import Base
 
 
 class SessionJoinedUser(Base):
-    """Association table for users who have accepted invite and joined the session roster"""
+    """The roster: one row per user at this table.
+
+    It holds users, not characters. Which character a user has in the party is the
+    characters table's ``session_id`` — the party is a query, and a pointer here would be a
+    second copy of that fact.
+    """
     __tablename__ = 'session_joined_users'
 
     session_id = Column(UUID(as_uuid=True), ForeignKey('sessions.id', ondelete='CASCADE'), primary_key=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
     joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    selected_character_id = Column(UUID(as_uuid=True), ForeignKey('characters.id', ondelete='SET NULL'), nullable=True)
 
     # Relationships for easy access
     session = relationship("Session", backref=backref("roster_entries", passive_deletes=True))
     user = relationship("User", backref="joined_sessions")
-    character = relationship("Character", backref="selected_for_sessions")
 
     def __repr__(self):
-        return f"<SessionJoinedUser(session_id={self.session_id}, user_id={self.user_id}, character_id={self.selected_character_id})>"
+        return f"<SessionJoinedUser(session_id={self.session_id}, user_id={self.user_id})>"
 
 
 class Session(Base):

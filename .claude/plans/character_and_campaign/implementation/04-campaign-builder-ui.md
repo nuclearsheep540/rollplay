@@ -150,7 +150,7 @@ and a ghosted "+ Add table" button. Copy the table contents from `World.dc.html`
 Layout: `grid grid-cols-[minmax(0,1fr)_300px] gap-[26px] items-start`.
 
 **Header row**: eyebrow "Character config", heading "What a character is made of"
-(Metamorphous 28px), hint "Players build against this when they take a seat. Order here
+(Metamorphous 28px), hint "Players build against this when they join the party. Order here
 is the order they see. Nothing is required except what you mark required."
 
 **Components sub-tab, left column**: the draft's components in order, each a

@@ -5,9 +5,12 @@ from typing import Optional
 from uuid import UUID
 import logging
 import asyncio
-import httpx
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
+from shared_contracts.character_config import CharacterConfig, diff_configs
+from modules.characters.api.schemas import PlayerCharacterUpdate
+from shared.services.game_notifier import GameNotifier
+from modules.campaign.domain.character_config_version import CharacterConfigVersionRecord
 from modules.campaign.domain.campaign_role import CampaignRole
 from modules.campaign.domain.campaign_events import CampaignEvents
 from modules.events.event_manager import EventManager
@@ -15,6 +18,25 @@ from modules.user.repositories.user_repository import UserRepository
 from modules.characters.repositories.character_repository import CharacterRepository
 
 logger = logging.getLogger(__name__)
+
+
+
+def _eject_party_character(character_repo, session_repo, campaign_id, user_id, reason):
+    """Unbind a user's party character from this campaign's table, if they have one.
+
+    Shared by the three commands that take someone off a campaign. The character becomes a
+    keepsake — the same state ejecting produces — rather than being deleted.
+    """
+    # One campaign, one session, for life — so the first row is the table.
+    sessions = session_repo.get_by_campaign_id(campaign_id) if session_repo else []
+    if not sessions:
+        return
+    character = character_repo.get_party_character(sessions[0].id, user_id)
+    if character is None:
+        return
+    character.unbind_from_table()
+    character_repo.save(character)
+    logger.info(f"Unbound character {character.id} from campaign {campaign_id} ({reason})")
 
 
 class CreateCampaign:
@@ -77,10 +99,9 @@ class UpdateCampaign:
 
 
 class DeleteCampaign:
-    def __init__(self, repository, game_repository=None, character_repository: CharacterRepository = None, event_manager: EventManager = None):
+    def __init__(self, repository, game_repository=None, event_manager: EventManager = None):
         self.repository = repository
         self.game_repository = game_repository
-        self.character_repository = character_repository
         self.event_manager = event_manager
 
     async def execute(self, campaign_id: UUID, host_id: UUID) -> bool:
@@ -99,13 +120,11 @@ class DeleteCampaign:
         if self.game_repository and self.game_repository.get_open_game_for_campaign(campaign_id):
             raise ValueError("End the game before deleting this campaign")
 
-        # Release all character locks before deletion — characters stay on
-        # the user's account but are no longer bound to this campaign.
-        if self.character_repository:
-            locked_characters = self.character_repository.get_by_active_campaign(campaign_id)
-            for character in locked_characters:
-                character.unlock_from_campaign()
-                self.character_repository.save(character)
+        # Characters survive as keepsakes. Nothing to do here: the database's
+        # ON DELETE SET NULL on characters.campaign_id and characters.session_id nulls
+        # their pointers as the campaign and its session go, which is the same keepsake
+        # state ejection produces. Doing it in application code as well would be a second
+        # implementation of one rule.
 
         # Broadcast before delete — we need campaign data for the event
         if self.event_manager:
@@ -180,11 +199,13 @@ class AddPlayerToCampaign:
 
 
 class RemovePlayerFromCampaign:
-    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, character_repo: CharacterRepository = None):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager,
+                 character_repo: CharacterRepository = None, session_repo=None):
         self.repository = repository
         self.user_repo = user_repo
         self.event_manager = event_manager
         self.character_repo = character_repo
+        self.session_repo = session_repo
 
     async def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
         """Remove a player from the campaign (host only)"""
@@ -199,13 +220,11 @@ class RemovePlayerFromCampaign:
         # Get player details for notification before removing
         player = self.user_repo.get_by_id(player_id)
 
-        # Unlock player's character from this campaign (if they have one selected)
+        # Off the campaign means out of the party: unbind their character so it becomes a
+        # keepsake rather than a row pointing at a table they are not at.
         if self.character_repo:
-            character = self.character_repo.get_user_character_for_campaign(player_id, campaign_id)
-            if character:
-                character.unlock_from_campaign()
-                self.character_repo.save(character)
-                logger.info(f"Unlocked character {character.id} from campaign {campaign_id} (player removed by host)")
+            _eject_party_character(self.character_repo, self.session_repo, campaign_id,
+                                   player_id, "player removed by host")
 
         # Business logic in aggregate
         campaign.remove_member(player_id)
@@ -285,19 +304,18 @@ class AcceptCampaignInvite:
                 auto_added_to_session_ids.append(session.id)
                 logger.info(f"Auto-added late-joining player {player_id} to the party of session {session.id}")
 
-            # Sync player_name + campaign_role to api-game, addressed by the GAME's
-            # id (which is the room id). The role is always SPECTATOR right after
-            # accept_invite (character not yet selected) — passing it explicitly so
-            # MongoDB's player_metadata carries it for runtime checks.
+            # Tell the running game about the new player, addressed by the GAME's id
+            # (which is the room id). Identity only, with no character half — a late
+            # joiner has not built one — which is the documented meaning of an absent
+            # character half, not an accident of which keys we happened to send.
             open_game = self.game_repository.get_open_game_for_campaign(campaign_id) if self.game_repository else None
             if open_game and open_game.status.value == "active":
                 role = campaign.get_role(player_id)
-                await self._sync_player_to_game(
-                    str(open_game.id),
-                    player_id,
-                    player_name,
-                    role.value if role else "spectator",
-                )
+                await GameNotifier().sync_player(open_game.id, PlayerCharacterUpdate(
+                    user_id=str(player_id),
+                    player_name=player_name,
+                    campaign_role=role.value if role else "spectator",
+                ))
 
         # Broadcast notification event to host
         await self.event_manager.broadcast(
@@ -313,31 +331,62 @@ class AcceptCampaignInvite:
 
         return campaign
 
-    @staticmethod
-    async def _sync_player_to_game(game_id: str, player_id: UUID, player_name: str, campaign_role: str):
-        """Notify api-game about a new player so they appear by name, not UUID.
 
-        ``campaign_role`` is the user's role in the campaign at sync time —
-        api-game stores it on ``player_metadata[user_id]`` so the runtime can
-        derive spectator/player/mod status without re-asking api-site.
-        """
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.put(
-                    f"http://api-game:8081/game/{game_id}/player/character",
-                    json={
-                        "user_id": str(player_id),
-                        "player_name": player_name,
-                        "campaign_role": campaign_role,
-                    },
-                    timeout=5.0
-                )
-                if response.status_code == 200:
-                    logger.info(f"Synced late-joining player {player_id} ({player_name}) to game {game_id}")
-                else:
-                    logger.warning(f"Player sync to game failed ({response.status_code}): {response.text}")
-        except Exception as e:
-            logger.warning(f"Player sync to api-game failed (non-fatal): {e}")
+class SaveCharacterConfigDraft:
+    """The host writes their working copy of the character config.
+
+    Save is not publish. Any number of saves land on one draft row and version nothing;
+    PublishCharacterConfigVersion is what mints a version from it.
+    """
+
+    def __init__(self, campaign_repository, version_repository):
+        self.repository = campaign_repository
+        self.version_repository = version_repository
+
+    def execute(self, campaign_id: UUID, host_id: UUID, config: CharacterConfig) -> CampaignAggregate:
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+        if campaign.created_by != host_id:
+            raise PermissionError("Only the host can edit the character config")
+
+        latest = self.version_repository.get_latest(campaign_id)
+        next_version = (latest.version + 1) if latest else 1
+        campaign.set_character_config_draft(config, next_version)
+        self.repository.save(campaign)
+        return campaign
+
+
+class PublishCharacterConfigVersion:
+    """Mint the next immutable version from the draft, then clear the draft.
+
+    Refuses a draft that differs from the latest published version in no way, so the GM
+    cannot fill their version list with identical entries by pressing the button twice.
+    """
+
+    def __init__(self, campaign_repository, version_repository):
+        self.repository = campaign_repository
+        self.version_repository = version_repository
+
+    def execute(self, campaign_id: UUID, host_id: UUID) -> CharacterConfigVersionRecord:
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+        if campaign.created_by != host_id:
+            raise PermissionError("Only the host can publish the character config")
+
+        draft = campaign.character_config_draft
+        if draft is None:
+            raise ValueError("Nothing to publish: save a draft first")
+
+        latest = self.version_repository.get_latest(campaign_id)
+        if latest and not diff_configs(latest.config, draft):
+            raise ValueError(f"No changes since v{latest.version}")
+
+        record = self.version_repository.insert(campaign_id, draft, host_id)
+        campaign.clear_character_config_draft()
+        self.repository.save(campaign)
+        return record
 
 
 class DeclineCampaignInvite:
@@ -374,11 +423,13 @@ class DeclineCampaignInvite:
 
 
 class LeaveCampaign:
-    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, character_repo: CharacterRepository = None):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager,
+                 character_repo: CharacterRepository = None, session_repo=None):
         self.repository = repository
         self.user_repo = user_repo
         self.event_manager = event_manager
         self.character_repo = character_repo
+        self.session_repo = session_repo
 
     async def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """Player voluntarily leaves a campaign they've joined"""
@@ -397,13 +448,10 @@ class LeaveCampaign:
         # Get player details for notification before removing
         player = self.user_repo.get_by_id(player_id)
 
-        # Unlock player's character from this campaign (if they have one selected)
+        # Leaving the campaign leaves the party too; the character survives as a keepsake.
         if self.character_repo:
-            character = self.character_repo.get_user_character_for_campaign(player_id, campaign_id)
-            if character:
-                character.unlock_from_campaign()
-                self.character_repo.save(character)
-                logger.info(f"Unlocked character {character.id} from campaign {campaign_id} (player leaving)")
+            _eject_party_character(self.character_repo, self.session_repo, campaign_id,
+                                   player_id, "player leaving")
 
         # Business logic in aggregate - removes member
         campaign.remove_member(player_id)
@@ -504,7 +552,9 @@ class SetMemberRole:
     - If promoting to MOD: target must not have a selected character
     """
 
-    def __init__(self, campaign_repo, character_repo: CharacterRepository, event_manager: Optional[EventManager] = None):
+    def __init__(self, campaign_repo, character_repo: CharacterRepository,
+                 event_manager: Optional[EventManager] = None, session_repo=None):
+        self.session_repo = session_repo
         self.campaign_repo = campaign_repo
         self.character_repo = character_repo
         self.event_manager = event_manager
@@ -519,11 +569,12 @@ class SetMemberRole:
 
         role = CampaignRole.from_string(new_role)
 
-        # If promoting to MOD, check target doesn't have a selected character
-        if role == CampaignRole.MOD:
-            character = self.character_repo.get_user_character_for_campaign(target_user_id, campaign_id)
-            if character:
-                raise ValueError("Players with selected characters cannot be moderators")
+        # A moderator runs the table rather than playing at it, so they cannot hold a
+        # character in the party.
+        if role == CampaignRole.MOD and self.character_repo:
+            sessions = self.session_repo.get_by_campaign_id(campaign_id) if self.session_repo else []
+            if sessions and self.character_repo.get_party_character(sessions[0].id, target_user_id):
+                raise ValueError("A player with a character in the party cannot be a moderator")
 
         campaign.set_role(target_user_id, role)
         self.campaign_repo.save(campaign)
@@ -543,229 +594,3 @@ class SetMemberRole:
                 await self.event_manager.broadcast(event_config)
 
         return campaign
-
-
-class SelectCharacterForCampaign:
-    """
-    Select a character to use in a campaign. Locks character to campaign.
-
-    Domain Rule: A character can only be active in one campaign at a time.
-    """
-
-    def __init__(self, campaign_repo, character_repo: CharacterRepository, user_repo: UserRepository = None, event_manager: EventManager = None, game_repo=None):
-        self.campaign_repo = campaign_repo
-        self.character_repo = character_repo
-        self.user_repo = user_repo
-        self.event_manager = event_manager
-        self.game_repo = game_repo
-
-    async def execute(self, campaign_id: UUID, user_id: UUID, character_id: UUID):
-        """
-        Select a character for use in this campaign.
-
-        Validates:
-        - User is a member of the campaign
-        - Character is owned by the user
-        - Character is not locked to another campaign
-
-        On success, locks the character to this campaign.
-        """
-        # Get campaign
-        campaign = self.campaign_repo.get_by_id(campaign_id)
-        if not campaign:
-            raise ValueError(f"Campaign {campaign_id} not found")
-
-        # Business rule: User must be a member of the campaign
-        if not campaign.is_member(user_id):
-            raise ValueError("You are not a member of this campaign")
-
-        # Business rule: Moderators cannot select characters
-        if campaign.get_role(user_id) == CampaignRole.MOD:
-            raise ValueError("Moderators cannot select characters")
-
-        # Get character
-        character = self.character_repo.get_by_id(character_id)
-        if not character:
-            raise ValueError(f"Character {character_id} not found")
-
-        # Business rule: Character must be owned by the user
-        if not character.is_owned_by(user_id):
-            raise ValueError("You do not own this character")
-
-        # Business rule: Character must not be locked to another campaign
-        if character.is_locked() and character.active_campaign != campaign_id:
-            raise ValueError(f"Character is already locked to another campaign")
-
-        # If already locked to THIS campaign, nothing to do
-        if character.active_campaign == campaign_id:
-            return character
-
-        # During an active session: ADDING a character (none → one) is allowed and hot-synced into
-        # the live game; SWAPPING an existing one (one → another) is NOT — it would desync the
-        # server-authoritative session. So block only when the user already holds a *different*
-        # character in this campaign.
-        user_has_other_character = any(
-            c.user_id == user_id and c.id != character.id
-            for c in self.character_repo.get_by_active_campaign(campaign_id)
-        )
-        if user_has_other_character and self.game_repo and self.game_repo.get_open_game_for_campaign(campaign_id):
-            raise ValueError("You can't change your character while a game is running")
-
-        # Invariant: one active character per (user, campaign). Release any
-        # character this user already has locked to this campaign before
-        # locking the new one — otherwise the swap leaves two locked rows
-        # and downstream queries (.first()/find) become non-deterministic.
-        for existing in self.character_repo.get_by_active_campaign(campaign_id):
-            if existing.user_id == user_id and existing.id != character.id:
-                existing.unlock_from_campaign()
-                self.character_repo.save(existing)
-                logger.info(f"Released previous character {existing.id} for user {user_id} in campaign {campaign_id}")
-
-        # Lock character to campaign
-        character.lock_to_campaign(campaign_id)
-        self.character_repo.save(character)
-
-        # Transition role: SPECTATOR → PLAYER
-        campaign.set_role(user_id, CampaignRole.PLAYER)
-        self.campaign_repo.save(campaign)
-
-        logger.info(f"Character {character_id} locked to campaign {campaign_id} by user {user_id}")
-
-        # Broadcast to all other campaign members
-        if self.event_manager and self.user_repo:
-            acting_user = self.user_repo.get_by_id(user_id)
-            all_members = campaign.get_all_member_ids()
-            events = CampaignEvents.campaign_character_selected(
-                campaign_member_ids=all_members,
-                acting_user_id=user_id,
-                campaign_id=campaign_id,
-                campaign_name=campaign.title,
-                player_screen_name=acting_user.screen_name if acting_user else "Unknown",
-                character_name=character.character_name
-            )
-            for event_config in events:
-                await self.event_manager.broadcast(event_config)
-
-        # Hot update: if a game is running, notify api-game
-        if self.game_repo:
-            await self._notify_running_game(campaign_id, user_id, character)
-
-        return character
-
-    async def _notify_running_game(self, campaign_id: UUID, user_id: UUID, character):
-        """If the campaign has a running game, push the character change to api-game."""
-        open_game = self.game_repo.get_open_game_for_campaign(campaign_id)
-        if not open_game or open_game.status.value != "active":
-            return
-
-        player_name = ""
-        if self.user_repo:
-            user = self.user_repo.get_by_id(user_id)
-            player_name = user.screen_name if user else ""
-
-        class_names = [entry.class_code for entry in character.class_entries]
-
-        character_data = {
-            "user_id": str(user_id),
-            "player_name": player_name,
-            "campaign_role": "player",
-            "character_id": str(character.id),
-            "character_name": character.character_name,
-            "character_class": class_names,
-            "character_race": character.species_code,
-            "level": character.level,
-            "hp_current": character.hp_current,
-            "hp_max": character.hp_max,
-            "ac": character.ac,
-            "color": character.color,
-        }
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.put(
-                    f"http://api-game:8081/game/{open_game.id}/player/character",
-                    json=character_data,
-                    timeout=5.0
-                )
-                if response.status_code == 200:
-                    logger.info(f"Hot update: character {character.id} synced to running game {open_game.id}")
-                else:
-                    logger.warning(f"Hot update failed ({response.status_code}): {response.text}")
-        except Exception as e:
-            logger.warning(f"Hot update to api-game failed (non-fatal): {e}")
-
-
-class ReleaseCharacterFromCampaign:
-    """
-    Release character from campaign without leaving the campaign.
-
-    Domain Rule: Only allowed when no active session exists in the campaign.
-    Player stays as campaign member but can now use their character elsewhere.
-    """
-
-    def __init__(self, campaign_repo, character_repo: CharacterRepository, game_repo=None, user_repo: UserRepository = None, event_manager: EventManager = None):
-        self.campaign_repo = campaign_repo
-        self.character_repo = character_repo
-        self.game_repo = game_repo
-        self.user_repo = user_repo
-        self.event_manager = event_manager
-
-    async def execute(self, campaign_id: UUID, user_id: UUID):
-        """
-        Release the user's character from this campaign.
-
-        Validates:
-        - User is a member of the campaign
-        - User has a character selected for this campaign
-        - No game is running in the campaign
-
-        On success, unlocks the character from this campaign.
-        """
-        # Get campaign
-        campaign = self.campaign_repo.get_by_id(campaign_id)
-        if not campaign:
-            raise ValueError(f"Campaign {campaign_id} not found")
-
-        # Business rule: User must be a member of the campaign
-        if not campaign.is_member(user_id):
-            raise ValueError("You are not a member of this campaign")
-
-        # Business rule: no game may be running
-        if self.game_repo and self.game_repo.get_open_game_for_campaign(campaign_id):
-            raise ValueError("Cannot release your character while a game is running")
-
-        # Get user's character for this campaign
-        character = self.character_repo.get_user_character_for_campaign(user_id, campaign_id)
-        if not character:
-            raise ValueError("You don't have a character selected for this campaign")
-
-        # Capture character name before unlocking
-        character_name = character.character_name
-
-        # Unlock character
-        character.unlock_from_campaign()
-        self.character_repo.save(character)
-
-        # Transition role: PLAYER → SPECTATOR
-        campaign.set_role(user_id, CampaignRole.SPECTATOR)
-        self.campaign_repo.save(campaign)
-
-        logger.info(f"Character {character.id} released from campaign {campaign_id} by user {user_id}")
-
-        # Broadcast to all other campaign members
-        if self.event_manager and self.user_repo:
-            acting_user = self.user_repo.get_by_id(user_id)
-            all_members = campaign.get_all_member_ids()
-            events = CampaignEvents.campaign_character_released(
-                campaign_member_ids=all_members,
-                acting_user_id=user_id,
-                campaign_id=campaign_id,
-                campaign_name=campaign.title,
-                player_screen_name=acting_user.screen_name if acting_user else "Unknown",
-                character_name=character_name
-            )
-            for event_config in events:
-                await self.event_manager.broadcast(event_config)
-
-        return character
-

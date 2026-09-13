@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from modules.campaign.model.campaign_model import Campaign as CampaignModel
 from modules.campaign.model.campaign_member_model import CampaignMember
+from shared_contracts.character_config import CharacterConfig
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate, HeroImageAssetMeta
 from modules.campaign.domain.campaign_role import CampaignRole
 
@@ -131,6 +132,10 @@ class CampaignRepository:
             campaign_model.updated_at = aggregate.updated_at
             campaign_model.last_played_at = aggregate.last_played_at
             campaign_model.max_players = aggregate.max_players
+            campaign_model.character_config_draft = (
+                aggregate.character_config_draft.model_dump(mode="json")
+                if aggregate.character_config_draft else None
+            )
 
             # Sync members join table
             self._sync_members(campaign_model, aggregate)
@@ -259,6 +264,10 @@ class CampaignRepository:
             updated_at=model.updated_at,
             last_played_at=model.last_played_at,
             max_players=model.max_players,
+            character_config_draft=(
+                CharacterConfig.model_validate(model.character_config_draft)
+                if model.character_config_draft else None
+            ),
             session_ids=session_ids,
             members=members
         )

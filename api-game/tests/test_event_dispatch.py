@@ -87,3 +87,29 @@ class TestHandlerContract:
     def test_no_duplicate_handlers(self):
         handler_names = [handler.__name__ for handler in EVENT_HANDLERS.values()]
         assert len(handler_names) == len(set(handler_names))
+
+
+class TestSystemAgnosticEventSurface:
+    """The wire carries no game system's mechanics.
+
+    Combat and initiative were D&D-shaped: a table playing something else has no use for
+    either, and the app was never the right place to decide when combat starts. The generic
+    group prompt replaces the one piece of it that was worth keeping — the GM asking
+    everyone for something, in their own words.
+    """
+
+    def test_combat_state_is_gone(self):
+        assert "combat_state" not in EVENT_HANDLERS
+        assert not hasattr(WebsocketEvent, "combat_state")
+
+    def test_initiative_prompt_all_is_gone(self):
+        assert "initiative_prompt_all" not in EVENT_HANDLERS
+        assert not hasattr(WebsocketEvent, "initiative_prompt_all")
+
+    def test_group_prompt_is_dispatchable(self):
+        assert EVENT_HANDLERS["group_prompt"] is WebsocketEvent.group_prompt
+
+    def test_the_single_target_dice_prompt_survives(self):
+        """Prompting one player by name is not system-specific; it stays."""
+        assert "dice_prompt" in EVENT_HANDLERS
+        assert "dice_prompt_clear" in EVENT_HANDLERS

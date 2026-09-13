@@ -20,7 +20,9 @@ Deliverables:
 7. Delete the stale build artefact `rollplay-shared-contracts/build/` (it is a copy of the
    package; it is not consumed by anything; confirm with `grep -r "build/lib" ..` returning
    nothing outside `build/` itself before deleting).
-8. Bump `pyproject.toml` version `0.3.0` → `0.4.0`.
+8. Bump `pyproject.toml` version `0.3.0` → `0.4.0`. This is a changelog marker only —
+   the package is installed by path in a monorepo and **nothing pins it**. Do not add a
+   pin to any `requirements.txt`.
 
 ## Rules that apply in this package
 
@@ -578,9 +580,12 @@ above locally.
 
 ## Not in this PR
 
-- No consumer changes. api-site and api-game will fail to import `PlayerCharacter` with the
-  old fields once they pin `0.4.0`; PRs 2 and 3 do that migration. Until then the services
-  stay on `0.3.0`.
+- No consumer changes *in this PR* — but the consumers are not insulated from it. Both
+  services install the package by path and dev volume-mounts it, so the moment PR 1 lands,
+  api-site's `StartGame` and api-game's ETL are building a `PlayerCharacter` whose old
+  fields are now forbidden extras. That breakage is expected and is repaired by PRs 2 and
+  3; the three merge together (see `00-agent-brief.md`, "PR sequence and gates"). Rebuild
+  both service images after this PR so the containers pick the new package up.
 - No `Number`, `Text`, `Choice` components. They arrive with the framework preset
   (`08-followups.md`).
 - No JSON-schema endpoint (that is api-site, PR 2).

@@ -45,7 +45,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCampaigns } from '../hooks/useCampaigns'
 import { useInvitedCampaignMembers } from '../hooks/useInvitedCampaignMembers'
 import { useCharacters } from '../hooks/useCharacters'
-import { useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
+import { useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
 import { useStartGame, useEndGame, useUpdateGame, useScheduleGame } from '../hooks/mutations/useSessionMutations'
 import { countPlayedGames, findCurrentSession, findOpenGame } from '../utils/homeRanking'
 import { gameStatusLine } from '../utils/gameStatusLine'
@@ -224,7 +224,7 @@ function PartyMemberCard({
   )
 }
 
-export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, openCreateCampaign, clearOpenCreateCampaign, showToast }) {
+export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, showToast }) {
   const router = useRouter()
   const queryClient = useQueryClient()
 
@@ -279,8 +279,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const { data: characters = [] } = useCharacters()
 
   // ── Mutation hooks ──
-  const createCampaignMutation = useCreateCampaign()
-  const updateCampaignMutation = useUpdateCampaign()
   const deleteCampaignMutation = useDeleteCampaign()
   const acceptInviteMutation = useAcceptInvite()
   const declineInviteMutation = useDeclineInvite()
@@ -322,14 +320,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   )
 
   // Campaign form modal
-  const [campaignFormOpen, setCampaignFormOpen] = useState(false)
-  const [campaignForm, setCampaignForm] = useState({
-    title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, maxPlayers: 8, editingCampaign: null
-  })
-  const closeCampaignForm = () => {
-    setCampaignFormOpen(false)
-    setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, maxPlayers: 8, editingCampaign: null })
-  }
 
   // Accept campaign invite
   const acceptCampaignInvite = async (campaignId) => {
@@ -465,62 +455,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     router.push(`/game?room_id=${game.id}`)
   }
 
-  // Open the campaign form on a blank campaign. Shared by the create tile and
-  // the `create_campaign` URL param Home links to.
-  const openNewCampaignForm = () => {
-    setCampaignForm({
-      title: '',
-      description: '',
-      heroImage: '/campaign-tile-bg.png',
-      heroImageAssetId: null,
-      maxPlayers: 8,
-      editingCampaign: null,
-    })
-    setCampaignFormOpen(true)
-  }
+  // Create and edit are one page now: the builder at /campaign/[id]. The modal that used
+  // to live here — and the separate edit modal — are gone with it.
+  const openNewCampaignForm = () => router.push('/campaign/new')
 
   // Create a new campaign
-  const createCampaign = async () => {
-    if (!user || !campaignForm.title.trim()) return
-
-    setError(null)
-
-    try {
-      await createCampaignMutation.mutateAsync({
-        title: campaignForm.title,
-        description: campaignForm.description,
-        heroImage: campaignForm.heroImage,
-        heroImageAssetId: campaignForm.heroImageAssetId,
-        maxPlayers: campaignForm.maxPlayers,
-      })
-
-      closeCampaignForm()
-    } catch (err) {
-      setError('Failed to create campaign: ' + err.message)
-    }
-  }
 
   // Update an existing campaign
-  const updateCampaign = async () => {
-    if (!user || !campaignForm.editingCampaign || !campaignForm.title.trim()) return
-
-    setError(null)
-
-    try {
-      await updateCampaignMutation.mutateAsync({
-        campaignId: campaignForm.editingCampaign.id,
-        title: campaignForm.title,
-        description: campaignForm.description,
-        heroImage: campaignForm.heroImage,
-        heroImageAssetId: campaignForm.heroImageAssetId,
-        maxPlayers: campaignForm.maxPlayers,
-      })
-
-      closeCampaignForm()
-    } catch (err) {
-      setError('Failed to update campaign: ' + err.message)
-    }
-  }
 
   // Show delete campaign confirmation modal
   const promptDeleteCampaign = (campaign) => {
@@ -644,14 +585,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       clearExpandCampaignId?.()
     }
   }, [expandCampaignId, campaigns, loading])
-
-  // Open the create form from the URL param Home's build card links to.
-  useEffect(() => {
-    if (openCreateCampaign && !loading) {
-      openNewCampaignForm()
-      clearOpenCreateCampaign?.()
-    }
-  }, [openCreateCampaign, loading])
 
   // Auto-open character modal from sessionStorage (after returning from character creation)
   useEffect(() => {
@@ -1969,17 +1902,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                             <div className="flex flex-wrap items-center gap-3">
                               {/* Configure */}
                               <button
-                                onClick={() => {
-                                  setCampaignForm({
-                                    editingCampaign: selectedCampaign,
-                                    title: selectedCampaign.title,
-                                    description: selectedCampaign.description || '',
-                                    heroImage: selectedCampaign.hero_image_asset ? null : (selectedCampaign.hero_image || '/campaign-tile-bg.png'),
-                                    heroImageAssetId: selectedCampaign.hero_image_asset?.asset_id || null,
-                                    maxPlayers: selectedCampaign.max_players ?? 8
-                                  })
-                                  setCampaignFormOpen(true)
-                                }}
+                                onClick={() => router.push(`/campaign/${selectedCampaign.id}?section=overview`)}
                                 className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
                                 style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
                               >
@@ -2111,178 +2034,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Create/Edit Campaign Modal */}
-      <Modal open={campaignFormOpen} onClose={closeCampaignForm} size="2xl">
-        {/* Header */}
-        <div className="p-6 border-b border-border-subtle">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)] text-content-on-dark">
-              {campaignForm.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
-            </h2>
-            <button
-              onClick={closeCampaignForm}
-              className="text-2xl font-bold hover:opacity-80 transition-opacity text-content-secondary"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium mb-2 text-content-on-dark">
-              Campaign Title
-            </label>
-            <input
-              type="text"
-              value={campaignForm.title}
-              onChange={(e) => setCampaignForm(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
-              placeholder="Enter campaign title"
-              maxLength={100}
-            />
-            <div className="text-right text-sm mt-1 text-content-secondary">
-              {(campaignForm.title || '').length}/100 characters
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2 text-content-on-dark">
-              Description (Optional)
-            </label>
-            <textarea
-              value={campaignForm.description}
-              onChange={(e) => setCampaignForm(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
-              rows="5"
-              placeholder="Enter campaign description"
-              maxLength={1000}
-            />
-            <div className="text-right text-sm mt-1 text-content-secondary">
-              {(campaignForm.description || '').length}/1000 characters
-            </div>
-          </div>
-          {/* Seats — a campaign setting, read into the game at every start */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-content-on-dark">
-              Seats at the table (1-8)
-            </label>
-            <select
-              value={campaignForm.maxPlayers}
-              onChange={(e) => setCampaignForm(prev => ({ ...prev, maxPlayers: parseInt(e.target.value) }))}
-              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
-            >
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(seats => (
-                <option key={seats} value={seats}>{seats} seats</option>
-              ))}
-            </select>
-            <div className="text-sm mt-1 text-content-secondary">
-              Applies the next time the game starts.
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2 text-content-on-dark">
-              Tile Background
-            </label>
-            <div className="flex flex-wrap gap-3">
-              {[
-                { value: '/campaign-tile-bg.png', label: 'Mountains' },
-                { value: '/floating-city.png', label: 'Floating City' },
-                { value: '/barren-land.png', label: 'Barren' },
-                { value: '/underworld.png', label: 'Underworld' },
-                { value: null, label: 'None' }
-              ].map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: option.value, heroImageAssetId: null }))}
-                  className={`aspect-[16/9] rounded-sm border-2 overflow-hidden relative ${
-                    !campaignForm.heroImageAssetId && campaignForm.heroImage === option.value ? 'border-border-active' : 'border-border'
-                  }`}
-                  style={{
-                    width: 'calc(33.333% - 0.5rem)',
-                    backgroundColor: option.value ? 'transparent' : COLORS.carbon
-                  }}
-                >
-                  {option.value && (
-                    <img
-                      src={option.value}
-                      alt={option.label}
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  )}
-                  <span
-                    className="absolute bottom-1 left-1 right-1 text-xs px-1 py-0.5 rounded-sm text-center text-content-accent"
-                    style={{ backgroundColor: `${COLORS.onyx}CC` }}
-                  >
-                    {option.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Library Images */}
-            {libraryImages.length > 0 && (
-              <>
-                <p className="text-xs font-medium mt-4 mb-2 text-content-secondary">From Library</p>
-                <div className="flex flex-wrap gap-3">
-                  {libraryImages.map((asset) => (
-                    <button
-                      key={asset.id}
-                      type="button"
-                      onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: null, heroImageAssetId: asset.id }))}
-                      className={`aspect-[16/9] rounded-sm border-2 overflow-hidden relative ${
-                        campaignForm.heroImageAssetId === asset.id ? 'border-border-active' : 'border-border'
-                      }`}
-                      style={{ width: 'calc(33.333% - 0.5rem)' }}
-                    >
-                      <S3Image
-                        src={asset.s3_url}
-                        fileSize={asset.file_size}
-                        assetId={asset.id}
-                        alt={asset.filename}
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                      <span
-                        className="absolute bottom-1 left-1 right-1 text-xs px-1 py-0.5 rounded-sm text-center text-content-accent truncate"
-                        style={{ backgroundColor: `${COLORS.onyx}CC` }}
-                      >
-                        {asset.filename}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t border-border-subtle flex justify-end gap-3">
-          <Button
-            variant="ghost"
-            onClick={closeCampaignForm}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={campaignForm.editingCampaign ? updateCampaign : createCampaign}
-            disabled={!campaignForm.title.trim() || (createCampaignMutation.isPending || updateCampaignMutation.isPending)}
-          >
-            {(createCampaignMutation.isPending || updateCampaignMutation.isPending) ? (
-              <>
-                <Spinner size="sm" className="border-white mr-2" />
-                {campaignForm.editingCampaign ? 'Saving...' : 'Creating...'}
-              </>
-            ) : (
-              <>
-                <FontAwesomeIcon icon={campaignForm.editingCampaign ? faGear : faPlus} className="mr-2" />
-                {campaignForm.editingCampaign ? 'Save Changes' : 'Create Campaign'}
-              </>
-            )}
-          </Button>
-        </div>
-      </Modal>
 
       {/* End Game Confirmation Modal */}
       {endGameTarget && (
@@ -2353,10 +2104,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
           }}
           onCharacterSelected={handleCharacterSelected}
           onCreateCharacter={() => {
-            const campaignId = characterModalCampaign.id
+            const sessionId = characterModalCampaign.sessions?.[0]?.id
             setShowCharacterModal(false)
             setCharacterModalCampaign(null)
-            router.push(`/character/create?return_campaign=${campaignId}`)
+            router.push(sessionId ? `/character/new?session_id=${sessionId}` : '/character/new')
           }}
         />
       )}

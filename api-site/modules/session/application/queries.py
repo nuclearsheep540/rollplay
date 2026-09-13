@@ -13,7 +13,6 @@ from modules.session.api.schemas import SessionResponse, RosterPlayerResponse
 from modules.session.model.session_model import Session as SessionModel, SessionJoinedUser
 from modules.user.model.user_model import User
 from modules.characters.model.character_model import Character
-from modules.characters.model.character_class_model import CharacterClassEntry  # noqa: F401
 
 
 # How many past games ride along on a session response. The campaign drawer
@@ -43,39 +42,33 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
     host_user = db.query(User).filter(User.id == model.host_id).first()
     host_name = host_user.screen_name or host_user.email if host_user else "Unknown"
 
-    # Build roster with character details via cross-table join
-    roster_query = db.query(
-        SessionJoinedUser, User, Character
-    ).join(
+    # The roster is users. The party is characters, and a character's session_id IS its
+    # party membership — so this is one left join on that column, not a pointer lookup.
+    roster_query = db.query(SessionJoinedUser, User).join(
         User, SessionJoinedUser.user_id == User.id
-    ).outerjoin(
-        Character, SessionJoinedUser.selected_character_id == Character.id
-    ).options(
-        selectinload(Character.class_entries)
     ).filter(
         SessionJoinedUser.session_id == model.id
     ).all()
 
+    party_by_user_id = {
+        character.user_id: character
+        for character in db.query(Character).filter(
+            Character.session_id == model.id,
+            Character.is_deleted == False,  # noqa: E712
+        ).all()
+    }
+
     roster = []
     joined_user_ids = []
-    for joined_user, user, character in roster_query:
+    for joined_user, user in roster_query:
         joined_user_ids.append(user.id)
-        character_class_str = None
-        if character and character.class_entries:
-            character_class_str = ' / '.join(
-                entry.class_code.replace("_", " ").title() for entry in character.class_entries
-            )
+        character = party_by_user_id.get(user.id)
         roster.append(RosterPlayerResponse(
             user_id=user.id,
             username=user.screen_name or user.email,
             character_id=character.id if character else None,
-            character_name=character.character_name if character else None,
-            character_level=character.level if character else None,
-            character_class=character_class_str,
-            character_race=(
-                character.species_code.replace("_", " ").title()
-                if character and character.species_code else None
-            ),
+            display_name=character.display_name if character else None,
+            is_alive=character.is_alive if character else None,
             joined_at=joined_user.joined_at
         ))
 

@@ -402,7 +402,7 @@ CREATE_BODY = """
     <div class="eyebrow" style="color: #D9A441;">Take a seat</div>
     <div class="display" style="color: #F7F4F3; font-size: 36px; line-height: 1.1; text-shadow: 0 2px 10px rgba(5,4,3,.85);">Secret to Bear</div>
     <div style="display: flex; align-items: center; gap: 10px; color: #CFC9C2; font-size: 13.5px;">
-      <span>Built against</span><span class="version skew"><span class="unskew">v1.0.0</span></span><span>run by Matt</span>
+      <span>Built against</span><span class="version skew"><span class="unskew">v1</span></span><span>run by Matt</span>
     </div>
   </div>
 
@@ -499,13 +499,13 @@ def create_page() -> str:
 def main() -> None:
     title = "Secret to Bear"
     (HERE / "Main.dc.html").write_text(page(
-        "Campaign · Overview", "Overview", title, "v1.0.0",
+        "Campaign · Overview", "Overview", title, "v1",
         [("Story", True), ("Setup", False)], OVERVIEW_BODY))
     (HERE / "World.dc.html").write_text(page(
-        "Campaign · World", "World", title, "v1.0.0",
+        "Campaign · World", "World", title, "v1",
         [("Tables", True), ("Reference", False)], WORLD_BODY))
     (HERE / "Character.dc.html").write_text(page(
-        "Campaign · Character", "Character", title, "v1.0.0",
+        "Campaign · Character", "Character", title, "v1",
         [("Components", True), ("Versions", False)], CHARACTER_BODY))
     (HERE / "CharacterCreate.dc.html").write_text(create_page())
     print("wrote 4 artboards")

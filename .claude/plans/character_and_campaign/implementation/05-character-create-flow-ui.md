@@ -1,4 +1,4 @@
-# 05 — Character create flow, character detail, seats on the dashboard
+# 05 — Character create flow, character detail, the party on the dashboard
 
 > Read `00-agent-brief.md` first. Depends on PRs 2 and 4. The fourth artboard of
 > `../design-mock.html` (`CharacterCreate.dc.html`) is the create form. Paths relative to
@@ -69,7 +69,7 @@ config in one request. Populate it in the campaign list/read helpers from
 ## Chooser — `app/characters/components/CampaignChooser.js`
 
 Heading (Metamorphous 28px): "Which table is this character for?" Sub: "Characters are
-built against a campaign's character config and take a seat at its table."
+built against a campaign's character config and join the party at its table."
 
 List: every campaign from `useCampaigns(user.id).campaigns` (member or host), as rows:
 title, host screen name, `v<character_config_version>` tag or the disabled reason. A row is
@@ -96,16 +96,16 @@ add `useSession(sessionId)` → `GET /api/sessions/{id}` key `['sessions', id]`)
 `useCharacterConfigState(campaignId)` (`latest`, `latest_version_id`).
 
 Layout (`max-w-[760px] mx-auto`): the hero plate (same clip and gradient as the campaign
-band's plate; eyebrow gold "Take a seat", campaign title Metamorphous 36px, line
+band's plate; eyebrow gold "Join the party", campaign title Metamorphous 36px, line
 `Built against v<n> · run by <host>`), then a white card `p-7` with the inputs in GM
 order (attributes grouped, above), a footer row: hint "Nothing here is checked against a
-rulebook. Your table decides what is fair." and gold `PlateButton` **Take a seat**.
+rulebook. Your table decides what is fair." and gold `PlateButton` **Join the party**.
 
 Submit: build `values` from every configuration (skip a `name` whose text is empty and
 not required), `POST /api/characters/` `{session_id, values}` via `useCreateCharacter()`
 (new, in `app/characters/hooks/useCharacterMutations.js`; invalidates `['characters']`,
 `['campaigns']`, `['sessions', sessionId]`). On 400 show the server message in a toast
-(it names missing required labels). On success: toast "Seated at <campaign title>",
+(it names missing required labels). On success: toast "Joined the party at <campaign title>",
 `router.push('/character/<id>')`.
 
 No draft, no multi-step, no back button beyond the browser's. Refreshing loses unsent input;
@@ -124,7 +124,7 @@ raw display (number, text, or the step label for weighted). PR 6 replaces it.
 Header row: display name (Metamorphous), a `v<config_snapshot.version>` tag **only when
 `config_version_id` is set** (a keepsake, migrated or orphaned, has no version to claim), a
 **Keepsake** chip when `is_keepsake` with body copy "This character isn't at a table. It's
-yours to keep; it can't take a seat." (the copy must not assume the campaign was deleted —
+yours to keep; it can't join a party." (the copy must not assume the campaign was deleted —
 migrated characters have a campaign that still exists), a **Dead** chip when `!is_alive`. Actions (owner or GM):
 "Mark dead" / "Mark alive" (`PATCH /alive`), "Delete" (existing hand-rolled modal; on 400
 "eject first" show the server message). Edits to values go through
@@ -132,8 +132,8 @@ migrated characters have a campaign that still exists), a **Dead** chip when `!i
 "A game is running: edit this character in the game" and leave the field unchanged.
 
 Delete the Edit → wizard link (`[id]/page.js:123`) and every `active_campaign` read
-(`[id]/page.js:89`, `HomeManager.js:63`, `CharacterSelectionModal.js:88`,
-`game/hooks/useCharacterRuntime.js:61`).
+(`[id]/page.js:89`, `HomeManager.js:63`, `game/hooks/useCharacterRuntime.js:61`;
+`CharacterSelectionModal.js:88` goes with the file).
 
 ## Characters tab — `app/dashboard/components/CharacterManager.js`
 
@@ -151,29 +151,40 @@ create card → `/character/new`. `HomeManager.js:63`: drop the `active_campaign
 
 - `characterLine` (1893-1901): `character_display_name`, plus "· dead" when
   `character_is_alive === false`. Remove level/class.
-- `handleSelectCharacter` (586) opens `CharacterSelectionModal` as today.
+- `handleSelectCharacter` (586) is **deleted**. A roster member with no character has
+  exactly one action now — build one — so the button reads "Create a character" and
+  navigates to `/character/new?session_id=<sessionId>`. There is nothing to choose between
+  (see `02-api-site.md` §0 and §3.3), so there is no chooser.
 - `handleReleaseCharacter` (598) → `handleEjectCharacter`, calling
-  `useEjectMyCharacter(sessionId)` (`DELETE /api/sessions/{id}/my-character`). Copy:
+  `useEjectCharacter(characterId)` (`POST /api/characters/{id}/eject`). Copy:
   "Eject character" and the tooltip "Cannot eject while a game is running" becomes
-  **allowed** (the backend permits it and notifies the room) — delete the
-  `hasRunningGame` gate at 1911/610 for this action only.
-- Host-side `PartyMemberCard` gains an "Eject" action for other members
-  (`DELETE /api/sessions/{id}/players/{user_id}/character`), confirm via `ConfirmDialog`
-  (`variant="warning"`, text "Eject <name>'s character from the seat? They keep the
-  character.").
-- `sessionStorage openCharacterModalForCampaign` (657-672): keep.
+  **allowed** (the backend permits it, saves the character's current state out of the room
+  and then notifies it) — delete the `hasRunningGame` gate at 1911/610 for this action only.
+  Confirm first via `ConfirmDialog` (`variant="warning"`): heading "Eject this character?",
+  body "They leave the table and become a keepsake you keep. They can't come back to this
+  campaign, and you'll be able to build a new character straight away." On **503** show the
+  server message ("Couldn't save this character's current state from the running game; try
+  again") and leave the character where it is.
+- Host-side `PartyMemberCard` gains an "Eject" action for other members — the **same**
+  endpoint, `POST /api/characters/{id}/eject`, since permission is read off the character
+  — with the `ConfirmDialog` "Eject <name>'s character? It leaves the table for good and
+  stays theirs to keep."
+- `sessionStorage openCharacterModalForCampaign` (657-672): **delete** — it existed to
+  reopen the selection modal after a redirect, and there is no modal.
 
-## `CharacterSelectionModal.js` (rewrite the list)
+## `CharacterSelectionModal.js` — delete the file
 
-Props unchanged except `campaign` now supplies `sessions[0].id`. Lists the user's
-characters where `character.session_id === sessionId && character.is_alive &&
-!character.is_deleted`, excluding the currently seated one. Each row: avatar wedge,
-`display_name`, `v<config_snapshot.version>`. "Seat" → `useSeatCharacter(sessionId)`
-(`POST /api/sessions/{id}/select-character`). Footer: "Create a character for this table"
-→ `/character/new?session_id=<sessionId>`. Delete `characterMetaLine`, hp/ac lines, the
-`active_campaign` filter, and `useSelectCharacter`/`useReleaseCharacter` from
-`hooks/mutations/useCharacterMutations.js` (replace the file's exports with
-`useDeleteCharacter` only; the seat/eject hooks live in `useSessionMutations.js`).
+It has nothing to list. Creating a character joins the party, and ejection unbinds the
+character from the table, so a user never holds two characters at one table — the modal's
+list is empty by construction. Every entry point to it becomes
+"Create a character" → `/character/new?session_id=<sessionId>`.
+
+Delete the component, its imports, `characterMetaLine`, the `active_campaign` filter, and
+`useSelectCharacter` / `useReleaseCharacter` from
+`hooks/mutations/useCharacterMutations.js` (the file's exports become `useDeleteCharacter`
+only; the eject hooks live in `useSessionMutations.js`). Choosing between several
+characters at one table is a real feature the day a table wants it — it is in
+`08-followups.md`, and it needs the deleted backend command back before any UI.
 
 ## Hooks summary (new or changed)
 
@@ -184,9 +195,7 @@ characters where `character.session_id === sessionId && character.is_alive &&
 | `useUpdateCharacterComponent(id)` | same | `PUT /api/characters/{id}/components/{cid}` | character/{id}, characters |
 | `useSetCharacterAlive(id)` | same | `PATCH /api/characters/{id}/alive` | character/{id}, characters, campaigns |
 | `useSession(id)` | `app/dashboard/hooks/useSession.js` | `GET /api/sessions/{id}` | — |
-| `useSeatCharacter(sessionId)` | `app/dashboard/hooks/mutations/useSessionMutations.js` | `POST /api/sessions/{id}/select-character` | campaigns, characters, sessions/{id} |
-| `useEjectMyCharacter(sessionId)` | same | `DELETE /api/sessions/{id}/my-character` | same |
-| `useEjectPlayerCharacter(sessionId)` | same | `DELETE /api/sessions/{id}/players/{uid}/character` | same |
+| `useEjectCharacter()` | `app/characters/hooks/useCharacterMutations.js` | `POST /api/characters/{id}/eject` | campaigns, characters, sessions/{id} |
 
 All via `authFetch`.
 
@@ -197,6 +206,7 @@ All via `authFetch`.
   `components/CharacterSheet.js` (the dashboard-side D&D sheet), `FeatureChoicePicker.js`,
   `ExpandableTile.js`, `ClassTile.js`, `SpeciesTile.js`, `BackgroundTile.js`,
   `StepFooter.js`, `WizardChrome.js`
+- `app/dashboard/components/CharacterSelectionModal.js` and every import of it
 - `app/(authenticated)/character/hooks/useCharacterDraft.js`, `useReferenceData.js`
 - `app/(authenticated)/character/utils/pointBuyCalculations.js`, `hpAcCalculations.js`,
   `diceRolling.js` (confirm no game-side import first; the game has its own dice code)

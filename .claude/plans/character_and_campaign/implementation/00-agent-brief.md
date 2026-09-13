@@ -47,10 +47,16 @@ the SRD ruleset code stays, dormant, for a later framework preset.
 - **Run tests in the container that owns the code**: `docker exec api-site-dev python -m
   pytest <path> -q`, `docker exec api-game-dev python -m pytest <path> -q`, and for
   contracts `docker exec api-site-dev python -m pytest /rollplay-shared-contracts/tests/ -q`.
-- **After changing `requirements.txt` or the contracts package version**, rebuild the
+- **After changing `requirements.txt` or the shared contracts package**, rebuild the
   service image: `docker-compose -f docker-compose.dev.yml build <service> &&
   docker-compose -f docker-compose.dev.yml up -d <service>`. Dev images install deps at
   build; a running container can hide a dead uvicorn worker.
+- **There is no contracts version to pin.** `rollplay-shared-contracts` is a monorepo
+  package installed by path — `pip install -e /rollplay-shared-contracts` in
+  `docker/dev/api-site/Dockerfile` and `docker/dev/api-game/Dockerfile`, plain
+  `pip install` in the prod images — and the source is volume-mounted into both dev
+  containers. Every service sees a contracts change the moment it lands. Neither
+  `requirements.txt` mentions the package; do not add a pin.
 - **Never run `npm run build` (or `npx next build` inside the container) while
   `rollplay-dev` is up.** It clobbers the dev server's `.next`. To compile-check, use the
   throwaway-page method in the project memory or restart `rollplay-dev` and read its logs.
@@ -73,7 +79,9 @@ the SRD ruleset code stays, dormant, for a later framework preset.
 - **No emoji in log prefixes**; use a SCREAMING-CASE text tag.
 - **No user-facing copy may assume one game system.** No "class", "race", "AC",
   "initiative", "spell", "d20", "nat 1". Safe words: campaign, party, table, Game Master,
-  adventure, character, seat, game.
+  adventure, character, party, game. "Seat" means a place in a live game and nothing else
+  (see `02-api-site.md` §0: Seat is hot and api-game's; Roster is users; Party is
+  characters).
 - **UI styling**: Tailwind with the app's tokens (`surface-*`, `content-*`, `border-*`,
   `interactive-*`), Metamorphous for display text, Inter body, the 8° skew family from
   `app/styles/plateGeometry.js`, plate buttons from `globals.css` (`.home-plate-*`).
@@ -86,9 +94,28 @@ the SRD ruleset code stays, dormant, for a later framework preset.
 All in `../00-high-level.md`. The ones you will be tempted to revisit:
 
 - Characters are **bound to** a session by id, not contained by it. Own aggregate.
-- **One seated character per user per session** (roster key). Many bound over time.
-- Keepsakes: characters **survive** campaign deletion with a null session, campaign and
-  version pointer, rendering from their embedded snapshot.
+- **Roster, Party, Seat are three different things.** `02-api-site.md` §0 defines them and
+  that table is binding on every file you write. The party is a **query**, never a column:
+  `session_joined_users.selected_character_id` is dropped.
+- **One character per user per party**, enforced by a partial unique index that is *not*
+  qualified by `is_alive` — a dead character keeps its place until someone ejects it.
+- **Creating a character joins the party; ejecting leaves it.** Eject nulls `session_id`,
+  `campaign_id` and `config_version_id`, so the player can build another immediately.
+  An ejected character is a keepsake and never rejoins (decided 2026-09-12). Nothing
+  produces a second character at one table, which is why `SelectCharacterForSession`, its
+  endpoint and `CharacterSelectionModal` are deleted rather than rewritten.
+- **Eject is addressed by character**: `POST /api/characters/{id}/eject`, owner or the
+  session's host. Not by session, not by user — the character knows both.
+- Keepsakes: characters **survive** campaign deletion — and ejection — with a null
+  session, campaign and version pointer, rendering from their embedded snapshot. One
+  orphan state, reached three ways (campaign deleted, character ejected, row migrated).
+- **The `player` role is derived, never stored.** PR 2 deletes its only two writers; Start
+  computes dm / mod / player (has a party character) / spectator. `SetMemberRole` assigns
+  only `mod`.
+- **One call carries a player's whole state in a room.** `PUT /game/{room_id}/player/character`
+  takes identity always and the character half optionally; an absent character half means
+  the player holds no character. Late-joiner sync, joining and ejection all go through it.
+  There is no DELETE route and no second identity-only route.
 - Version is an **integer**. Save writes the draft; **Publish** mints the version.
 - **Display name** = every Name value in config order, space-joined; fallback
   `"Unnamed character"`.
@@ -103,7 +130,7 @@ All in `../00-high-level.md`. The ones you will be tempted to revisit:
 - **Existing characters are kept as keepsakes**, never discarded (decided 2026-09-12,
   reversing an earlier lean). The backfill in `02-api-site.md` §5 turns each old row into a
   keepsake: no campaign, no session, no version, a snapshot built from its name, hit
-  points and ability scores. Current sessions end up with no seated characters. This is
+  points and ability scores. Current sessions end up with no party at all. This is
   the same state a character reaches when its campaign is deleted, so no new code path
   exists for migrated rows.
 - **Schema changes are two autogenerated migrations with a backfill script between
@@ -121,13 +148,16 @@ All in `../00-high-level.md`. The ones you will be tempted to revisit:
 | 2 | `02-api-site.md` | api-site suite green in container; migration autogenerated and applied; `07` steps 1–4 pass by curl |
 | 3 | `03-api-game.md` | api-game suite green; `07` steps 5–7 pass by curl + a websocket client |
 | 4 | `04-campaign-builder-ui.md` | the Overview and Character tabs of the mock work end to end in the browser against PR 2 |
-| 5 | `05-character-create-flow-ui.md` | a second dev user creates and seats a character against a published version |
+| 5 | `05-character-create-flow-ui.md` | a second dev user creates a character against a published version and joins the party |
 | 6 | `06-game-runtime-ui.md` | `07` in full |
 
-PRs 1–3 are backend and may be developed against each other locally, but each is its own
-PR with its own tests green. Pin the contracts version in `api-site/requirements.txt` and
-`api-game/requirements.txt` in PRs 2 and 3 respectively (find the current pin line by
-grepping `rollplay-shared-contracts`), and rebuild those images.
+PRs 1–3 are backend and each is its own PR with its own tests green, but they are **one
+deployable train**. Because contracts installs by path, PR 1 alone leaves api-site and
+api-game constructing a `PlayerCharacter` they no longer populate: there is no version
+boundary to hide behind. Develop all three on the same branch, merge them together, and
+ship nothing until PR 3 is green. Rebuild both service images after PR 1:
+`docker-compose -f docker-compose.dev.yml build api-site api-game && docker-compose -f
+docker-compose.dev.yml up -d api-site api-game`.
 
 ## When you finish each PR
 
