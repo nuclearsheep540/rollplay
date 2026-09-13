@@ -7,7 +7,17 @@ from .audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from .assets import AssetRef
 from .base import ContractModel
 from .character import DungeonMaster, PlayerCharacter, SessionUser
-from .character_config import CharacterConfig, CharacterSheet, ComponentChange, ComponentGroup, ConfigEntry, diff_configs
+from .character_config import (
+    CharacterConfig,
+    CharacterSheet,
+    ComponentChange,
+    ComponentGroup,
+    ConfigEntry,
+    Reconciliation,
+    diff_configs,
+    initial_value_for,
+    reconcile_values,
+)
 from .components import (
     RUNTIME_TYPE_ORDER,
     AttributeConfiguration,
@@ -54,6 +64,9 @@ __all__ = [
     "ComponentChange",
     "ComponentGroup",
     "ConfigEntry",
+    "Reconciliation",
+    "initial_value_for",
+    "reconcile_values",
     "ComponentConfiguration",
     "ComponentValue",
     "diff_configs",

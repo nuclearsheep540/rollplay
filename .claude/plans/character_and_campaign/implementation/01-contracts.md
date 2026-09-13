@@ -329,6 +329,19 @@ class AttributeValue(ContractModel):
 > identity by default. `GET /api/characters/{id}` now carries `latest_version` and
 > `version_changes` (`GetCharacterVersionDrift`): what the campaign published since the
 > character was built — information, never a block.
+>
+> **Revision (2026-09-13, update to version).** A character *can* move forward, but only
+> by its owner's confirmation. Contract: `initial_value_for(configuration)` (mirror of the
+> frontend's) and `reconcile_values(older, newer, values) -> Reconciliation {values, kept,
+> added, dropped, reset}` — kept when the value still pairs (range-blind as ever), reset
+> when kind/representation changed, dropped when the component is gone, seeded when new
+> (a single-select cannot be seeded and is left for the form). api-site:
+> `CharacterAggregate.adopt_config_version` (same bar as create: pairing + required),
+> `AdoptConfigVersion` (owner only, at a table, latest newer, no open game),
+> `GetCharacterUpgradePreview`; routes `GET /api/characters/{id}/upgrade-preview`,
+> `POST /api/characters/{id}/adopt-version`. Frontend: "Update to vN" on the drift panel →
+> `/character/{id}/update`, A (now) beside B (the form on the new config, pre-filled from
+> the reconciliation), confirm applies. Mid-game update is runtime work (06).
 
 ```python
 # Copyright (C) 2025 Matthew Davey

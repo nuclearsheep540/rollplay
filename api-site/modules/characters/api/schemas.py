@@ -38,6 +38,26 @@ class CharacterCreateRequest(BaseModel):
     avatar_asset_id: Optional[UUID] = None
 
 
+class AdoptVersionRequest(BaseModel):
+    """The values the player confirmed for the latest version — the whole document."""
+
+    values: Dict[str, ComponentValue]
+
+
+class UpgradePreviewResponse(BaseModel):
+    """The move to the latest version, before the player confirms it."""
+
+    latest_version_id: UUID
+    latest_version: int
+    config: CharacterConfig
+    changes: List[ComponentChange]
+    values: Dict[str, ComponentValue]
+    kept: List[str]
+    added: List[str]
+    dropped: List[str]
+    reset: List[str]
+
+
 class UpdateComponentRequest(BaseModel):
     value: ComponentValue
 
@@ -84,6 +104,9 @@ class CharacterResponse(BaseModel):
     # character is on the latest version or is a keepsake. Information, never a block.
     latest_version: Optional[int] = None
     version_changes: List[ComponentChange] = []
+    # The open game at this character's table, if any: while it runs the room owns the
+    # character and the page renders read-only. None for a keepsake or a quiet table.
+    open_game_id: Optional[UUID] = None
 
 
 class CharacterRuntimeBundle(BaseModel):

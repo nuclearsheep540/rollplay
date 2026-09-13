@@ -9,7 +9,7 @@ import {
   DM_ARROW,
   ACTIVE_BACKGROUND,
 } from '../../styles/constants';
-import Switch from '@/app/shared/components/Switch';
+import PlateButton from '@/app/dashboard/components/home/PlateButton';
 import DicePrompt from './DMDicePrompt';
 
 // Local helper for title case (avoids prototype mutation)
@@ -18,25 +18,32 @@ const titleCase = (str) =>
     txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
   );
 
-export default function CombatControlsPanel({
+/**
+ * The GM's prompts: ask one player for a roll, or the whole table for something in the
+ * GM's own words. Nothing here decides what a prompt means.
+ */
+export default function PromptsPanel({
   promptPlayerRoll,
-  promptAllPlayersInitiative,
-  combatActive = true,
-  setCombatActive,
+  promptEveryone,
   gameSeats,
   activePrompts = [],
   clearDicePrompt,
   characterNameMap = {},
   displayNameMap = {},
+  quickPicksFor = null,
 }) {
   // State for dice roll prompts
   const [selectedPlayerForPrompt, setSelectedPlayerForPrompt] = useState('general');
   const [isPlayerSelectExpanded, setIsPlayerSelectExpanded] = useState(true);
   const [rollPromptModalOpen, setRollPromptModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState('');
+  const [everyoneText, setEveryoneText] = useState('');
 
-  const toggleCombat = () => {
-    setCombatActive(!combatActive);
+  const sendEveryone = () => {
+    const text = everyoneText.trim();
+    if (!text) return;
+    promptEveryone(text);
+    setEveryoneText('');
   };
 
   // Handle prompting specific player for specific roll type — uses userId
@@ -56,6 +63,7 @@ export default function CombatControlsPanel({
           selectedPlayer={selectedPlayerForModal}
           selectedPlayerDisplayName={resolveDisplayName(selectedPlayerForModal, characterNameMap, displayNameMap)}
           onPromptRoll={handlePromptPlayerForRoll}
+          quickPicks={quickPicksFor ? quickPicksFor(selectedPlayerForModal) : []}
         />
 
         {/* Active Dice Prompts Status */}
@@ -82,6 +90,7 @@ export default function CombatControlsPanel({
                     <div>
                       <div>
                         {titleCase(resolveDisplayName(prompt.player, characterNameMap, displayNameMap))} • {prompt.rollType}
+                        {prompt.groupPromptId && <span className="ml-1 opacity-60">(everyone)</span>}
                       </div>
                     </div>
                     <button
@@ -96,26 +105,23 @@ export default function CombatControlsPanel({
           </div>
         )}
 
-        {/* Initiate Combat Toggle */}
-        <div
-          className={`${DM_CHILD} w-full flex items-center justify-between cursor-pointer`}
-          onClick={toggleCombat}
-          role="switch"
-          aria-checked={combatActive}
-          aria-label="Combat"
-        >
-          ⚔️ Combat
-          <Switch checked={combatActive} />
+        {/* Prompt everyone — the GM says what for */}
+        <div className={`${DM_CHILD} w-full`}>
+          <div className="mb-2">Prompt everyone</div>
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 min-w-0 px-2 py-1.5 rounded-sm border border-white/20 bg-black/30 text-sm text-content-on-dark"
+              placeholder="What should everyone roll?"
+              maxLength={120}
+              value={everyoneText}
+              onChange={(event) => setEveryoneText(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && sendEveryone()}
+            />
+            <PlateButton variant="gold" size="sm" onClick={sendEveryone} disabled={!everyoneText.trim()}>
+              Prompt all
+            </PlateButton>
+          </div>
         </div>
-
-        <button
-          className={`${DM_CHILD} w-full text-left`}
-          onClick={() => {
-            promptAllPlayersInitiative();
-          }}
-        >
-          ⚡ Prompt All Players - Initiative
-        </button>
 
         {/* Prompt Dice Throw - shows player selection */}
         <div>

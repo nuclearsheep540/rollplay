@@ -7,7 +7,7 @@ import { FieldHeader } from '../shared/Fields'
 import ChoiceChips from './ChoiceChips'
 
 /** The player's answer to an identity, in the shape the GM chose for it. */
-export default function CreateInput({ configuration, value, error, onChange }) {
+export default function CreateInput({ configuration, value, error, onChange, readOnly = false }) {
   const input = configuration.input
 
   return (
@@ -19,6 +19,7 @@ export default function CreateInput({ configuration, value, error, onChange }) {
             error ? 'border-feedback-error' : 'border-[#37322F]'
           }`}
           aria-invalid={!!error}
+          readOnly={readOnly}
           maxLength={input.max_length}
           value={value?.answer?.text ?? ''}
           onChange={(event) => onChange({ ...value, answer: { kind: 'text', text: event.target.value } })}
@@ -28,6 +29,7 @@ export default function CreateInput({ configuration, value, error, onChange }) {
           input={input}
           answer={value?.answer}
           invalid={!!error}
+          disabled={readOnly}
           onChange={(answer) => onChange({ ...value, answer })}
         />
       )}

@@ -33,10 +33,10 @@ export const handleInitialState = (data, handlers) => {
   const {
     seat_layout,
     dungeon_master,
-    combat_active,
     max_players,
     campaign_id,
     player_metadata,
+    character_configs,
     audio_state
   } = data;
 
@@ -45,6 +45,12 @@ export const handleInitialState = (data, handlers) => {
 
   if (handlers.setPlayerMetadata) {
     handlers.setPlayerMetadata(metadata);
+  }
+
+  // Every config version in the party, keyed by version id — players on different
+  // versions each resolve their own. The values in player_metadata pair against these.
+  if (handlers.setCharacterConfigs) {
+    handlers.setCharacterConfigs(character_configs || {});
   }
 
   // Late-join / reconnect: hand the snapshot to the client whenever one exists, even an
@@ -62,11 +68,6 @@ export const handleInitialState = (data, handlers) => {
   // Set campaign ID for asset library calls
   if (handlers.setCampaignId && campaign_id) {
     handlers.setCampaignId(campaign_id);
-  }
-
-  // Set combat state
-  if (handlers.setCombatActive !== undefined) {
-    handlers.setCombatActive(combat_active || false);
   }
 
   // Convert seat layout (user_id array) to frontend unified structure
@@ -133,22 +134,38 @@ export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   setGameSeats(updatedSeats);
 };
 
+/** The character half of a player's metadata — what an eject clears. */
+const CHARACTER_FIELDS = ['character_id', 'display_name', 'config_version_id', 'values', 'avatar_asset_id', 'color'];
+
 /**
  * Handle player character change during active session
  * Updates the seat with new character data — matched by user_id
  */
-export const handlePlayerCharacterChanged = (data, { setGameSeats, setPlayerMetadata }) => {
+export const handlePlayerCharacterChanged = (data, { setGameSeats, setPlayerMetadata, setCharacterConfigs }) => {
   console.log("received player character change:", data);
   const { user_id } = data;
   if (!user_id) return;
+
+  // The event may carry the config it was built against, so a player on a version this
+  // client has not seen (a late joiner on v7 among v6s) can still be rendered.
+  if (data.config && data.config_version_id && setCharacterConfigs) {
+    setCharacterConfigs(prev => (prev[data.config_version_id] ? prev : { ...prev, [data.config_version_id]: data.config }));
+  }
 
   // Merge incoming fields into existing metadata so partial events (e.g. a
   // late-accept that only carries {user_id, player_name, campaign_role}) don't
   // wipe character fields, and a full character sync doesn't wipe role. Mirror
   // of the merge pattern api-game uses on its end of the PUT.
   const incoming = Object.fromEntries(
-    Object.entries(data).filter(([, v]) => v !== null && v !== undefined)
+    Object.entries(data).filter(([key, v]) => key !== 'config' && v !== null && v !== undefined)
   );
+
+  // A null character_id is an eject: the seat keeps its player, loses its character.
+  const cleared = 'character_id' in data && data.character_id === null;
+  if (cleared) {
+    for (const field of CHARACTER_FIELDS) incoming[field] = null;
+    incoming.values = {};
+  }
 
   // color is character-owned and may legitimately be null (the swapped-in
   // character has no custom color) — carry the explicit null through the
@@ -160,6 +177,10 @@ export const handlePlayerCharacterChanged = (data, { setGameSeats, setPlayerMeta
 
   if (setPlayerMetadata) {
     setPlayerMetadata(prev => {
+      // When the event carries values they are the room's current ones, already filtered
+      // for this viewer, and they replace what is held: what is held may be nothing at
+      // all, because the HTTP room read strips values on purpose. An event without values
+      // (a late-accept carrying only identity) leaves them alone.
       const merged = { ...(prev[user_id] || {}), ...incoming };
       return { ...prev, [user_id]: merged };
     });
@@ -264,11 +285,20 @@ export const handlePlayerKicked = (data, { thisUserId, stopRemoteTrack, remoteTr
   }
 };
 
-export const handleCombatState = (data, { setCombatActive }) => {
-  console.log("received combat state change:", data);
-  const { combatActive: newCombatState } = data;
-
-  setCombatActive(newCombatState);
+/**
+ * One component value changed, in the room, for one player. Sent per viewer already
+ * filtered for secrets, so whatever arrives is ours to show.
+ */
+export const handlePlayerComponentChanged = (data, { setPlayerMetadata }) => {
+  const { user_id, component_id, value } = data;
+  if (!user_id || !component_id || !setPlayerMetadata) return;
+  setPlayerMetadata(prev => {
+    const existing = prev[user_id] || {};
+    return {
+      ...prev,
+      [user_id]: { ...existing, values: { ...(existing.values || {}), [component_id]: value } },
+    };
+  });
 };
 
 export const handlePlayerDisconnected = (data, { thisUserId, setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts, clearMapTokenHoldsForUser }) => {
@@ -347,36 +377,29 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
   setIsDicePromptActive(true);
 };
 
-export const handleInitiativePromptAll = (data, { setActivePrompts, setIsDicePromptActive, setCurrentInitiativePromptId, thisUserId, addToLog }) => {
-  console.log("received initiative prompt all:", data);
-  const { players_to_prompt, roll_type, prompted_by, prompt_id, initiative_prompt_id, log_message } = data;
+/**
+ * The GM asks the whole table for something, in their own words. One prompt per seated
+ * player, so the dice panel's per-player logic needs no special case; the group id is
+ * kept so Clear all can remove the one log line.
+ */
+export const handleGroupPrompt = (data, { setActivePrompts, setIsDicePromptActive, setCurrentGroupPromptId, thisUserId, gameSeats, addToLog }) => {
+  console.log("received group prompt:", data);
+  const { prompt_text, prompted_by, prompt_id, log_message } = data;
 
-  setCurrentInitiativePromptId(initiative_prompt_id);
+  if (setCurrentGroupPromptId) setCurrentGroupPromptId(prompt_id);
+  if (addToLog) addToLog(log_message, 'dungeon-master', prompted_by, prompt_id);
 
-  if (addToLog) {
-    addToLog(log_message, 'dungeon-master', prompted_by, initiative_prompt_id);
-  }
-
-  // players_to_prompt is now an array of userIds
-  const allPrompts = players_to_prompt.map(userId => ({
-    id: `${userId}_${roll_type}_${Date.now()}`,
+  const seatedUserIds = (gameSeats || []).map(seat => seat.userId).filter(userId => userId && userId !== 'empty');
+  const prompts = seatedUserIds.map(userId => ({
+    id: `${prompt_id}_${userId}`,
     player: userId,
-    rollType: roll_type,
+    rollType: prompt_text,
     promptedBy: prompted_by,
-    isInitiativePrompt: true
+    groupPromptId: prompt_id,
   }));
 
-  setActivePrompts(prev => {
-    const filteredPrev = prev.filter(p =>
-      !players_to_prompt.includes(p.player) || p.rollType !== roll_type
-    );
-    return [...filteredPrev, ...allPrompts];
-  });
-
-  // Only set dice prompt active if this user is actually prompted
-  if (players_to_prompt.includes(thisUserId)) {
-    setIsDicePromptActive(true);
-  }
+  setActivePrompts(prev => [...prev.filter(p => p.groupPromptId !== prompt_id), ...prompts]);
+  if (seatedUserIds.includes(thisUserId)) setIsDicePromptActive(true);
 };
 
 export const handleDicePromptClear = (data, { setActivePrompts, setIsDicePromptActive }) => {
@@ -474,24 +497,22 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     }));
   };
 
-  const sendInitiativePromptAll = (userIdsToPrompt) => {
+  const sendGroupPrompt = (promptText) => {
     if (!webSocket || !isConnected) {
-      console.log("❌ Cannot send initiative prompt - WebSocket not connected");
+      console.log("❌ Cannot send group prompt - WebSocket not connected");
       return;
     }
 
-    console.log(`⚡ Sending initiative prompt to all players: ${userIdsToPrompt.join(', ')}`);
-
     webSocket.send(JSON.stringify({
-      "event_type": "initiative_prompt_all",
+      "event_type": "group_prompt",
       "data": {
-        "players": userIdsToPrompt,
+        "prompt_text": promptText,
         "prompted_by": userId
       }
     }));
   };
 
-  const sendDicePromptClear = (promptId = null, clearAll = false, initiativePromptId = null) => {
+  const sendDicePromptClear = (promptId = null, clearAll = false, groupPromptId = null) => {
     if (!webSocket || !isConnected) {
       console.log("❌ Cannot clear dice prompt - WebSocket not connected");
       return;
@@ -503,8 +524,8 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
       "clear_all": clearAll
     };
 
-    if (clearAll && initiativePromptId) {
-      clearData.initiative_prompt_id = initiativePromptId;
+    if (clearAll && groupPromptId) {
+      clearData.group_prompt_id = groupPromptId;
     }
 
     webSocket.send(JSON.stringify({
@@ -616,19 +637,6 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     }
   };
 
-  const sendCombatStateChange = (newCombatState) => {
-    if (!webSocket || !isConnected) return;
-
-    console.log("Sending combat state change to WS:", newCombatState);
-
-    webSocket.send(JSON.stringify({
-      "event_type": "combat_state",
-      "data": {
-        "combatActive": newCombatState
-      }
-    }));
-  };
-
   const sendPlayerKick = (userIdToKick) => {
     if (!webSocket || !isConnected) return;
 
@@ -694,14 +702,13 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
 
   return {
     sendSeatChange,
-    sendCombatStateChange,
     sendPlayerKick,
     sendDiceRoll,
     sendClearSystemMessages,
     sendClearAllMessages,
     sendDicePrompt,
     sendDicePromptClear,
-    sendInitiativePromptAll,
+    sendGroupPrompt,
     sendColorChange,
     sendRemoteAudioPlay,
     sendRemoteAudioResume,

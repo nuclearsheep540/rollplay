@@ -80,15 +80,7 @@ class CharacterAggregate:
                 which is the one axis it is fair to require.
         """
         CharacterSheet(config=config, values=values)
-
-        missing = [
-            component.label
-            for component in config.flat_components()
-            if component.type == "identity" and component.required
-            and not (values.get(component.id) and values[component.id].is_populated())
-        ]
-        if missing:
-            raise ValueError(f"Missing required: {', '.join(missing)}")
+        _check_required(config, values)
 
         now = datetime.now(timezone.utc)
         aggregate = cls(
@@ -149,6 +141,33 @@ class CharacterAggregate:
         self.display_name = self.derive_display_name()
         self._touch()
 
+    def adopt_config_version(
+        self, config: CharacterConfig, config_version_id: UUID, values: Dict[str, ComponentValue]
+    ) -> None:
+        """Move to a newer version of the campaign's config, with the values the player
+        confirmed for it — the one time the snapshot changes after creation.
+
+        The same bar as creation: the values must pair with the new config, and every
+        required identity must be answered. Never applied without the player's say-so;
+        the reconciliation that proposes the values is the contract's, this only accepts.
+
+        Raises:
+            ValueError: the config is not newer than the one built on, or a required
+                identity is unanswered.
+            ValidationError: the values do not pair with the config.
+        """
+        if config.version <= self.config_snapshot.version:
+            raise ValueError(
+                f"Version {config.version} is not newer than the one this character was built on"
+            )
+        CharacterSheet(config=config, values=values)
+        _check_required(config, values)
+        self.config_snapshot = config
+        self.config_version_id = config_version_id
+        self.values = dict(values)
+        self.display_name = self.derive_display_name()
+        self._touch()
+
     def unbind_from_table(self) -> None:
         """Leave the table for good: no session, no campaign, no version pointer.
 
@@ -197,3 +216,16 @@ class CharacterAggregate:
 
     def _touch(self) -> None:
         self.updated_at = datetime.now(timezone.utc)
+
+
+def _check_required(config: CharacterConfig, values: Dict[str, ComponentValue]) -> None:
+    """Completeness at the moment a character is built against a config — the one axis
+    it is fair to require. Raises ValueError naming the unanswered required identities."""
+    missing = [
+        component.label
+        for component in config.flat_components()
+        if component.type == "identity" and component.required
+        and not (values.get(component.id) and values[component.id].is_populated())
+    ]
+    if missing:
+        raise ValueError(f"Missing required: {', '.join(missing)}")

@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 import Spinner from '@/app/shared/components/Spinner'
+import ConfirmDialog from '@/app/shared/components/ConfirmDialog'
 import PlateButton from '@/app/dashboard/components/home/PlateButton'
 import CharacterValueList from '@/app/characters/components/CharacterValueList'
 import {
@@ -47,6 +48,7 @@ export default function CharacterDetailPage() {
   const setAvatar = useSetCharacterAvatar(id)
   const queryClient = useQueryClient()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
 
   // Pick -> frame the token face -> apply, the workshop's chain. Saving the crop lands on
@@ -77,12 +79,33 @@ export default function CharacterDetailPage() {
 
   const isOwner = character.user_id === user?.id
   const atATable = !!character.session_id
+  // While the table's game runs the room owns this character: the page reads, and every
+  // change is made in the game. The backend refuses the same writes; this is the page
+  // saying so before a click rather than after.
+  const gameRunning = !!character.open_game_id
+  const canEdit = isOwner && !gameRunning
 
   const onValueChange = async (value) => {
     try {
       await updateComponent.mutateAsync(value)
     } catch (failure) {
       showToast(failure.message, 'error')
+    }
+  }
+
+  // Delete refuses a seated character, by design: leaving the table is the one verb that
+  // knows about a running game. So deleting from the table is two commands, eject then
+  // delete, behind one confirmation that says so.
+  const onDelete = async () => {
+    setDeleting(true)
+    try {
+      if (atATable) await ejectCharacter.mutateAsync(id)
+      await deleteCharacter.mutateAsync(id)
+      router.push('/dashboard?tab=characters')
+    } catch (failure) {
+      showToast(failure.message, 'error')
+      setConfirmingDelete(false)
+      setDeleting(false)
     }
   }
 
@@ -106,7 +129,7 @@ export default function CharacterDetailPage() {
           avatarAssetId={character.avatar_asset_id}
           focalArea={character.avatar_focal_area}
           isBusy={setAvatar.isPending}
-          readOnly={!isOwner}
+          readOnly={!canEdit}
           onOpenPicker={() => setAvatarPickerOpen(true)}
           onAdjustCrop={character.avatar_asset_id ? () => cropFlow.begin(character.avatar_asset_id) : null}
         />
@@ -146,11 +169,24 @@ export default function CharacterDetailPage() {
             </div>
           </div>
 
+          {gameRunning && (
+            <div className="rounded-md border border-[#D9A441] bg-[#FBF7EF] px-5 py-3 flex items-center justify-between gap-4">
+              <div className="text-[12.5px] text-[#37322F]">
+                <span className="font-semibold">A game is in progress.</span> Changes to this character are made in
+                the game; this page is read-only until it ends.
+              </div>
+              <PlateButton variant="gold" size="sm" onClick={() => router.push(`/game?room_id=${character.open_game_id}`)}>
+                Enter the game
+              </PlateButton>
+            </div>
+          )}
+
           {character.latest_version && (
             <VersionDriftPanel
               builtOn={character.config_snapshot?.version}
               latest={character.latest_version}
               changes={character.version_changes}
+              onUpdate={canEdit && atATable ? () => router.push(`/character/${id}/update`) : null}
             />
           )}
 
@@ -158,13 +194,13 @@ export default function CharacterDetailPage() {
             <CharacterValueList
               config={character.config_snapshot}
               values={character.values}
-              editable={isOwner && !updateComponent.isPending}
+              editable={canEdit}
               pendingIds={new Set(updateComponent.isPending ? [updateComponent.variables?.component_id] : [])}
               onChange={onValueChange}
             />
           </div>
 
-          {isOwner && (
+          {canEdit && (
             <div className="flex items-center gap-3 flex-wrap">
               <PlateButton
                 variant="light"
@@ -179,31 +215,26 @@ export default function CharacterDetailPage() {
                   {ejectCharacter.isPending ? 'Leaving…' : 'Leave the table'}
                 </PlateButton>
               )}
-              {confirmingDelete ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-[12.5px] text-content-muted">Delete for good?</span>
-                  <PlateButton
-                    variant="danger"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await deleteCharacter.mutateAsync(id)
-                        router.push('/dashboard?tab=characters')
-                      } catch (failure) {
-                        showToast(failure.message, 'error')
-                        setConfirmingDelete(false)
-                      }
-                    }}
-                  >
-                    Delete
-                  </PlateButton>
-                  <PlateButton variant="light" size="sm" onClick={() => setConfirmingDelete(false)}>Cancel</PlateButton>
-                </div>
-              ) : (
-                <PlateButton variant="light" size="sm" onClick={() => setConfirmingDelete(true)}>Delete</PlateButton>
-              )}
+              <PlateButton variant="light" size="sm" onClick={() => setConfirmingDelete(true)}>Delete</PlateButton>
             </div>
           )}
+
+          <ConfirmDialog
+            show={confirmingDelete}
+            title="Delete character"
+            message={
+              atATable
+                ? `This character is currently in a session for ${character.campaign_title || 'a campaign'}. Are you sure you want to delete them?`
+                : `Delete ${character.display_name} for good?`
+            }
+            description={atATable ? 'They will leave the party first. This cannot be undone.' : 'This cannot be undone.'}
+            confirmText="Delete"
+            loadingText="Deleting…"
+            isLoading={deleting}
+            variant="danger"
+            onConfirm={onDelete}
+            onCancel={() => setConfirmingDelete(false)}
+          />
         </div>
       </div>
     </div>
@@ -215,11 +246,18 @@ export default function CharacterDetailPage() {
  * verdict: the character keeps playing on the version it was built against, and
  * nothing here asks anyone to do anything about it.
  */
-function VersionDriftPanel({ builtOn, latest, changes }) {
+function VersionDriftPanel({ builtOn, latest, changes, onUpdate }) {
   return (
     <div className="rounded-md border border-[#E5DECF] bg-[#FBF7EF] px-5 py-4">
-      <div className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#9A7526]">
-        Built on v{builtOn} · v{latest} is now published
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#9A7526]">
+          Built on v{builtOn} · v{latest} is now published
+        </div>
+        {onUpdate && (
+          <PlateButton variant="gold" size="sm" onClick={onUpdate}>
+            Update to v{latest}
+          </PlateButton>
+        )}
       </div>
       <ul className="mt-2 flex flex-col gap-1">
         {changes.map((change) => (

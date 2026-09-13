@@ -5,6 +5,17 @@
 > as arranged: groups as named sections, config order (`layoutBlocks`, shared with the
 > create form). Do not bring the type order back onto the character page.
 
+> **Done (2026-09-13).** Shipped as written, with these particulars: `characterConfigs`
+> state + `handlePlayerComponentChanged` + `handleGroupPrompt` (one prompt per seated
+> player, so the dice panel needs no special case; `group_prompt_id` rides the clear);
+> `RuntimeCharacterSheet` re-tones the light sheet pieces on the dark drawer with one
+> style (`--content-muted: var(--content-secondary)`), and the GM gets a sheet picker;
+> `useUpdateGameComponent` exposes `update(userId, value)` + `pendingComponentIds`;
+> `DMDicePrompt`'s D&D roll lists became "From their sheet" quick picks — the attribute
+> labels from that player's own config — plus the free-text roll. "My character" is the
+> room's metadata, not a site query (`useCharacterRuntime` deleted). Mid-game update to a
+> newer version and mid-game alive/avatar remain refused on the site side.
+
 > Read `00-agent-brief.md` first. Depends on PRs 3 and 5. Paths relative to `rollplay/`.
 > This PR makes the seat card and the in-game sheet mappers over the component registry,
 > wires the component write, and deletes every D&D surface in the game.

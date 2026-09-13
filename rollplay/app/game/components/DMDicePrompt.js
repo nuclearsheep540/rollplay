@@ -6,13 +6,9 @@ import Modal from '@/app/shared/components/Modal';
 import {
   MODAL_TITLE,
   MODAL_CLOSE_BUTTON,
-  EMERALD_BUTTON,
   BLUE_BUTTON,
-  RED_BUTTON,
   PURPLE_BUTTON,
-  EMERALD_HEADER,
   BLUE_HEADER,
-  RED_HEADER,
   PURPLE_HEADER,
   MODAL_INPUT,
   MODAL_LABEL,
@@ -24,7 +20,8 @@ export default function DicePrompt({
   onClose,
   selectedPlayer,
   selectedPlayerDisplayName,
-  onPromptRoll
+  onPromptRoll,
+  quickPicks = [],
 }) {
   const displayName = selectedPlayerDisplayName || 'Unknown Adventurer'; // never the raw user_id (PII)
 
@@ -52,85 +49,31 @@ export default function DicePrompt({
         </button>
       </div>
 
-      {/* Attack Rolls Section */}
-      <div className="mb-6">
-        <h4 className={EMERALD_HEADER}>
-          Attack Rolls
-        </h4>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            className={EMERALD_BUTTON}
-            onClick={() => handlePromptPlayerForRoll(selectedPlayer, "Attack Roll")}
-          >
-            <div className="font-medium">Attack Roll</div>
-            <div className="text-emerald-400/70 text-sm">Roll to hit target (d20 + modifiers)</div>
-          </button>
-          <button
-            className={EMERALD_BUTTON}
-            onClick={() => handlePromptPlayerForRoll(selectedPlayer, "Damage Roll")}
-          >
-            <div className="font-medium">Damage Roll</div>
-            <div className="text-emerald-400/70 text-sm">Roll for damage if attack hits</div>
-          </button>
+      {/* Quick picks: the attributes on this player's own sheet. The app knows no rulebook;
+          what a roll is called is the campaign's word, taken from the config the GM wrote. */}
+      {quickPicks.length > 0 && (
+        <div className="mb-6">
+          <h4 className={BLUE_HEADER}>
+            From their sheet
+          </h4>
+          <div className="grid grid-cols-2 gap-3">
+            {quickPicks.map((label) => (
+              <button
+                key={label}
+                className={BLUE_BUTTON}
+                onClick={() => handlePromptPlayerForRoll(selectedPlayer, label)}
+              >
+                <div className="font-medium">{label}</div>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-
-      {/* Ability Checks Section */}
-      <div className="mb-6">
-        <h4 className={BLUE_HEADER}>
-          Ability Checks
-        </h4>
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { name: "Strength Check", desc: "Lifting, pushing, breaking" },
-            { name: "Dexterity Check", desc: "Acrobatics, stealth" },
-            { name: "Constitution Check", desc: "Endurance, holding breath" },
-            { name: "Intelligence Check", desc: "Recall lore, solve puzzles" },
-            { name: "Wisdom Check", desc: "Perception, insight" },
-            { name: "Charisma Check", desc: "Persuasion, deception" }
-          ].map((check, index) => (
-            <button
-              key={index}
-              className={BLUE_BUTTON}
-              onClick={() => handlePromptPlayerForRoll(selectedPlayer, check.name)}
-            >
-              <div className="font-medium">{check.name}</div>
-              <div className="text-blue-400/70 text-sm">{check.desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Saving Throws Section */}
-      <div className="mb-6">
-        <h4 className={RED_HEADER}>
-          Saving Throws
-        </h4>
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { name: "Strength Save", desc: "Resist being moved or grappled" },
-            { name: "Dexterity Save", desc: "Avoid traps and area effects" },
-            { name: "Constitution Save", desc: "Resist poison and disease" },
-            { name: "Intelligence Save", desc: "Resist mental effects" },
-            { name: "Wisdom Save", desc: "Resist charm and fear" },
-            { name: "Charisma Save", desc: "Resist banishment" }
-          ].map((save, index) => (
-            <button
-              key={index}
-              className={RED_BUTTON}
-              onClick={() => handlePromptPlayerForRoll(selectedPlayer, save.name)}
-            >
-              <div className="font-medium">{save.name}</div>
-              <div className="text-red-400/70 text-sm">{save.desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* Custom Roll Section */}
       <div className="mb-6">
         <h4 className={PURPLE_HEADER}>
-          📝 Custom Roll
+          📝 Anything else
         </h4>
         <div className="space-y-3">
           <div>
@@ -139,7 +82,7 @@ export default function DicePrompt({
             </label>
             <input
               type="text"
-              placeholder="e.g., Arcana check to identify the rune, History to recall ancient lore..."
+              placeholder="e.g., a check to spot the ambush, a roll to recall the old rite..."
               className={MODAL_INPUT}
               id="customRollInput"
             />

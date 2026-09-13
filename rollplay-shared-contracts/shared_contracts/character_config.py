@@ -11,10 +11,15 @@ and the frontend's create flow and runtime renderers.
 
 from typing import Annotated, Dict, List, Literal, Optional, Set, Union
 
+from pydantic import ValidationError
+
 from pydantic import Field, model_validator
 
 from .base import ContractModel
 from .components import ComponentConfiguration, ComponentValue
+from .components.attribute import AttributeValue
+from .components.hit_points import HitPointsValue, IntHitPointsState, WeightedHitPointsState
+from .components.identity import IdentityValue, MultiSelectIdentityAnswer, TextIdentityAnswer
 
 
 class ComponentGroup(ContractModel):
@@ -258,3 +263,90 @@ def _changed_fields(older: dict, newer: dict, prefix: str) -> List[str]:
         elif older_value != newer_value:
             changed.append(path)
     return changed
+
+
+def initial_value_for(configuration: ComponentConfiguration) -> ComponentValue:
+    """What a player's input starts at for one configuration — the mirror of the
+    frontend's initialValueFor. The GM's default where they declared one; hit points at
+    the top of the entry range (a full character); an identity unanswered."""
+    if configuration.type == "identity":
+        kind = configuration.input.kind
+        answer = (
+            TextIdentityAnswer(text="") if kind == "text"
+            else MultiSelectIdentityAnswer(choices=[]) if kind == "multi_select"
+            else None
+        )
+        if answer is None:
+            # A single choice has no honest "unanswered" — the answer model requires a
+            # choice — so the seed is absent and the form asks for it.
+            raise ValueError("a single-select identity has no initial value")
+        return IdentityValue(component_id=configuration.id, answer=answer)
+    if configuration.type == "hit_points":
+        if configuration.rules.representation == "int":
+            state = IntHitPointsState(maximum=configuration.rules.maximum, current=configuration.rules.maximum)
+        else:
+            state = WeightedHitPointsState(current_weight=configuration.rules.starting_weight)
+        return HitPointsValue(component_id=configuration.id, state=state)
+    if configuration.type == "attribute":
+        score = configuration.default if configuration.default is not None else configuration.minimum
+        return AttributeValue(component_id=configuration.id, score=score)
+    raise ValueError(f"no initial value for component type {configuration.type!r}")
+
+
+class Reconciliation(ContractModel):
+    """A character's values carried from one config version to another, and what
+    happened to each: kept as they were, seeded because the component is new, dropped
+    because it is gone, or reset because its shape changed underneath the value."""
+
+    values: Dict[str, ComponentValue]
+    kept: List[str] = []
+    added: List[str] = []
+    dropped: List[str] = []
+    reset: List[str] = []
+
+
+def reconcile_values(
+    older: CharacterConfig, newer: CharacterConfig, values: Dict[str, ComponentValue]
+) -> Reconciliation:
+    """Carry values built against `older` forward to `newer`.
+
+    Pure function; the proposal a player confirms, never applied on its own. A value is
+    kept when it still pairs with its component under the new config — a range it has
+    fallen outside of is still kept, as everywhere else. It is reset (seeded afresh) when
+    the component's kind or representation changed, because the old value has no meaning
+    against the new shape. A component the new config lacks loses its value; one the old
+    config lacked is seeded. A single-select identity that must be seeded is left absent
+    for the form to ask.
+    """
+    older_by_id = older.configuration_by_id()
+    newer_by_id = newer.configuration_by_id()
+    carried: Dict[str, ComponentValue] = {}
+    kept: List[str] = []
+    added: List[str] = []
+    reset: List[str] = []
+
+    def seed(component_id: str) -> None:
+        try:
+            carried[component_id] = initial_value_for(newer_by_id[component_id])
+        except ValueError:
+            pass
+
+    for component_id in newer_by_id:
+        if component_id not in older_by_id:
+            added.append(component_id)
+            seed(component_id)
+            continue
+        value = values.get(component_id)
+        if value is None:
+            continue
+        try:
+            CharacterSheet(config=newer, values={component_id: value})
+        except ValidationError:
+            reset.append(component_id)
+            seed(component_id)
+            continue
+        carried[component_id] = value
+        kept.append(component_id)
+
+    dropped = [component_id for component_id in values if component_id not in newer_by_id]
+    return Reconciliation(values=carried, kept=kept, added=added, dropped=dropped, reset=reset)

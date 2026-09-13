@@ -56,14 +56,8 @@ export default function ModeratorControls({
   // Get active players (non-empty seats) — identity is seat.userId
   const activePlayers = gameSeats?.filter(seat => seat.userId && seat.userId !== "empty") || [];
 
-  const formatCharacterSummary = (characterData) => {
-    if (!characterData) return null;
-    const classValue = characterData.character_class || characterData.class;
-    const className = Array.isArray(classValue) ? classValue.join(' / ') : classValue;
-    const level = characterData.level;
-    if (!className || level === undefined || level === null) return null;
-    return `${className} • Level ${level}`;
-  };
+  // The one line a seat has to say about its character: the display name.
+  const formatCharacterSummary = (characterData) => characterData?.display_name || null;
 
   const seatedUserIds = new Set(
     activePlayers

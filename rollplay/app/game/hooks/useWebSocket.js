@@ -9,13 +9,13 @@ import {
   handlePlayerConnected,
   handleLobbyUpdate,
   handlePlayerKicked,
-  handleCombatState,
+  handlePlayerComponentChanged,
   handlePlayerDisconnected,
   handleDiceRoll,
   handleSystemMessagesCleared,
   handleAllMessagesCleared,
   handleDicePrompt,
-  handleInitiativePromptAll,
+  handleGroupPrompt,
   handleDicePromptClear,
   handleColorChange,
   handleAdventureLogRemoved,
@@ -121,8 +121,8 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
           case 'player_kicked':
             handlePlayerKicked(data, handlers);
             break;
-          case 'combat_state':
-            handleCombatState(data, handlers);
+          case 'player_component_changed':
+            handlePlayerComponentChanged(data, handlers);
             break;
           case 'player_disconnected':
             handlePlayerDisconnected(data, handlers);
@@ -139,8 +139,8 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
           case 'dice_prompt':
             handleDicePrompt(data, handlers);
             break;
-          case 'initiative_prompt_all':
-            handleInitiativePromptAll(data, handlers);
+          case 'group_prompt':
+            handleGroupPrompt(data, handlers);
             break;
           case 'dice_prompt_clear':
             handleDicePromptClear(data, handlers);
@@ -209,10 +209,10 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
   const sendFunctions = webSocket && isConnected
     ? createSendFunctions(webSocket, isConnected, roomId, thisUserId)
     : {
-        sendSeatChange: noop, sendCombatStateChange: noop,
+        sendSeatChange: noop,
         sendPlayerKick: noop, sendDiceRoll: noop, sendClearSystemMessages: noop,
         sendClearAllMessages: noop, sendDicePrompt: noop, sendDicePromptClear: noop,
-        sendInitiativePromptAll: noop, sendColorChange: noop,
+        sendGroupPrompt: noop, sendColorChange: noop,
         sendRemoteAudioPlay: noop, sendRemoteAudioResume: noop, sendRemoteAudioBatch: noop,
         sendSpotifyControl: noop,
       };

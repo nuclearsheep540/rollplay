@@ -15,18 +15,17 @@ import PlayerCard from "./components/PlayerCard";
 import DMChair from "./components/DMChair";
 import MapControlsPanel from './components/MapControlsPanel';
 import ImageControlsPanel from './components/ImageControlsPanel';
-import CombatControlsPanel from './components/CombatControlsPanel';
+import PromptsPanel from './components/PromptsPanel';
 import ModeratorControls from './components/ModeratorControls';
 import { AudioMixerPanel, BottomMixerDrawer, SpotifyUnsupportedNotice } from '../audio_management/components';
 import { PlaybackState } from '../audio_management/types';
 import { COLORS } from '../styles/colorTheme';
-import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
-import CharacterSheet from './components/CharacterSheet';
-import LevelUpModal from './components/LevelUpModal';
-import { useMyCharacterForCampaign } from './hooks/useCharacterRuntime';
+import RuntimeCharacterSheet from './components/RuntimeCharacterSheet';
+import { useUpdateGameComponent } from './hooks/useUpdateGameComponent';
+import { flatComponents } from '@/app/characters/components/registry';
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
@@ -76,7 +75,7 @@ const RIGHT_DRAWER_TABS = [
   // from the people who place them.
   { id: 'tokens', label: 'TOKENS', dmOnly: true },
   { id: 'image', label: 'IMAGE', dmOnly: true },
-  { id: 'combat', label: 'COMBAT', dmOnly: true },
+  { id: 'prompts', label: 'PROMPTS', dmOnly: true },
 ];
 
 // Loading gate — rotating themed flavor text
@@ -119,6 +118,8 @@ export default function GameContent() {
   // Character metadata is hydrated from api-game hot state via ETL.
   // Keyed by user_id (UUID string).
   const [playerMetadata, setPlayerMetadata] = useState({});
+  // Every character config version in the party, keyed by version id (from initial_state).
+  const [characterConfigs, setCharacterConfigs] = useState({});
   // Derived from playerMetadata — no separate state needed
   const moderatorIds = useMemo(() => {
     return Object.entries(playerMetadata)
@@ -196,12 +197,12 @@ export default function GameContent() {
     return map;
   }, [playerMetadata, dungeonMaster]);
 
-  // userId → character name map (derived from player_metadata)
+  // userId → character display name map (derived from player_metadata)
   const characterNameMap = useMemo(() => {
     const map = {};
     Object.entries(playerMetadata).forEach(([userId, meta]) => {
-      if (meta.character_name) {
-        map[userId] = meta.character_name;
+      if (meta.display_name) {
+        map[userId] = meta.display_name;
       }
     });
     return map;
@@ -288,7 +289,6 @@ export default function GameContent() {
       || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
     if (isMobile) setUIScale('small');
   }, []);
-  const [combatActive, setCombatActive] = useState(false); // Combat state
   const [rollLog, setRollLog] = useState([
     { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
   ]);
@@ -297,15 +297,13 @@ export default function GameContent() {
   const filteredRollLog = useMemo(() => rollLog.filter(e => e.type !== 'system'), [rollLog]);
   const systemMessages = useMemo(() => rollLog.filter(e => e.type === 'system'), [rollLog]);
 
-  const [initiativeOrder, setInitiativeOrder] = useState([]); // ❌ Removed hardcoded data
-
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
   const [isPlaying, setIsPlaying] = useState(true);
 
   // UPDATED: Multiple dice roll prompts support
   const [activePrompts, setActivePrompts] = useState([]); // Array of {id, player, rollType, promptedBy}
   const [isDicePromptActive, setIsDicePromptActive] = useState(false); // Is any prompt active?
-  const [currentInitiativePromptId, setCurrentInitiativePromptId] = useState(null); // Track initiative prompt ID for removal
+  const [currentGroupPromptId, setCurrentGroupPromptId] = useState(null); // The GM's whole-table prompt, for Clear all
 
   // Map system state
   const [activeMap, setActiveMap] = useState(null); // Current active map data
@@ -386,13 +384,13 @@ export default function GameContent() {
   // /api/campaigns/{id} response, which now embeds the full member list.
   const [campaignMembersById, setCampaignMembersById] = useState({});
 
-  // Current user's character locked to THIS campaign. Drives the CHARACTER
-  // tab visibility and content. Returns ``undefined`` (not null) until the
-  // characters/me query resolves, so the tab is hidden during boot.
-  const { character: myCharacter } = useMyCharacterForCampaign(campaignId);
-
-  // Level-up modal open state — triggered from the XP CTA inside CharacterSheet.
-  const [levelUpModalOpen, setLevelUpModalOpen] = useState(false);
+  // "My character" is the room's word, not a second query: the seat's metadata carries
+  // the character, its version and its values, and the config resolves from the party's
+  // versions. Nothing here reads PostgreSQL.
+  const hasMyCharacter = Boolean(playerMetadata[thisUserId]?.character_id);
+  // Whose sheet the CHARACTER drawer shows: yours, or — for the GM — anyone's.
+  const [sheetUserId, setSheetUserId] = useState(null);
+  const componentWrite = useUpdateGameComponent(roomId, thisUserId, useCallback((message) => alert(message), []));
   // Roll-modal open-state lives here (not in DiceActionPanel) so both the floating prompt and the
   // logs-drawer "Roll dice" button open the same modal.
   const [isDiceModalOpen, setIsDiceModalOpen] = useState(false);
@@ -454,13 +452,13 @@ export default function GameContent() {
     });
   }, [canUseModeratorTools, isDM]);
 
-  // CHARACTER tab is only useful for seated players with a real character row.
+  // CHARACTER tab: players with a character in the party, and the GM (anyone's sheet).
   const visibleLeftTabs = useMemo(() => {
     return LEFT_DRAWER_TABS.filter((tab) => {
-      if (tab.playerOnly) return Boolean(myCharacter);
+      if (tab.playerOnly) return hasMyCharacter || isDM;
       return true;
     });
-  }, [myCharacter]);
+  }, [hasMyCharacter, isDM]);
 
   // If the active left tab disappears (e.g. user just released their character),
   // close the drawer rather than forcing an unrelated tab on them.
@@ -1140,13 +1138,13 @@ export default function GameContent() {
   const gameContext = useMemo(() => ({
     // State setters (stable — React guarantees identity)
     setGameSeats,
-    setCombatActive,
+    setCharacterConfigs,
     setRollLog,
     setActivePrompts,
     setIsDicePromptActive,
     setLobbyUsers,
     setDisconnectTimeouts,
-    setCurrentInitiativePromptId,
+    setCurrentGroupPromptId,
     setCampaignId,
     setPlayerMetadata,
     setDungeonMaster,
@@ -1161,7 +1159,7 @@ export default function GameContent() {
     currentUser,
     lobbyUsers,
     disconnectTimeouts,
-    currentInitiativePromptId,
+    currentGroupPromptId,
 
     // Helper functions
     addToLog,
@@ -1222,7 +1220,7 @@ export default function GameContent() {
     setSessionEndedData
   }), [
     gameSeats, thisUserId, currentUser, lobbyUsers,
-    disconnectTimeouts, currentInitiativePromptId, remoteTrackStates,
+    disconnectTimeouts, currentGroupPromptId, remoteTrackStates,
     addToLog, getCharacterData, handleRoleChange,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
@@ -1240,14 +1238,13 @@ export default function GameContent() {
     webSocket,
     isConnected,
     sendSeatChange,
-    sendCombatStateChange,
     sendPlayerKick,
     sendDiceRoll,
     sendClearSystemMessages,
     sendClearAllMessages,
     sendDicePrompt,
     sendDicePromptClear,
-    sendInitiativePromptAll,
+    sendGroupPrompt,
     sendColorChange,
     sendRemoteAudioBatch,
     sendSpotifyControl,
@@ -1428,13 +1425,6 @@ export default function GameContent() {
   // Map/Image handlers are managed by their respective WebSocket hooks
   // Initial loading is handled by HTTP fetch in onLoad function
 
-  // Listen for combat state changes and play audio
-  useEffect(() => {
-    if (combatActive && isAudioUnlocked) {
-      playLocalSFX('combatStart');
-    }
-  }, [combatActive, isAudioUnlocked]);
-
   // Handle "Enter Session" overlay click — unlocks audio + auto-seats player
   const handleEnterSession = async () => {
     // 0. Unlock Spotify FIRST, synchronously in the gesture path (before any await):
@@ -1555,12 +1545,12 @@ export default function GameContent() {
 
   // UPDATED: Clear dice prompt (can clear specific prompt or all prompts)
   const clearDicePrompt = (promptId = null, clearAll = false) => {
-    sendDicePromptClear(promptId, clearAll, currentInitiativePromptId);
-    
+    sendDicePromptClear(promptId, clearAll, currentGroupPromptId);
+
     if (clearAll) {
       setActivePrompts([]);
       setIsDicePromptActive(false);
-      setCurrentInitiativePromptId(null); // Clear the tracked initiative prompt ID
+      setCurrentGroupPromptId(null);
     } else if (promptId) {
       setActivePrompts(prev => {
         const filtered = prev.filter(prompt => prompt.id !== promptId);
@@ -1570,16 +1560,14 @@ export default function GameContent() {
     }
   };
 
-  // Prompt all seated players for initiative — sends userIds
-  const promptAllPlayersInitiative = () => {
-    const activePlayers = gameSeats.filter(seat => seat.userId !== "empty");
-    if (activePlayers.length === 0) {
-      alert("No players in the game to prompt for initiative!");
+  // The GM asks the whole table for something, in their own words. The server fans it
+  // out; every seated player sees it as a prompt.
+  const promptEveryone = (promptText) => {
+    if (!gameSeats.some(seat => seat.userId !== "empty")) {
+      alert('No players in the game to prompt');
       return;
     }
-
-    const userIds = activePlayers.map(player => player.userId);
-    sendInitiativePromptAll(userIds);
+    sendGroupPrompt(promptText);
   };
 
   // Handle dice roll
@@ -1592,24 +1580,6 @@ export default function GameContent() {
     }, 1000);
   };
 
-  // Handle initiative order clicks — identity is userId for players
-  const handleInitiativeClick = (userId) => {
-    setInitiativeOrder(prev =>
-      prev.map(item => ({
-        ...item,
-        active: item.userId === userId
-      }))
-    );
-
-    setCurrentTurn(userId);
-
-    // Show dice portal for player turns (not NPCs — NPCs have no userId)
-    if (userId) {
-      showDicePortal(userId);
-    } else {
-      hideDicePortal();
-    }
-  };
 
   // Handle audio track changes
   const handleTrackClick = (trackName, btnElement) => {
@@ -2202,7 +2172,10 @@ export default function GameContent() {
                   isSitting={isSitting}
                   currentTurn={currentTurn}
                   onDiceRoll={handlePlayerDiceRoll}
-                  playerData={seat.characterData}
+                  // Live metadata, not the seat's snapshot: values change under a seat
+                  // all game long, and only playerMetadata is written by those events.
+                  playerData={playerMetadata[seat.userId] || seat.characterData}
+                  configuration={(playerMetadata[seat.userId] || seat.characterData)?.config_version_id ? characterConfigs[(playerMetadata[seat.userId] || seat.characterData).config_version_id] : null}
                   onColorChange={handlePlayerColorChange}
                   currentColor={currentColor}
                   usedColors={colorsInUseByOthers}
@@ -2219,14 +2192,28 @@ export default function GameContent() {
           </>
         )}
 
-        {activeLeftDrawer === 'character' && myCharacter && (
-          <CharacterSheet
-            character={myCharacter}
-            userId={thisUserId}
-            onRoll={handlePlayerDiceRoll}
-            onOpenLevelUp={() => setLevelUpModalOpen(true)}
-          />
-        )}
+        {activeLeftDrawer === 'character' && (() => {
+          const viewedUserId = (isDM && sheetUserId) || thisUserId;
+          const meta = playerMetadata[viewedUserId];
+          const configuration = meta?.config_version_id ? characterConfigs[meta.config_version_id] : null;
+          const holders = Object.entries(playerMetadata).filter(([, entry]) => entry.character_id);
+          return (
+            <RuntimeCharacterSheet
+              configuration={configuration}
+              values={meta?.values || {}}
+              displayName={meta?.display_name}
+              isOwner={viewedUserId === thisUserId}
+              isGM={isDM}
+              pendingComponentIds={componentWrite.pendingComponentIds}
+              onChange={(value) => componentWrite.update(viewedUserId, value)}
+              picker={isDM ? {
+                value: viewedUserId,
+                options: holders.map(([userId, entry]) => ({ value: userId, label: entry.display_name || entry.player_name || userId })),
+                onChange: setSheetUserId,
+              } : null}
+            />
+          );
+        })()}
 
         {activeLeftDrawer === 'log' && (
           <AdventureLog
@@ -2244,15 +2231,6 @@ export default function GameContent() {
           />
         )}
       </Drawer>}
-
-      {/* Level-up modal — opens via the XP CTA inside the CHARACTER tab. */}
-      {myCharacter && (
-        <LevelUpModal
-          character={myCharacter}
-          open={levelUpModalOpen}
-          onClose={() => setLevelUpModalOpen(false)}
-        />
-      )}
 
       {/* Right drawer — fixed-position, outside grid flow — hidden in cine mode for players */}
       {!cineHideUI && (() => {
@@ -2380,12 +2358,19 @@ export default function GameContent() {
                 />
                 </>
               )}
-              {activeRightDrawer === 'combat' && isDM && (
-                <CombatControlsPanel
+              {activeRightDrawer === 'prompts' && isDM && (
+                <PromptsPanel
                   promptPlayerRoll={promptPlayerRoll}
-                  promptAllPlayersInitiative={promptAllPlayersInitiative}
-                  combatActive={combatActive}
-                  setCombatActive={sendCombatStateChange}
+                  promptEveryone={promptEveryone}
+                  quickPicksFor={(userId) => {
+                    // The attributes on that player's own sheet, in config order — the
+                    // campaign's words for what a roll is called.
+                    const meta = playerMetadata[userId];
+                    const configuration = meta?.config_version_id ? characterConfigs[meta.config_version_id] : null;
+                    return configuration
+                      ? flatComponents(configuration.components).filter((entry) => entry.type === 'attribute').map((entry) => entry.label)
+                      : [];
+                  }}
                   gameSeats={gameSeats}
                   activePrompts={activePrompts}
                   clearDicePrompt={clearDicePrompt}
@@ -2498,14 +2483,6 @@ export default function GameContent() {
             />
           )}
 
-          {!cineHideUI && (
-            <HorizontalInitiativeTracker
-              initiativeOrder={initiativeOrder}
-              handleInitiativeClick={handleInitiativeClick}
-              currentTurn={currentTurn}
-              combatActive={combatActive}
-            />
-          )}
         </div>
       </div>
 
@@ -2518,7 +2495,6 @@ export default function GameContent() {
             currentTurn={currentTurn}
             thisUserId={thisUserId}
             currentUser={currentUser}
-            combatActive={combatActive}
             onRollDice={handlePlayerDiceRoll}
             onEndTurn={handleEndTurn}
             uiScale={uiScale}

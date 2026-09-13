@@ -14,7 +14,7 @@ import { HiddenToggleButton, LockToggleButton } from './TokenFlagToggles';
 
 /**
  * MapTokenCreator — the DM's "+ Add token" (decision 14: housed in
- * CombatControlsPanel; UI placement only, no combat/initiative linkage).
+ * PromptsPanel; UI placement only).
  *
  * Creates local NPC drafts (label + D&D-size footprint) that appear below
  * as chips; drag a chip onto the map to place it — the token becomes

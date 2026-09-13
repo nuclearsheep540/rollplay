@@ -4,6 +4,11 @@ import { resolveName } from '../resolveDisplayName'
 import ColorPicker from './ColorPicker'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faGamepad } from '@fortawesome/free-solid-svg-icons'
+import { flatComponents, pieceFor } from '@/app/characters/components/registry'
+
+// What a seat card shows of a character: hit points only, in v1. The sheet is where the
+// rest lives; the card is read at a glance.
+const SEAT_CARD_TYPES = ['hit_points']
 
 export default function PlayerCard({
     seatId,
@@ -13,6 +18,7 @@ export default function PlayerCard({
     currentTurn = null,
     onDiceRoll = null,
     playerData = null,
+    configuration = null,
     onColorChange = null,
     currentColor = null,
     usedColors = [],
@@ -29,17 +35,16 @@ export default function PlayerCard({
     const isMyTurn = currentTurn === currentSeat.userId;
     const isThisPlayerSeat = currentSeat.userId === thisUserId;
 
-    // Character payload can arrive in two shapes depending on source;
-    // normalize once so rendering uses a single format. Shares the same
-    // character → screen → neutral-default chain as resolveDisplayName.
-    const displayCharacterName = resolveName(playerData?.character_name || playerData?.name, occupantName);
-    const displayCharacterClassRaw = playerData?.character_class || playerData?.class;
-    const displayCharacterClass = Array.isArray(displayCharacterClassRaw)
-      ? displayCharacterClassRaw.join(' / ')
-      : displayCharacterClassRaw;
-    const displayCharacterLevel = playerData?.level;
-    const displayHpCurrent = playerData?.hp_current ?? playerData?.hp;
-    const displayHpMax = playerData?.hp_max ?? playerData?.maxHp;
+    // The seat's title is the character's display name (the room's word), else the
+    // screen name. Under it: the hit-points components the config declares, in config
+    // order, each rendered by its type's SeatCompact — and only those the room let this
+    // viewer see (a secret value is absent, and absent renders nothing).
+    const displayCharacterName = resolveName(playerData?.display_name, occupantName);
+    const seatComponents = configuration
+      ? flatComponents(configuration.components).filter(
+          (entry) => SEAT_CARD_TYPES.includes(entry.type) && playerData?.values?.[entry.id],
+        )
+      : [];
 
     // Get the actual seat color from CSS custom property
     const getActualSeatColor = (seatIndex) => {
@@ -69,24 +74,6 @@ export default function PlayerCard({
       if (!name || name === "empty") return name;
       return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     };
-
-    // Avoid NaN/infinite HP values when metadata arrives incomplete or stringified.
-    const numericHpCurrent = Number(displayHpCurrent);
-    const numericHpMax = Number(displayHpMax);
-    const hasValidHpValues = Number.isFinite(numericHpCurrent)
-      && Number.isFinite(numericHpMax)
-      && numericHpMax > 0;
-
-    // Calculate HP percentage for styling
-    const hpPercentage = hasValidHpValues
-      ? (numericHpCurrent / numericHpMax) * 100
-      : 0;
-    const hpPercentageClamped = Math.max(0, Math.min(100, hpPercentage));
-    const hpFillColor = hpPercentageClamped > 60
-      ? '#22c55e'
-      : hpPercentageClamped > 30
-        ? '#eab308'
-        : '#ef4444';
 
     // Render empty seat (static placeholder — seats are auto-assigned via Enter Session overlay)
     if (!isOccupied) {
@@ -154,73 +141,13 @@ export default function PlayerCard({
           </div>
         </div>
 
-        {playerData ? (
-          <>
-            {/* Character Class & Level */}
-            <div
-              className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]"
-            >
-              Level {displayCharacterLevel} {displayCharacterClass}
-            </div>
-
-            {/* HP Display */}
-            <div
-              className="flex items-center gap-[calc(10px*var(--ui-scale))] mb-[calc(6px*var(--ui-scale))]"
-            >
-              {/* HP Bar Container */}
-              <div
-                className="flex-1 bg-gray-800/70 rounded-full overflow-hidden relative h-[calc(6px*var(--ui-scale))]"
-              >
-                {/* HP Fill changes color by threshold and width by current HP */}
-                <div
-                  className="h-full transition-[width,background-color] duration-300"
-                  style={{
-                    width: `${hpPercentageClamped}%`,
-                    backgroundColor: hpFillColor,
-                  }}
-                ></div>
-              </div>
-
-              {/* HP Text */}
-              <div
-                className="text-gray-300 font-mono flex items-baseline text-[calc(14px*var(--ui-scale))] min-w-[calc(50px*var(--ui-scale))]"
-              >
-                <span
-                  className="text-white text-[calc(13px*var(--ui-scale))]"
-                >
-                  {displayHpCurrent}
-                </span>
-                <span className="mx-1">/</span>
-                <span
-                  className="font-semibold text-[calc(15px*var(--ui-scale))]"
-                >
-                  {displayHpMax}
-                </span>
-              </div>
-            </div>
-
-            {/* Status Effects - Closer to HP */}
-            <div
-              className="flex flex-wrap items-center gap-[calc(4px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))]"
-            >
-              {playerData.statusEffects && playerData.statusEffects.length > 0 ? (
-                playerData.statusEffects.slice(0, 3).map((status, index) => (
-                  <div
-                    key={index}
-                    className="bg-purple-500/20 border border-purple-400/60 text-purple-300 rounded-full px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] font-medium text-[calc(9px*var(--ui-scale))]"
-                  >
-                    {status}
-                  </div>
-                ))
-              ) : (
-                <div
-                  className="bg-gray-600/20 border border-gray-500/40 text-gray-400 rounded-full px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] font-medium text-[calc(9px*var(--ui-scale))]"
-                >
-                  No Status Effects
-                </div>
-              )}
-            </div>
-          </>
+        {playerData?.character_id ? (
+          <div className="flex flex-col gap-[calc(4px*var(--ui-scale))] mb-[calc(6px*var(--ui-scale))]">
+            {seatComponents.map((entry) => {
+              const SeatCompact = pieceFor(entry.type, 'SeatCompact');
+              return <SeatCompact key={entry.id} configuration={entry} value={playerData.values[entry.id]} />;
+            })}
+          </div>
         ) : (
           <div
             className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(10px*var(--ui-scale))]"

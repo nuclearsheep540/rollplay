@@ -72,8 +72,10 @@ export function useUpdateCharacterComponent(characterId) {
       }
       return response.json()
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['character', characterId] })
+    // The response is the whole character, drift included, so it replaces the cache
+    // rather than triggering a refetch — no round trip, no flicker between the two.
+    onSuccess: (character) => {
+      queryClient.setQueryData(['character', characterId], character)
       queryClient.invalidateQueries({ queryKey: ['characters'] })
     },
   })
@@ -160,6 +162,51 @@ export function useSession(sessionId) {
       const response = await authFetch(`/api/sessions/${sessionId}`, { credentials: 'include' })
       if (!response.ok) throw new Error('Could not load the table')
       return response.json()
+    },
+  })
+}
+
+/**
+ * The move to the campaign's latest version, as a proposal: the new config, what changed,
+ * and the values carried over for the player to review. 409 means there is nothing newer.
+ */
+export function useUpgradePreview(characterId) {
+  return useQuery({
+    queryKey: ['character', characterId, 'upgrade-preview'],
+    enabled: !!characterId,
+    retry: false,
+    queryFn: async () => {
+      const response = await authFetch(`/api/characters/${characterId}/upgrade-preview`, { credentials: 'include' })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || 'Could not prepare the update')
+      }
+      return response.json()
+    },
+  })
+}
+
+/** Confirm the move to the latest version with the reviewed values — the whole document. */
+export function useAdoptVersion(characterId) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (values) => {
+      const response = await authFetch(`/api/characters/${characterId}/adopt-version`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ values }),
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || 'Could not update this character')
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['character', characterId] })
+      queryClient.invalidateQueries({ queryKey: ['characters'] })
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
     },
   })
 }

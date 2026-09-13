@@ -7,7 +7,6 @@ export default function DiceActionPanel({
   currentTurn,
   thisUserId,
   currentUser,
-  combatActive,
   onRollDice,
   onEndTurn,
   uiScale = 'medium',
@@ -58,14 +57,14 @@ export default function DiceActionPanel({
   const [advantageMode, setAdvantageMode] = useState('normal'); // 'normal', 'advantage', 'disadvantage'
   
   // Check if player should see dice interface — currentTurn is a userId
-  const isMyTurn = currentTurn === thisUserId && combatActive;
+  const isMyTurn = currentTurn === thisUserId;
   // Prompts use userId for identity
   const myPrompts = activePrompts.filter(prompt => prompt.player === thisUserId);
   const isPromptedToRoll = myPrompts.length > 0;
   
-  // The floating prompt shows only when there's something to prompt: an active roll request OR
-  // combat. Unprompted "roll anytime" is served by the logs-drawer button, not this panel.
-  const shouldShowDicePanel = isPromptedToRoll || combatActive;
+  // The floating prompt shows only when there's something to prompt: an active roll request.
+  // Unprompted "roll anytime" is served by the logs-drawer button, not this panel.
+  const shouldShowDicePanel = isPromptedToRoll;
 
   // Panel is active (highlighted) on your turn or when you're prompted.
   const isPanelActive = isMyTurn || isPromptedToRoll;
@@ -263,7 +262,7 @@ export default function DiceActionPanel({
   // mounted so it can be opened from the logs-drawer button even when there's no prompt/combat.
   return (
     <>
-      {/* Floating prompt: shown only when prompted/in combat, and hidden while the modal is open
+      {/* Floating prompt: shown only when prompted or on your turn, and hidden while the modal is open
           (both start a roll — redundant on screen at once; the modal is where you actually roll). */}
       {shouldShowDicePanel && !isDiceModalOpen && (
       <div
@@ -314,12 +313,12 @@ export default function DiceActionPanel({
 
           {/* REMOVED: Redundant prompt indicator - info now in button */}
 
-          {/* Show turn prompt if it's combat turn and not prompted */}
-          {isMyTurn && combatActive && !isPromptedToRoll && (
+          {/* Show turn prompt if it's your turn and not prompted */}
+          {isMyTurn && !isPromptedToRoll && (
             <div 
-              className="combat-turn-indicator bg-emerald-500/15 border border-emerald-500/30 rounded-lg p-2 mb-3 text-emerald-500 text-xs font-bold"
+              className="turn-indicator bg-emerald-500/15 border border-emerald-500/30 rounded-lg p-2 mb-3 text-emerald-500 text-xs font-bold"
             >
-              ⚔️ Combat Turn
+              🎯 Your turn
             </div>
           )}
 
@@ -342,8 +341,8 @@ export default function DiceActionPanel({
               🎲 Roll Dice
             </button>
 
-            {/* End Turn Button - Only show during combat turns (not prompts) */}
-            {isMyTurn && combatActive && !isPromptedToRoll && (
+            {/* End Turn Button - Only show on your turn (not prompts) */}
+            {isMyTurn && !isPromptedToRoll && (
               <button
                 className="end-turn-btn active bg-red-500/20 border-2 border-red-500/50 text-red-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-colors duration-200 hover:bg-red-500/30 hover:-translate-y-0.5"
                 onClick={handleEndTurn}

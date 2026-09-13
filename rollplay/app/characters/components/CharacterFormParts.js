@@ -54,8 +54,10 @@ export function CharacterFormHero({ campaignName, version, hostName }) {
 /**
  * The white card of inputs, in the GM's order and sections, with `children` as the
  * footer row (the hint and the submit — or, in a preview, a note that nothing is saved).
+ * `readOnly` renders the same card with every control inert — the "as it is now" side
+ * of a comparison, which must look exactly like the side being edited.
  */
-export function CharacterFormFields({ config, values, errors, onChange, children }) {
+export function CharacterFormFields({ config, values, errors, onChange, readOnly = false, children }) {
   return (
     <div className="rounded-md border border-[#E5DECF] bg-white px-7 py-6 flex flex-col gap-[22px]">
       {layoutBlocks(config.components).map((block) =>
@@ -64,10 +66,10 @@ export function CharacterFormFields({ config, values, errors, onChange, children
             <div className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#9A7526] mb-3">
               {block.group.label}
             </div>
-            <ComponentInputs components={block.group.components} values={values} errors={errors} onChange={onChange} />
+            <ComponentInputs components={block.group.components} values={values} errors={errors} onChange={onChange} readOnly={readOnly} />
           </section>
         ) : (
-          <ComponentInputs key={block.key} components={block.components} values={values} errors={errors} onChange={onChange} />
+          <ComponentInputs key={block.key} components={block.components} values={values} errors={errors} onChange={onChange} readOnly={readOnly} />
         ),
       )}
       {children}
@@ -106,7 +108,7 @@ export function layoutBlocks(entries) {
  * as many cells as fit and caps each one, and every control caps its own width — a name
  * box or a description a screen wide is harder to read, not easier.
  */
-function ComponentInputs({ components, values, errors, onChange }) {
+function ComponentInputs({ components, values, errors, onChange, readOnly = false }) {
   const runs = []
   for (const configuration of components) {
     const last = runs[runs.length - 1]
@@ -128,6 +130,7 @@ function ComponentInputs({ components, values, errors, onChange }) {
               configuration={configuration}
               value={values[configuration.id]}
               error={errors[configuration.id]}
+              readOnly={readOnly}
               onChange={(next) => onChange(configuration.id, next)}
             />
           )

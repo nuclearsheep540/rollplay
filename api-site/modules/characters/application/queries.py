@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from uuid import UUID
 
-from shared_contracts.character_config import ComponentChange, diff_configs
+from shared_contracts.character_config import CharacterConfig, ComponentChange, Reconciliation, diff_configs, reconcile_values
 
 from modules.campaign.repositories.character_config_version_repository import (
     CharacterConfigVersionRepository,
@@ -60,4 +60,38 @@ class GetCharacterVersionDrift:
         return VersionDrift(
             latest_version=latest.version,
             changes=diff_configs(character.config_snapshot, latest.config),
+        )
+
+
+@dataclass
+class UpgradePreview:
+    """The move to the campaign's latest version, as the player will see it before
+    confirming: the target, what the diff says changed, and the values carried over."""
+
+    latest_version_id: UUID
+    latest_version: int
+    config: CharacterConfig
+    changes: List[ComponentChange]
+    reconciliation: Reconciliation
+
+
+class GetCharacterUpgradePreview:
+    """What updating this character to the latest version would mean. None when there is
+    nothing newer, or the character is a keepsake."""
+
+    def __init__(self, version_repository: CharacterConfigVersionRepository):
+        self.version_repository = version_repository
+
+    def execute(self, character: CharacterAggregate) -> Optional[UpgradePreview]:
+        if character.session_id is None or character.campaign_id is None:
+            return None
+        latest = self.version_repository.get_latest(character.campaign_id)
+        if latest is None or latest.version <= character.config_snapshot.version:
+            return None
+        return UpgradePreview(
+            latest_version_id=latest.id,
+            latest_version=latest.version,
+            config=latest.config,
+            changes=diff_configs(character.config_snapshot, latest.config),
+            reconciliation=reconcile_values(character.config_snapshot, latest.config, character.values),
         )

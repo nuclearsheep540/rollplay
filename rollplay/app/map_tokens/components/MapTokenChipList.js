@@ -36,7 +36,7 @@ function MapTokenChipList({
       </div>
       <div className="space-y-1">
         {chipSeats.map(seat => {
-          const characterName = seat.characterData.character_name || seat.playerName || 'Adventurer';
+          const characterName = seat.characterData.display_name || seat.playerName || 'Adventurer';
           const placedToken = tokens.find(token =>
             token.kind === 'pc' && token.owner_user_id === seat.userId);
           return (

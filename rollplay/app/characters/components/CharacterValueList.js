@@ -4,7 +4,7 @@
 'use client'
 
 import { layoutBlocks } from './CharacterFormParts'
-import { pieceFor } from './registry'
+import { initialValueFor, pieceFor } from './registry'
 
 /**
  * A character's values, laid out the way the GM arranged the form: groups as named
@@ -15,27 +15,27 @@ import { pieceFor } from './registry'
  * The platform-fixed type order (RUNTIME_TYPE_ORDER) is the in-game sheet's rule, for
  * the surface people read under pressure mid-play; it does not apply here.
  *
- * A component with no value is skipped — that is a secret one, stripped for this viewer.
+ * Every component shows, answered or not: the readers here are the owner and the GM,
+ * who see everything, and an unanswered field is still a field. A first edit to one
+ * builds the whole value from the component's starting point.
  */
 export default function CharacterValueList({ config, values, editable = false, onChange, pendingIds }) {
   if (!config) return null
 
   const rows = (components) =>
-    components
-      .filter((configuration) => values?.[configuration.id])
-      .map((configuration) => {
-        const SheetFull = pieceFor(configuration.type, 'SheetFull')
-        return (
-          <SheetFull
-            key={configuration.id}
-            configuration={configuration}
-            value={values[configuration.id]}
-            editable={editable}
-            pending={pendingIds?.has(configuration.id)}
-            onChange={(next) => onChange?.(next)}
-          />
-        )
-      })
+    components.map((configuration) => {
+      const SheetFull = pieceFor(configuration.type, 'SheetFull')
+      return (
+        <SheetFull
+          key={configuration.id}
+          configuration={configuration}
+          value={values?.[configuration.id]}
+          editable={editable}
+          pending={pendingIds?.has(configuration.id)}
+          onChange={(next) => onChange?.({ ...initialValueFor(configuration), ...next })}
+        />
+      )
+    })
 
   return (
     <div className="flex flex-col gap-5">

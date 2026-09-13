@@ -6,7 +6,7 @@
 import { SKEW_BOX, SKEW_LABEL } from '@/app/styles/plateGeometry'
 import { FieldHeader, Stepper } from '../shared/Fields'
 
-export default function CreateInput({ configuration, value, onChange }) {
+export default function CreateInput({ configuration, value, onChange, readOnly = false }) {
   const rules = configuration.rules
 
   if (rules.representation === 'int') {
@@ -24,6 +24,7 @@ export default function CreateInput({ configuration, value, onChange }) {
           value={value?.state?.maximum}
           min={rules.minimum}
           max={rules.maximum}
+          disabled={readOnly}
           onChange={(maximum) => onChange({ ...value, state: { representation: 'int', maximum, current: maximum } })}
         />
       </div>
@@ -40,6 +41,7 @@ export default function CreateInput({ configuration, value, onChange }) {
             <button
               key={step.weight}
               type="button"
+              disabled={readOnly}
               style={{ transform: SKEW_BOX }}
               className={`px-2.5 py-1 rounded-sm text-[11px] font-semibold tracking-widest uppercase border ${
                 selected ? 'bg-[#D9A441] text-[#241C08] border-[#D9A441]' : 'border-[rgba(31,31,31,0.35)] text-[#1F1F1F]'

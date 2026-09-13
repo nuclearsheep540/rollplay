@@ -86,6 +86,16 @@ async def _player_identity(user_repository, user_id: UUID, campaign, character=N
     )
 
 
+def _refuse_while_game_runs(character, game_repository) -> None:
+    """The cold-side rule for a seated character: while its table has an open game the
+    room owns the character, and cold writes would either be lost at End or overwrite
+    what the room wrote back. Create and eject are the exceptions, each with its own ETL."""
+    if character.session_id is None or game_repository is None:
+        return
+    if game_repository.get_open_game_for_session(character.session_id):
+        raise ValueError("A game is running: edit this character in the game")
+
+
 class CreateCharacter:
     """A roster member builds against the campaign's latest published config.
 
@@ -227,9 +237,7 @@ class UpdateCharacterComponent:
         if not self._may_edit(character, requesting_user_id):
             raise PermissionError("Only the owner or the campaign host can edit this character")
 
-        if character.session_id and self.game_repository:
-            if self.game_repository.get_open_game_for_session(character.session_id):
-                raise ValueError("A game is running: edit this character in the game")
+        _refuse_while_game_runs(character, self.game_repository)
 
         character.set_component_value(value)
         self.repository.save(character)
@@ -251,9 +259,10 @@ class SetCharacterAlive:
     stays at the table, rendered at its zero point, until someone ejects it.
     """
 
-    def __init__(self, character_repository, campaign_repository):
+    def __init__(self, character_repository, campaign_repository, game_repository=None):
         self.repository = character_repository
         self.campaign_repository = campaign_repository
+        self.game_repository = game_repository
 
     def execute(self, *, character_id: UUID, requesting_user_id: UUID, is_alive: bool) -> CharacterAggregate:
         character = self.repository.get_by_id(character_id)
@@ -262,6 +271,7 @@ class SetCharacterAlive:
         if not UpdateCharacterComponent(self.repository, self.campaign_repository, None)._may_edit(
                 character, requesting_user_id):
             raise PermissionError("Only the owner or the campaign host can change this character")
+        _refuse_while_game_runs(character, self.game_repository)
         character.set_alive(is_alive)
         self.repository.save(character)
         return character
@@ -270,9 +280,10 @@ class SetCharacterAlive:
 class SetCharacterAvatar:
     """Attach a library image as the character's avatar, or clear it."""
 
-    def __init__(self, character_repository, asset_repository):
+    def __init__(self, character_repository, asset_repository, game_repository=None):
         self.repository = character_repository
         self.asset_repository = asset_repository
+        self.game_repository = game_repository
 
     def execute(self, *, character_id: UUID, user_id: UUID, asset_id: Optional[UUID]) -> CharacterAggregate:
         character = self.repository.get_by_id(character_id)
@@ -280,6 +291,7 @@ class SetCharacterAvatar:
             raise ValueError("Character not found")
         if not character.is_owned_by(user_id):
             raise PermissionError("You do not own this character")
+        _refuse_while_game_runs(character, self.game_repository)
 
         if asset_id is not None:
             _check_avatar_asset(self.asset_repository, asset_id, user_id)
@@ -333,3 +345,35 @@ class WriteCharacterValuesFromGame:
             character.set_color(color)
 
         self.repository.save(character)
+
+
+class AdoptConfigVersion:
+    """Move a character to the campaign's latest config version with the values its
+    player confirmed.
+
+    Owner only — the character is theirs to carry forward, and the confirmation is the
+    point. Refused while a game is running: the room holds this character's config and
+    values, and swapping them under a live game is runtime work (see 06).
+    """
+
+    def __init__(self, character_repository, version_repository, game_repository):
+        self.repository = character_repository
+        self.version_repository = version_repository
+        self.game_repository = game_repository
+
+    def execute(self, *, character_id: UUID, requesting_user_id: UUID, values: Dict[str, ComponentValue]) -> CharacterAggregate:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            raise ValueError("Character not found")
+        if not character.is_owned_by(requesting_user_id):
+            raise PermissionError("Only the owner can update their character")
+        if character.session_id is None or character.campaign_id is None:
+            raise ValueError("A keepsake has no table to update against")
+        latest = self.version_repository.get_latest(character.campaign_id)
+        if latest is None or latest.version <= character.config_snapshot.version:
+            raise ValueError("This character is already on the latest version")
+        if self.game_repository.get_open_game_for_session(character.session_id) is not None:
+            raise ValueError("Cannot update a character while a game is running")
+        character.adopt_config_version(latest.config, latest.id, values)
+        self.repository.save(character)
+        return character

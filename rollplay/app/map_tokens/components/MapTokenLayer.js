@@ -552,7 +552,7 @@ export default function MapTokenLayer({
               || FALLBACK_TOKEN_COLOR)
           : NPC_TOKEN_COLOR;
         const tokenName = isPc
-          ? (ownerMetadata?.character_name || token.label || 'Unknown Adventurer')
+          ? (ownerMetadata?.display_name || token.label || 'Unknown Adventurer')
           : (token.label || 'NPC');
 
         // Stack badge (decision 21): the pile's top token wears the count

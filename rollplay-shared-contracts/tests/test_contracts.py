@@ -66,6 +66,8 @@ from shared_contracts.character_config import (
     ComponentChange,
     ComponentGroup,
     diff_configs,
+    initial_value_for,
+    reconcile_values,
 )
 
 
@@ -1666,6 +1668,81 @@ class TestDiffConfigsWithGroups:
             make_attribute("attribute_2", "B"), make_attribute("attribute_1", "A")])])
         changes = diff_configs(older, newer)
         assert len(changes) == 1 and changes[0].fields == ["position"]
+
+
+class TestInitialValueFor:
+    def test_identity_text_and_multi_start_unanswered(self):
+        assert initial_value_for(make_identity()).answer.text == ""
+        multi = make_identity(input=MultiSelectIdentityInput(options=["Guard", "Cook"]))
+        assert initial_value_for(multi).answer.choices == []
+
+    def test_single_select_has_no_initial_value(self):
+        """The answer model needs a choice, and choosing for the player is not seeding."""
+        with pytest.raises(ValueError):
+            initial_value_for(make_identity(input=SingleSelectIdentityInput(options=["Rogue", "Mage"])))
+
+    def test_hit_points_start_full(self):
+        value = initial_value_for(make_int_hit_points())
+        assert (value.state.maximum, value.state.current) == (20, 20)
+        assert initial_value_for(make_weighted_hit_points()).state.current_weight == 1.0
+
+    def test_attribute_starts_at_default_else_minimum(self):
+        assert initial_value_for(make_attribute()).score == 10
+        assert initial_value_for(make_attribute(default=None)).score == 1
+
+
+class TestReconcileValues:
+    """Carrying a character forward to a newer config: what the player is asked to confirm."""
+
+    def test_unchanged_components_keep_their_values(self):
+        result = reconcile_values(make_mock_config(), make_mock_config(), make_mock_values())
+        assert result.values == make_mock_values()
+        assert result.added == result.dropped == result.reset == []
+        assert len(result.kept) == 6
+
+    def test_new_component_is_seeded_and_removed_one_dropped(self):
+        older = make_mock_config()
+        newer = CharacterConfig(version=2, components=[
+            make_identity(), make_int_hit_points(), make_weighted_hit_points(),
+            make_attribute("attribute_1", "Strength"), make_attribute("attribute_2", "Agility"),
+            make_attribute("attribute_4", "Nerve", default=7),
+        ])
+        result = reconcile_values(older, newer, make_mock_values())
+        assert result.added == ["attribute_4"] and result.values["attribute_4"].score == 7
+        assert result.dropped == ["attribute_3"] and "attribute_3" not in result.values
+
+    def test_value_outside_a_new_range_is_kept(self):
+        """Axis 2 as everywhere: the GM lowered the bound, the value stays and is shown."""
+        older = make_mock_config()
+        newer = CharacterConfig(version=2, components=[
+            *[component for component in older.components if component.id != "attribute_1"],
+            make_attribute("attribute_1", "Strength", maximum=12),
+        ])
+        result = reconcile_values(older, newer, make_mock_values())
+        assert "attribute_1" in result.kept and result.values["attribute_1"].score == 14
+
+    def test_kind_change_resets_the_value(self):
+        older = CharacterConfig(version=1, components=[make_identity()])
+        newer = CharacterConfig(version=2, components=[
+            make_identity(input=MultiSelectIdentityInput(options=["Guard", "Cook"]))])
+        result = reconcile_values(older, newer, {"identity_1": make_text_answer("identity_1", "Brannoc")})
+        assert result.reset == ["identity_1"] and result.values["identity_1"].answer.choices == []
+
+    def test_single_select_needing_a_seed_is_left_for_the_form(self):
+        older = CharacterConfig(version=1, components=[make_identity()])
+        newer = CharacterConfig(version=2, components=[
+            make_identity(), make_identity("identity_2", "Class", input=SingleSelectIdentityInput(options=["Rogue"]))])
+        result = reconcile_values(older, newer, {"identity_1": make_text_answer("identity_1", "Brannoc")})
+        assert result.added == ["identity_2"] and "identity_2" not in result.values
+
+    def test_representation_change_resets_hit_points(self):
+        older = CharacterConfig(version=1, components=[make_int_hit_points()])
+        newer = CharacterConfig(version=2, components=[
+            make_int_hit_points(rules=WeightedHitPointsRules(starting_weight=1.0, scale=[
+                ScaleStep(weight=1.0, label="Full"), ScaleStep(weight=0.0, label="Zero")]))])
+        values = {"hit_points_1": HitPointsValue(component_id="hit_points_1", state=IntHitPointsState(maximum=12, current=3))}
+        result = reconcile_values(older, newer, values)
+        assert result.reset == ["hit_points_1"] and result.values["hit_points_1"].state.current_weight == 1.0
 
 
 class TestCharacterSheet:
