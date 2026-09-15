@@ -88,7 +88,7 @@ export function Stepper({ value, min, max, onChange, size = 'md', disabled = fal
   const step = (delta) => onChange(clamp((Number(value) || 0) + delta))
 
   return (
-    <div className="inline-flex items-stretch rounded-sm border border-[#37322F] bg-[#F7F4F3] overflow-hidden">
+    <div className="inline-flex items-stretch rounded-sm border border-[#37322F] bg-[#F7F4F3] text-[#1F1F1F] overflow-hidden">
       <button
         type="button"
         aria-label="Decrease"

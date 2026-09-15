@@ -18,6 +18,7 @@ class CampaignCreateRequest(BaseModel):
     hero_image: Optional[str] = Field(None, max_length=255)
     hero_image_asset_id: Optional[str] = Field(None)
     max_players: int = Field(8, ge=1, le=8, description="Seats at the table (1-8)")
+    system_name: Optional[str] = Field(None, max_length=80, description="The system this campaign is played with")
 
 
 class CampaignUpdateRequest(BaseModel):
@@ -26,6 +27,8 @@ class CampaignUpdateRequest(BaseModel):
     hero_image: Optional[str] = Field(None, max_length=255)
     hero_image_asset_id: Optional[str] = Field(None)
     max_players: Optional[int] = Field(None, ge=1, le=8, description="Seats at the table (1-8); applies at the next start")
+    # Absent = leave alone; null or blank = clear.
+    system_name: Optional[str] = Field(None, max_length=80, description="The system this campaign is played with")
 
 
 class HostStatusResponse(BaseModel):
@@ -105,6 +108,7 @@ class CampaignResponse(BaseModel):
     updated_at: datetime
     last_played_at: Optional[datetime] = None
     max_players: int = 8  # Seats at the table; applied at the next game start
+    system_name: Optional[str] = None
     sessions: List = []  # Sessions fetched separately via session module
     invited_player_ids: List[str] = []
     player_ids: List[str] = []
@@ -135,6 +139,7 @@ class CampaignSummaryResponse(BaseModel):
     updated_at: datetime
     last_played_at: Optional[datetime] = None
     max_players: int = 8  # Seats at the table; applied at the next game start
+    system_name: Optional[str] = None
     total_sessions: int = 0
     invited_player_ids: List[str] = []
     player_ids: List[str] = []

@@ -132,6 +132,7 @@ class CampaignRepository:
             campaign_model.updated_at = aggregate.updated_at
             campaign_model.last_played_at = aggregate.last_played_at
             campaign_model.max_players = aggregate.max_players
+            campaign_model.system_name = aggregate.system_name
             campaign_model.character_config_draft = (
                 aggregate.character_config_draft.model_dump(mode="json")
                 if aggregate.character_config_draft else None
@@ -168,6 +169,7 @@ class CampaignRepository:
                 updated_at=aggregate.updated_at,
                 last_played_at=aggregate.last_played_at,
                 max_players=aggregate.max_players,
+                system_name=aggregate.system_name,
             )
             self.db.add(campaign_model)
 
@@ -267,6 +269,7 @@ class CampaignRepository:
             updated_at=model.updated_at,
             last_played_at=model.last_played_at,
             max_players=model.max_players,
+            system_name=model.system_name,
             character_config_draft=(
                 CharacterConfig.model_validate(model.character_config_draft)
                 if model.character_config_draft else None

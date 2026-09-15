@@ -49,7 +49,7 @@ const HERO_SCRIM =
  * saves itself than in one that never did. They come back with a column to live in
  * (08-followups).
  */
-export default function OverviewSection({ tabKey, fields, onFieldChange }) {
+export default function OverviewSection({ tabKey, fields, onFieldChange, onOpenSystem }) {
   const [activeSection, setActiveSection] = useState('story')
   const sectionRefs = useRef({})
   const fileInputRef = useRef(null)
@@ -93,11 +93,11 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
 
   const sections =
     tabKey === 'setup'
-      ? [{ key: 'table', label: 'Party' }, { key: 'ruleset', label: 'Ruleset' }]
+      ? [{ key: 'table', label: 'Party' }, { key: 'ruleset', label: 'System' }]
       : [
           { key: 'story', label: 'The campaign' },
           { key: 'table', label: 'Party' },
-          { key: 'ruleset', label: 'Ruleset' },
+          { key: 'ruleset', label: 'System' },
         ]
 
   useEffect(() => {
@@ -263,24 +263,27 @@ export default function OverviewSection({ tabKey, fields, onFieldChange }) {
                   <option key={count} value={count}>{count}</option>
                 ))}
               </select>
-              <div className="mt-1.5 text-[12.5px] text-content-muted">Applies the next time the game starts.</div>
             </div>
           </div>
         </PlainCard>
 
-        <PlainCard reference={register('ruleset')} eyebrow="Ruleset">
-          <p className="text-[13px] text-[#37322F]">
-            Characters in this campaign are built from the components you configure under Character.
-          </p>
-          <div className="mt-3.5 flex items-center justify-between rounded border border-[#E5DECF] px-4 py-3">
-            <span className="text-[13px] text-content-muted">Framework preset — None. Start from scratch.</span>
+        {/* Points at the System section: what this campaign runs on, at a glance. */}
+        <PlainCard reference={register('ruleset')} eyebrow="System">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="font-[family-name:var(--font-metamorphous)] text-[20px] text-content-primary truncate">
+                {fields.systemName?.trim() || 'Not set yet'}
+              </div>
+              <p className="mt-1 text-[13px] text-content-muted">
+                This system governs how the game is played, including how characters should be built.
+              </p>
+            </div>
             <button
               type="button"
-              disabled
-              title="Coming later"
-              className="px-3 py-1.5 rounded border border-[#B5ADA6] text-[12px] text-content-muted opacity-60 cursor-not-allowed"
+              onClick={onOpenSystem}
+              className="shrink-0 px-3 py-1.5 rounded border border-[#37322F] text-[12px] font-medium text-[#37322F] hover:border-[#D9A441] hover:text-[#9A7526]"
             >
-              Choose
+              Open System
             </button>
           </div>
         </PlainCard>

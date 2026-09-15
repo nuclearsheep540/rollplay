@@ -149,6 +149,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         updated_at=campaign.updated_at,
         last_played_at=campaign.last_played_at,
         max_players=campaign.max_players,
+        system_name=campaign.system_name,
         sessions=[],  # Sessions fetched separately via session module
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
@@ -183,6 +184,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: Option
         updated_at=campaign.updated_at,
         last_played_at=campaign.last_played_at,
         max_players=campaign.max_players,
+        system_name=campaign.system_name,
         total_sessions=campaign.get_total_sessions(),
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
@@ -209,7 +211,8 @@ async def create_campaign(
             description=request.description or "",
             hero_image=request.hero_image,
             hero_image_asset_id=UUID(request.hero_image_asset_id) if request.hero_image_asset_id else None,
-            max_players=request.max_players
+            max_players=request.max_players,
+            system_name=request.system_name,
         )
 
         # A campaign is born with its session and keeps that one for life — this
@@ -329,7 +332,8 @@ async def update_campaign(
             description=request.description,
             hero_image=request.hero_image,
             hero_image_asset_id=request.hero_image_asset_id if request.hero_image_asset_id is not None else "UNSET",
-            max_players=request.max_players
+            max_players=request.max_players,
+            system_name=request.system_name if "system_name" in request.model_fields_set else "UNSET",
         )
 
         # Re-fetch to populate hero_image_asset_meta if asset changed

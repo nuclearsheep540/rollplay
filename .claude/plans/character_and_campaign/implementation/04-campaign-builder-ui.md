@@ -145,6 +145,19 @@ a "Not in v1" tag, then two ghosted (`opacity-55`, `pointer-events-none`) exampl
 and a ghosted "+ Add table" button. Copy the table contents from `World.dc.html` verbatim
 (they were made system-neutral on purpose). Both sub-tabs render the same stub.
 
+## System section — `components/SystemSection.js` (added 2026-09-15)
+
+> **Revision.** The Overview's "Ruleset / framework preset" card was the wrong concept: a
+> preset is a template for characters, and what the campaign needs is a **System** — how
+> it is played (D&D 5e, Coriolis, the GM's own), which includes characters but is not
+> only them. World is the fiction; Character is the configured part of the system;
+> System is the described part. Rail order: Overview, **System**, World, Character.
+> v1 is a single persisted field, `campaigns.system_name` (≤80, blank = unsaid;
+> migration `8bae7f924a9e`), autosaved like the rest. The Overview's card is now
+> "System": shows the name (or "Not set yet") and opens the section. Mechanics fields
+> (combat, dice, turns), a runtime System panel, and reusable systems across campaigns
+> are follow-ups; the dead `campaigns.edition_id` FK goes with the editions tail in 08.
+
 ## Character section — `components/CharacterSection.js`
 
 > **Revision (2026-09-13, groups).** Automatic adjacent-type grouping is gone (with

@@ -15,6 +15,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 export const SECTIONS = [
   { key: 'overview', label: 'Overview', subTabs: [{ key: 'story', label: 'Story' }, { key: 'setup', label: 'Setup' }] },
+  // How the campaign is played: the system, by name for now. Its mechanics come later;
+  // characters are the part of it configured under Character.
+  { key: 'system', label: 'System', subTabs: [{ key: 'rules', label: 'Rules' }] },
   { key: 'world', label: 'World', subTabs: [{ key: 'tables', label: 'Tables' }, { key: 'reference', label: 'Reference' }] },
   {
     key: 'character',
@@ -48,7 +51,10 @@ export function useBuilderNav() {
       // means nothing here — "Setup" is not a World sub-tab.
       if (nextTab) params.set('tab', nextTab)
       else params.delete('tab')
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+      // Pushed, not replaced: every section or tab a GM opens is a place they can go back
+      // to. (The one replace in the builder is CampaignBuilder's, turning /campaign/new
+      // into /campaign/{id} after the first save — Back must never land on "new" again.)
+      router.push(`${pathname}?${params.toString()}`, { scroll: false })
     },
     [pathname, router, searchParams],
   )

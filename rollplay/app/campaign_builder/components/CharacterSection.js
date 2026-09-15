@@ -151,8 +151,7 @@ export default function CharacterSection({
           </div>
           <div className="font-[family-name:var(--font-metamorphous)] text-[28px] text-content-primary">What a character is made of</div>
           <div className="mt-1.5 max-w-[620px] text-[12.5px] leading-relaxed text-content-muted">
-            Players build against this when they join the party. Order here is the order they see;
-            a group is a named section of the form. Nothing is required except what you mark required.
+            This is the structure of your character sheet. Players will submit their information according to this layout.
           </div>
         </div>
 
@@ -276,8 +275,8 @@ function VersionsTab({ state, onPublish, publishing, canEdit, campaignSaved }) {
         <div className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#9A7526] mb-2">Versions</div>
         <div className="font-[family-name:var(--font-metamorphous)] text-[28px] text-content-primary">What players have built against</div>
         <div className="mt-1.5 text-[12.5px] leading-relaxed text-content-muted">
-          Publishing freezes the current draft as a version. Characters already built keep the version
-          they were built on and keep playing — a difference is something to know about, never a block.
+          Publishing submits this version of your character sheet for players to use.
+          Players will need to update their character sheets to reflect the new version.
         </div>
       </div>
 

@@ -42,7 +42,7 @@ export default function SheetFull({ configuration, value, editable, onChange, pe
       <span className="text-[12.5px] text-content-muted">{configuration.label}</span>
       {editable ? (
         <input
-          className="w-[180px] px-2 py-1 rounded-sm border border-border bg-surface-primary text-right text-sm disabled:opacity-60"
+          className="w-[180px] px-2 py-1 rounded-sm border border-border bg-surface-primary text-content-primary text-right text-sm disabled:opacity-60"
           maxLength={input.max_length}
           value={draft}
           disabled={pending}

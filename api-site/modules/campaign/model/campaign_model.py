@@ -29,6 +29,9 @@ class Campaign(Base):
     # Seats at the table (1-8). Read into the start payload every time a game
     # starts, so an edit during a live game applies to the next one.
     max_players = Column(Integer, nullable=False, server_default='8')
+    # The system this campaign is played with — "D&D 5e", "Coriolis", something the GM
+    # made up. A name for now; the system's own mechanics come later. NULL = not said.
+    system_name = Column(String(80), nullable=True)
     # GM's working copy of the character config (a shared_contracts CharacterConfig).
     # NULL = never edited. Cleared by publish, which mints an immutable version row.
     character_config_draft = Column(JSONB, nullable=True)

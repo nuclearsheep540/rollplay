@@ -52,6 +52,10 @@ class CampaignAggregate:
     # Seats at the table (1-8). Pushed into the game at every start, so an edit
     # made while a game is running takes effect the next time it runs.
     max_players: int = 8
+    # The system the campaign is played with, by name. How it is played — combat, dice,
+    # turns — is the system's; characters are the part of it configured under the
+    # character config. None until the GM says.
+    system_name: Optional[str] = None
     session_ids: List[UUID] = field(default_factory=list)
     members: Dict[UUID, CampaignRole] = field(default_factory=dict)
     # The GM's unpublished working copy of the character config. None until they edit one.
@@ -66,7 +70,8 @@ class CampaignAggregate:
         created_by: UUID,
         hero_image: Optional[str] = None,
         hero_image_asset_id: Optional[UUID] = None,
-        max_players: int = 8
+        max_players: int = 8,
+        system_name: Optional[str] = None,
         ):
         """Create new campaign with business rules validation"""
         if not title or not title.strip():
@@ -94,6 +99,7 @@ class CampaignAggregate:
             created_at=now,
             updated_at=now,
             max_players=cls._validate_max_players(max_players),
+            system_name=cls._normalize_system_name(system_name),
             session_ids=[],
             members={created_by: CampaignRole.DM},
         )
@@ -206,7 +212,17 @@ class CampaignAggregate:
 
         self.session_ids.append(session_id)
 
-    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET", hero_image_asset_id: str = "UNSET", max_players: Optional[int] = None):
+    @staticmethod
+    def _normalize_system_name(system_name: Optional[str]) -> Optional[str]:
+        """Trimmed; blank means unsaid, not an empty name."""
+        if system_name is None:
+            return None
+        normalized = system_name.strip()
+        if len(normalized) > 80:
+            raise ValueError("System name too long (max 80 characters)")
+        return normalized or None
+
+    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET", hero_image_asset_id: str = "UNSET", max_players: Optional[int] = None, system_name: str = "UNSET"):
         """Update campaign details with business rules"""
         if title is not None:
             normalized_title = title.strip()
@@ -234,6 +250,10 @@ class CampaignAggregate:
 
         if max_players is not None:
             self.max_players = self._validate_max_players(max_players)
+
+        # "UNSET" = not in this update; None or blank = the GM cleared it.
+        if system_name != "UNSET":
+            self.system_name = self._normalize_system_name(system_name)
 
         self.update_timestamp()
 

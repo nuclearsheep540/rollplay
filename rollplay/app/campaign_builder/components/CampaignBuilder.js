@@ -15,6 +15,7 @@ import BuilderSubTabs from './BuilderSubTabs'
 import CampaignBand from './CampaignBand'
 import CharacterSection from './CharacterSection'
 import OverviewSection from './OverviewSection'
+import SystemSection from './SystemSection'
 import WorldSection from './WorldSection'
 import { useAutoSave } from '../hooks/useAutoSave'
 import { useBuilderNav } from '../hooks/useBuilderNav'
@@ -33,6 +34,7 @@ const EMPTY_FIELDS = {
   heroImage: '/campaign-tile-bg.png',
   heroImageAssetId: null,
   maxPlayers: 8,
+  systemName: '',
 }
 
 /**
@@ -89,6 +91,7 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
       heroImage: campaign.hero_image ?? null,
       heroImageAssetId: campaign.hero_image_asset?.asset_id ?? null,
       maxPlayers: campaign.max_players ?? 8,
+      systemName: campaign.system_name || '',
     }))
   }, [campaignQuery.data])
 
@@ -130,6 +133,7 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
         heroImage: currentFields.heroImage,
         heroImageAssetId: currentFields.heroImageAssetId,
         maxPlayers: currentFields.maxPlayers,
+        systemName: currentFields.systemName,
       })
       id = created.id
       campaignIdRef.current = id
@@ -143,6 +147,7 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
         heroImage: currentFields.heroImage,
         heroImageAssetId: currentFields.heroImageAssetId,
         maxPlayers: currentFields.maxPlayers,
+        systemName: currentFields.systemName,
       })
     }
 
@@ -250,8 +255,14 @@ export default function CampaignBuilder({ campaignId: initialCampaignId }) {
         <BuilderSubTabs subTabs={nav.section.subTabs} activeKey={nav.tabKey} onSelect={onSelectTab} />
         <div className="grow min-h-0 px-10 pt-9 pb-14 overflow-y-auto">
           {nav.sectionKey === 'overview' && (
-            <OverviewSection tabKey={nav.tabKey} fields={fields} onFieldChange={onFieldChange} />
+            <OverviewSection
+              tabKey={nav.tabKey}
+              fields={fields}
+              onFieldChange={onFieldChange}
+              onOpenSystem={() => onSelectSection('system')}
+            />
           )}
+          {nav.sectionKey === 'system' && <SystemSection fields={fields} onFieldChange={onFieldChange} />}
           {nav.sectionKey === 'world' && <WorldSection />}
           {nav.sectionKey === 'character' && (
             <CharacterSection

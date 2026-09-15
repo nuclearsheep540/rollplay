@@ -43,7 +43,7 @@ class CreateCampaign:
     def __init__(self, repository):
         self.repository = repository
 
-    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None, hero_image_asset_id: Optional[UUID] = None, max_players: int = 8) -> CampaignAggregate:
+    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None, hero_image_asset_id: Optional[UUID] = None, max_players: int = 8, system_name: Optional[str] = None) -> CampaignAggregate:
         """Create a new campaign. The creator becomes the DM."""
         campaign = CampaignAggregate.create(
             title=title,
@@ -51,7 +51,8 @@ class CreateCampaign:
             created_by=host_id,
             hero_image=hero_image,
             hero_image_asset_id=hero_image_asset_id,
-            max_players=max_players
+            max_players=max_players,
+            system_name=system_name,
         )
 
         self.repository.save(campaign)
@@ -70,7 +71,8 @@ class UpdateCampaign:
         description: Optional[str] = None,
         hero_image: Optional[str] = "UNSET",
         hero_image_asset_id: Optional[str] = "UNSET",
-        max_players: Optional[int] = None
+        max_players: Optional[int] = None,
+        system_name: Optional[str] = "UNSET",
     ) -> CampaignAggregate:
         """Update campaign details.
 
@@ -91,7 +93,8 @@ class UpdateCampaign:
             description=description,
             hero_image=hero_image,
             hero_image_asset_id=hero_image_asset_id,
-            max_players=max_players
+            max_players=max_players,
+            system_name=system_name,
         )
         self.repository.save(campaign)
 
